@@ -1,6 +1,6 @@
 # Stage 2 - Password Authentication
 
-Status: PLANNED
+Status: CURRENT
 Branch: `feature/02-password-auth`
 Primary coding environment: `nord`
 Integration host: `rhizome-test` (`172.16.13.14`)

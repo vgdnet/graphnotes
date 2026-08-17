@@ -120,7 +120,7 @@ Explicitly out of scope:
 - PR/merge workflow
 
 ## Stage 2 - Password Authentication
-Status: NEXT / PLANNED
+Status: CURRENT / IN PROGRESS
 Branch: `feature/02-password-auth`
 
 MVP auth:
@@ -132,3 +132,9 @@ MVP auth:
 - user/editor/admin roles
 
 Telegram remains future scope.
+
+Current implementation direction:
+- PostgreSQL-backed opaque sessions with only token hashes stored server-side
+- HttpOnly, SameSite cookies; Secure defaults on and is disabled explicitly
+  only for the HTTP-only `rhizome-test` environment
+- Argon2 password hashing and normalized unique usernames

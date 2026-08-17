@@ -164,8 +164,8 @@ Git is the primary delivery mechanism. SSH/rsync is a fallback or bootstrap mech
 
 ## 8. Stage roadmap
 - Stage 0 - Infrastructure - DONE
-- Stage 1 - Project Bootstrap - CURRENT
-- Stage 2 - Password Authentication
+- Stage 1 - Project Bootstrap - DONE
+- Stage 2 - Password Authentication - CURRENT
 - Stage 3 - GitHub Integration
 - Stage 4 - Markdown Import
 - Stage 5 - Graph Engine

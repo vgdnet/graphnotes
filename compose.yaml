@@ -25,6 +25,8 @@ services:
     environment:
       GRAPHNOTES_ENVIRONMENT: ${GRAPHNOTES_ENVIRONMENT:-production}
       GRAPHNOTES_DATABASE_URL: ${GRAPHNOTES_DATABASE_URL:?set GRAPHNOTES_DATABASE_URL in .env}
+      GRAPHNOTES_SESSION_TTL_HOURS: ${GRAPHNOTES_SESSION_TTL_HOURS:-168}
+      GRAPHNOTES_COOKIE_SECURE: ${GRAPHNOTES_COOKIE_SECURE:-true}
     depends_on:
       postgres:
         condition: service_healthy

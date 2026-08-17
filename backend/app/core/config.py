@@ -12,6 +12,9 @@ class Settings(BaseSettings):
     database_url: str = (
         "postgresql+asyncpg://graphnotes:change-me@localhost:5432/graphnotes"
     )
+    session_cookie_name: str = "graphnotes_session"
+    session_ttl_hours: int = 168
+    cookie_secure: bool = True
 
     model_config = SettingsConfigDict(
         env_file=PROJECT_ROOT / ".env",
