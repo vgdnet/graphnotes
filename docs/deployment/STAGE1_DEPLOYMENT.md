@@ -34,7 +34,7 @@ Deploy the integration stack with:
 docker compose \
   -f compose.yaml \
   -f deploy/compose.rhizome-test.yaml \
-  up -d
+  up -d --build
 ```
 
 The overlay uses `${GRAPHNOTES_TEST_BIND_IP:-172.16.13.14}`. Set
@@ -43,6 +43,39 @@ changes.
 
 Local `compose.override.yaml` files are not part of the canonical deployment,
 must not be required, and must not replace the committed integration overlay.
+
+### Boot-safe startup on rhizome-test
+
+Docker can restore an existing container before Debian has assigned the
+configured LAN address. If that happens, Docker cannot create the frontend's
+`GRAPHNOTES_TEST_BIND_IP:8080` binding and does not retry it after the address
+appears. The committed `graphnotes-rhizome-test.service` handles this boot race:
+it waits for the exact configured address and then force-recreates only the
+frontend container from the already-built image.
+
+After the first successful build, install and enable the unit:
+
+```bash
+install -o root -g root -m 0644 \
+  deploy/graphnotes-rhizome-test.service \
+  /etc/systemd/system/graphnotes-rhizome-test.service
+chmod 0755 deploy/start-rhizome-test.sh
+systemctl daemon-reload
+systemctl enable --now graphnotes-rhizome-test.service
+```
+
+The unit reads `GRAPHNOTES_TEST_BIND_IP` from `/opt/graphnotes/.env`, waits up to
+180 seconds by default, and deliberately uses `--no-build` during boot. Build
+images as part of deployment, not during host startup. Reinstall the unit and
+run `systemctl daemon-reload` when its committed definition changes.
+
+Verify the installed mechanism before rebooting:
+
+```bash
+systemctl status graphnotes-rhizome-test.service
+systemctl is-enabled graphnotes-rhizome-test.service
+journalctl -u graphnotes-rhizome-test.service -b --no-pager
+```
 
 Validate the merged configuration before startup:
 
@@ -75,7 +108,7 @@ docker compose up -d --build
 ```
 
 For later updates, review the incoming changes before running `git pull`, then
-rebuild the stack.
+rebuild the stack and reinstall the committed systemd unit if it changed.
 
 ## SSH copy delivery
 

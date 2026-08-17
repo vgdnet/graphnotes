@@ -59,6 +59,12 @@ docker compose \
 The frontend bind address can be changed through `GRAPHNOTES_TEST_BIND_IP`; its
 canonical default is `172.16.13.14`.
 
+Because Docker may restore containers before Debian assigns that address,
+`rhizome-test` uses the committed `deploy/graphnotes-rhizome-test.service` unit.
+It waits for the exact configured bind IP and force-recreates only the frontend
+container from an existing image. This preserves the restricted LAN binding;
+it does not widen exposure to `0.0.0.0`.
+
 ## 3. rhizome - stable target
 Platform and known facts:
 - Debian 13

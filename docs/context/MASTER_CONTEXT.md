@@ -134,6 +134,12 @@ configurable through `GRAPHNOTES_TEST_BIND_IP` with `172.16.13.14` as its
 default. Local `compose.override.yaml` files are not canonical and are not
 required for deployment.
 
+The integration host uses the versioned
+`deploy/graphnotes-rhizome-test.service` boot unit to wait for the configured
+LAN address before force-recreating the frontend container. This prevents a
+Docker host-port bind race during reboot without widening the frontend binding
+to `0.0.0.0`.
+
 The canonical delivery workflow is:
 
 ```text

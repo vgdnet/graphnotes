@@ -1,0 +1,18 @@
+[Unit]
+Description=Start GraphNotes after the rhizome-test bind address is available
+Requires=docker.service
+Wants=network-online.target
+After=docker.service network-online.target networking.service
+ConditionPathExists=/opt/graphnotes/.env
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/graphnotes
+EnvironmentFile=/opt/graphnotes/.env
+Environment=GRAPHNOTES_TEST_BIND_WAIT_SECONDS=180
+ExecStart=/opt/graphnotes/deploy/start-rhizome-test.sh
+RemainAfterExit=yes
+TimeoutStartSec=240
+
+[Install]
+WantedBy=multi-user.target

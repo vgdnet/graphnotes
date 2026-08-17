@@ -41,6 +41,8 @@ Implemented locally on `nord` as of 2026-08-17:
 - canonical AGPL-3.0 license and license ADR
 - GitHub delivery/read-only production security ADR
 - canonical `rhizome-test` Compose overlay with configurable frontend LAN bind
+- versioned `rhizome-test` boot unit that waits for the configured LAN address
+  and repairs the frontend port bindings without exposing `0.0.0.0`
 
 Stage 1 integration results on `rhizome-test`:
 - tested revision before this change: `5c9ec1b`
@@ -70,6 +72,12 @@ Still required before Stage 1 completion:
 - deploy only the approved revision to `rhizome`
 - inspect, test and integrate the existing Rhizome Nginx configuration without destructive experiments
 - write `docs/stages/STAGE1_COMPLETED.md` with observed runtime facts
+
+Known integration issue being revalidated:
+- the initial Compose-only deployment could lose the frontend LAN binding when
+  Docker restored containers before `172.16.13.14` appeared during boot;
+  the versioned systemd startup mechanism requires deployment and a successful
+  reboot test before this issue can be considered resolved
 
 Expected components:
 - FastAPI skeleton
