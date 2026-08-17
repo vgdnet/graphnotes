@@ -35,6 +35,7 @@ production. Обновление, rollback и восстановление да�
 - PostgreSQL backup и доказанный restore на disposable/test environment;
 - health/readiness и structured safe logging;
 - audit retention и correlation context;
+- proposal/history retention and archival policy;
 - resource limits, restart policy и disk/volume monitoring baseline;
 - reconciliation/rebuild operational runbooks;
 - read-only production Git access без push-capable credentials;
@@ -65,6 +66,21 @@ production. Обновление, rollback и восстановление да�
 - повторный deploy той же ревизии идемпотентен;
 - restart/reboot сохраняет данные и восстанавливает сервис;
 - index rebuild из Git/Markdown проверен отдельно от DB restore.
+- failed `merged_indexing` proposals can be reconciled without exposing a
+  partial shared revision;
+- role changes, editor/admin shared edits and proposal decisions remain in
+  retained audit/history.
+
+## Single shared rhizome scale hardening
+
+- representative large node/edge/revision/proposal dataset;
+- bounded graph/diff endpoints and paginated histories;
+- PostgreSQL index/query-plan review for layer, revision, owner and proposal;
+- incremental re-index and full-rebuild duration baseline;
+- disk growth baseline for Git history, index revisions, audit and proposals;
+- documented retention/archival without deleting canonical Git history;
+- capacity thresholds that trigger a new architectural review;
+- no Redis/Neo4j/queue/object storage added without measured need and decision.
 
 ## CI/CD promotion gate
 
@@ -94,6 +110,9 @@ feature branch
 - Nginx config validation and TLS check where applicable;
 - dependency/license/secret scans;
 - manual index rebuild and consistency with Git SHA;
+- interrupted proposal publication/reconciliation with old shared revision
+  remaining visible;
+- large shared-rhizome load/capacity baseline;
 - rollback/forward-fix rehearsal.
 
 ## Production deployment gate

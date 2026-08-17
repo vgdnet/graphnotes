@@ -20,7 +20,10 @@ change must update the relevant ADR/context/specification together after an
 explicit decision. Discussion alone is not an accepted requirement.
 
 ## Product principle
-GraphNotes is a multi-user Markdown knowledge system with personal and shared rhizomes.
+GraphNotes is a multi-user Markdown knowledge system with exactly one shared
+rhizome per installation and exactly one personal rhizome per user. Do not add
+workspace, organization, team, community or multiple-shared-rhizome entities
+without a new explicit product decision and ADR.
 
 Markdown is the source of truth for knowledge content.
 The graph is derived from Markdown and indexed for fast display/querying.
@@ -45,6 +48,9 @@ project-owned code under an incompatible license.
 
 ## Authentication
 MVP authentication is local username/password authentication.
+MVP RBAC is global and hierarchical: `user < editor < admin`. Admin includes all
+editor/user rights. Editors and admins cannot approve their own proposals, and
+all editorial/administrative actions are audited.
 Telegram is future scope only and must be designed as an optional identity provider attached to the existing internal user UUID.
 Do not implement Telegram in Stage 1 or Stage 2 unless the project context is explicitly changed.
 

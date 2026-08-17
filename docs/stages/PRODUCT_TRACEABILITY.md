@@ -1,101 +1,99 @@
 # Product requirements to Stage traceability
 
 Статус: DERIVED / MAINTAINED
-Источник: `docs/product/PRODUCT_SPEC.md` version 1.0
+Источник: `docs/product/PRODUCT_SPEC.md` version 1.2
 
-Эта таблица маршрутизирует канонические продуктовые требования в исполнимые
-Stage-файлы. Она не изменяет `PRODUCT_SPEC.md`.
+Матрица маршрутизирует канонические требования в Stage-файлы и не изменяет
+`PRODUCT_SPEC.md`.
 
-## Principles and roles
+## Product model and roles
 
-| Product requirement | Owning Stage | Acceptance evidence |
+| Requirement | Owning Stage | Acceptance evidence |
 | --- | --- | --- |
-| Markdown/Git is source of truth | 4, 5, 7, 8 | committed Markdown, rebuild equivalence, no canonical graph file |
-| Personal/shared layers | 3, 5, 6 | Git state mapping, indexed layer, isolated UI/API |
-| GitHub hidden behind product UX | 3, 7 | backend GitHub App operations, user-facing workflow |
-| Graph is not security boundary | 3, 5, 6, 8 | backend workspace/owner authorization negatives |
-| User role outcome | 2, 4, 6, 7 | auth + import + graph + proposal E2E |
-| Editor role outcome | 3, 7, 8 | membership + review/decision + diff E2E |
-| Admin role outcome | 2, 3, 5, 9 | user/role/blocking management, repository binding, rebuild, operations audit |
+| Exactly one shared rhizome | 3, 5, 6 | singleton Git binding; one shared revision pointer/API |
+| Exactly one personal rhizome per user | 3, 4, 5, 6 | UUID-owned Git state and derived personal layer |
+| No workspace/multiple shared graphs | every Stage | absence of workspace entities/routes/IDs |
+| Markdown/Git source of truth | 4, 5, 7, 8 | committed Markdown, rebuild equivalence, no graph merge file |
+| `user` outcome | 2, 4, 6, 7 | auth, personal edit, shared read, proposal E2E |
+| `editor` outcome | 2, 7, 8 | direct shared edit plus review/diff E2E |
+| `admin` outcome | 2, 5, 7, 9 | user/role/block management plus inherited editor/user rights and audited operations |
+| Self-approval forbidden | 7 | editor/admin author negative tests |
 
 ## Functional requirements
 
 | PRODUCT_SPEC section | Requirement group | Owning Stage |
 | --- | --- | --- |
-| 6.1 | UUID user, username/password, hash, session, inactive user, roles | 2 |
-| 6.2 | workspace ↔ GitHub resource, branches/state, App operations, SHA/status | 3 |
-| 6.3 | safe MD/ZIP import, parsing, unresolved links, Git commit, report | 4 |
-| 6.4 | note/link/tag/sync derived index and rebuildability | 5 |
-| 6.5 | personal/shared Graph API and Cytoscape visualization | 5, 6 |
-| 6.6 | proposal, textual review, PR/merge, conflict, re-index | 7 |
-| 6.6 | graph consequences before merge | 8 |
-| 6.7 | business audit, idempotent webhook, manual rebuild | 3, 5, 7, 9 |
+| 6.1 | UUID account, password hash, session, active state, global RBAC | 2 |
+| 6.2 | one GitHub repository, shared branch, one personal state per user | 3 |
+| 6.3 | safe import and personal Markdown editing | 4 |
+| 6.4 | revisioned shared/personal/proposal derived index and rebuild | 5 |
+| 6.5 | bounded personal/shared Graph API and Cytoscape UI | 5, 6 |
+| 6.6 | proposal, direct shared edit, review, atomic publication, reconciliation | 7 |
+| 6.6 | textual and graph impact before publication | 7, 8 |
+| 6.7 | audit, history, idempotency and recovery | 2, 3, 5, 7, 9 |
 
 ## API ownership
 
 | Endpoint group | Stage |
 | --- | --- |
-| `/api/auth/*`, `/api/users/me` | 2 |
-| workspaces, repository status, initial webhook receiver | 3 |
-| upload, notes list/detail | 4 |
-| personal/shared Graph API | 5 |
-| graph UI consuming Graph API | 6 |
-| proposals, approve/reject, merge reconciliation | 7 |
-| graph diff endpoint and preview | 8 |
-| operational/health/release controls | 9 |
+| auth, current user, admin user/role management | 2 |
+| repository status/connect/webhook | 3 |
+| personal import/note CRUD | 4 |
+| personal/shared Graph API and rebuild | 5 |
+| personal/shared graph UI | 6 |
+| proposals, decisions and editor/admin shared CRUD | 7 |
+| proposal graph diff | 8 |
+| operational/release controls | 9 |
 
 ## MVP acceptance criteria
 
-| Criterion from PRODUCT_SPEC §8 | Stage that proves it |
+| Criterion | Stage proving it |
 | --- | --- |
-| Register/login; plaintext password absent | 2 |
-| Isolated editable personal Markdown state | 3, 4 |
-| Safe `.md`/ZIP import committed to Git | 4 |
-| Wikilinks, Markdown links, tags, unresolved links | 4, 5 |
-| Index tied to Git revision and rebuildable | 5 |
-| Personal graph | 6 |
-| Accessible shared graph | 6 |
+| Register/login; no plaintext password | 2 |
+| Global `user/editor/admin` hierarchy | 2 |
+| Isolated editable personal rhizome | 3, 4 |
+| One shared rhizome readable by users | 3, 5, 6 |
+| Safe MD/ZIP import committed to personal Git state | 4 |
+| Links/tags/properties/unresolved projection | 4, 5 |
+| Revision-linked rebuildable index | 5 |
+| Personal/shared graph UX | 6 |
 | User creates proposal | 7 |
-| Editor sees textual diff | 7 |
-| Editor sees graph diff/preview | 8 |
-| Editor approves/rejects | 7 |
+| Editor/admin direct shared editing | 7 |
+| Editor/admin sees textual and graph impact | 7, 8 |
+| Editor/admin approves/rejects/returns with reason | 7 |
+| Author cannot self-approve | 7 |
+| Shared publication is atomic to readers | 7 |
 | Shared index reaches merged SHA | 7 |
 | No parallel canonical graph file | 5, 8 |
-| Security/migration/backup/deployment gates | every Stage; final proof in 9 |
+| Security/migration/backup/deployment gates | every Stage; final proof 9 |
 
 ## Non-functional requirements
 
-| PRODUCT_SPEC section | Requirement | Owning Stage(s) |
-| --- | --- | --- |
-| 9.1 | auth, role and workspace scope | 2, 3, then every protected feature |
-| 9.1 | no secrets in Git/API/logs | every Stage; release scan in 9 |
-| 9.1 | traversal/archive-bomb protection | 4 |
-| 9.1 | cryptographic webhook verification | 3, 7 |
-| 9.1 | least-privilege GitHub credentials | 3, 9 |
-| 9.1 | production read-only Git, private backend/DB | 1, every Stage, 9 |
-| 9.2 | observable sync errors | 3, 5, 7 |
-| 9.2 | idempotent webhook/reconciliation | 3, 7 |
-| 9.2 | Git wins over index | 5, 7, 8 |
-| 9.2 | migration testing | every DB Stage; final rehearsal in 9 |
-| 9.2 | persistent DB and verified backup | 1, 9 |
-| 9.3 | process vs integration health | 1, maintained through 9 |
-| 9.3 | safe correlation/context | 3, 5, 7, 9 |
-| 9.3 | business audit linked to actor/workspace/SHA | 3, 7, 9 |
-
-## Decision gates from open questions
-
-| Open question | Latest decision point |
+| Requirement | Owning Stage(s) |
 | --- | --- |
-| Local graph depth | before expanding Stage 6 beyond bounded subgraph |
-| Editing through graph | excluded from MVP unless ADR before Stage 6 |
-| Visual colors/states | Stage 6 baseline; complete proposal/diff legend in Stage 8 |
-| Node/edge provenance | decide before Stage 6/8 UI finalization if beyond base SHA/layer |
-| Selected changes vs whole personal diff | mandatory before Stage 7 |
-| GitHub workspace repository isolation | mandatory ADR before Stage 3 |
-| Real-time collaboration | post-MVP unless roadmap/ADR changes |
+| Authentication, role and personal ownership enforcement | 2, then every protected Stage |
+| No secrets in Git/API/logs | every Stage; final scan 9 |
+| Traversal/archive-bomb protection | 4 |
+| Verified/idempotent webhook and reconciliation | 3, 7 |
+| Least-privilege GitHub credentials | 3, 9 |
+| Git wins over derived index | 5, 7, 8 |
+| Migration testing | every DB Stage; final rehearsal 9 |
+| Persistent DB and verified backup/restore | 1, 9 |
+| Audit actor/role/layer/proposal/revision | 2, 3, 5, 7, 9 |
+| Bounded subgraphs and pagination | 5, 6, 8 |
+| Incremental re-index and scale baseline | 5, 8, 9 |
+| Proposal/history retention and recovery | 7, 9 |
+
+## Open decisions
+
+| Question | Latest decision point |
+| --- | --- |
+| Selected changes vs whole personal diff | before Stage 7 |
+| Local graph depth/provenance/visual states | Stage 6/8 UX finalization |
+| Editing through graph | excluded unless new ADR before implementation |
+| Real-time collaboration | post-MVP unless roadmap changes |
 
 ## Final completeness rule
 
-`v0.1.0` нельзя выпускать, пока каждая строка MVP acceptance criteria не имеет
-конкретного доказательства в соответствующем completion artifact и итоговой
-Technical Observer matrix для exact release SHA.
+`v0.1.0` запрещён, пока каждая MVP строка не имеет evidence в completion
+artifact и итоговой Technical Observer matrix для exact release SHA.

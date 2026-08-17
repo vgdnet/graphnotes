@@ -10,7 +10,7 @@ Integration host: `rhizome-test` (`172.16.13.14`)
 A new user can register with a username and password, sign in, reload the
 application without losing the authenticated state, view their identity, and
 sign out. An inactive account cannot authenticate or continue using an existing
-session. A system admin can safely inspect users, grant/revoke system admin and
+session. An admin can safely inspect users, assign `user`/`editor`/`admin`, and
 block or reactivate an account without accessing password/session secrets.
 
 ## Scope
@@ -18,12 +18,11 @@ block or reactivate an account without accessing password/session secrets.
 - user model with UUID primary key
 - unique normalized username
 - nullable email and display name
-- non-privileged registered account plus tightly controlled system `admin`
-- no single mutually exclusive `user/editor/admin` authorization enum
+- global hierarchical roles: `user`, `editor`, `admin`
 - `is_active`, `created_at`, and `updated_at`
 - Argon2 password hashing
 - registration, login, logout, refresh/session continuation, and current user
-- protected admin user list and system-admin/active-state management
+- protected admin user list and role/active-state management
 - explicit initial-admin bootstrap procedure without public self-escalation
 - security audit events for registration, login failure/success, logout,
   blocking and role changes without password/token values
@@ -58,8 +57,7 @@ without an ADR as long as the product and security model remains unchanged.
 - revoke the active refresh/session credential on logout
 - reject inactive users on login, refresh, and authenticated requests
 - registration always creates the non-privileged default role
-- only an authenticated active admin can grant/revoke system admin or change
-  active state
+- only an authenticated active admin can change roles or active state
 - prevent accidental removal/blocking of the last active admin, or document and
   test an equivalently safe recovery procedure
 - do not expose password hashes or credential secrets in API responses
@@ -70,7 +68,7 @@ without an ADR as long as the product and security model remains unchanged.
 
 - Telegram or OAuth identity providers
 - password recovery/email delivery
-- workspace membership and `editor`/`reviewer` assignments (Stage 3)
+- workspace, organization, team or multiple-shared-rhizome permissions
 - GitHub product integration
 - Markdown import, notes, graph, proposals, and moderation
 - production deployment to `rhizome` unless separately requested
@@ -83,10 +81,10 @@ without an ADR as long as the product and security model remains unchanged.
 - refresh/session continuation survives a page reload
 - logout revokes continuation credentials
 - inactive users are rejected
-- non-admin cannot list users, grant admin or block accounts
-- admin/active-state changes take effect on existing sessions as defined
+- user/editor cannot list users, assign roles or block accounts
+- role/active-state changes take effect on existing sessions as defined
   by the session model
-- public registration cannot request `editor`, `reviewer` or `admin`
+- public registration cannot request `editor` or `admin`
 - last-admin safety/recovery path is tested
 - audit events identify actor/target/action without authentication secrets
 - `/api/users/me` requires authentication and returns no secrets

@@ -22,14 +22,18 @@ prompt. Technical Observer должен оставаться отдельным 
 Ночная цель — последовательно выполнять Stage 2–9 до максимально дальнего
 безопасного checkpoint и, только если пройдены все gates, подготовить
 production release `v0.1.0`. Не перескакивай стадии и не называй промежуточный
-checkpoint полным MVP. Не переходи к Stage 3 без принятого ADR по GitHub
-repository visibility/isolation и далее соблюдай decision gates каждого
-Stage-файла.
+checkpoint полным MVP. Перед Stage 3 требуются test GitHub App/repository
+credentials и configuration единого knowledge repository; модель одной общей
+ризомы уже принята ADR-007 и не должна заменяться workspace-архитектурой.
 
 Работай последовательно по traceability matrix активного Stage. После каждого
 логического блока запускай применимые тесты. Заверши backend и frontend user
 outcome, миграции, Compose и реальные integration flows. Не скрывай `FAIL` или
 `NOT VERIFIED` в known issues.
+
+Каноническая модель: одна общая ризома, одна личная на пользователя, глобальная
+иерархия `user < editor < admin`; editor/admin не принимают собственные
+предложения.
 
 Не deploy на `rhizome` и не создавай/push tag без отдельного явного разрешения
 владельца для exact RC. При необходимости продукта, архитектуры, credentials

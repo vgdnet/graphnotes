@@ -1,112 +1,100 @@
 # Stage 3 - GitHub Integration
 
-Status: PLANNED / DECISION-GATED
+Status: PLANNED / ACCESS-GATED
 Branch: `feature/03-github-integration`
 Depends on: accepted Stage 2
 
 ## User outcome
 
-Авторизованный пользователь видит доступные рабочие пространства и понятный
-статус их knowledge repository. GraphNotes, а не браузер пользователя,
-безопасно выполняет разрешённые GitHub-операции от имени приложения.
+Авторизованный пользователь видит понятный статус единого knowledge repository.
+GraphNotes безопасно адресует одну общую Git revision и ровно одно personal Git
+state для каждого пользователя.
 
-## Blocking decision before implementation
+## Product boundary
 
-До начала реализации обязателен Accepted ADR, определяющий:
+- одна GraphNotes installation связывается с одним GitHub knowledge repository;
+- default branch представляет единую общую ризому;
+- `user/<uuid>` или эквивалентное состояние представляет личную ризому user;
+- workspace, organization, team, community и несколько shared repositories не
+  моделируются;
+- GraphNotes backend выполняет GitHub-операции; пользователю credentials не
+  выдаются.
 
-- private/public visibility knowledge repositories;
-- изоляцию разных workspaces и пользователей;
-- GitHub App installation model и минимальные permissions;
-- модель основной и пользовательских веток;
-- правила хранения installation/repository identifiers;
-- кто может создавать workspace и привязывать repository.
+## Required inputs
 
-Публичность source repository GraphNotes не делает пользовательские базы знаний
-публичными. Без этого ADR Stage имеет статус `BLOCK`.
+- visibility единого knowledge repository;
+- GitHub App test installation и repository identifier;
+- минимальные permissions;
+- подтверждённые names/lifecycle shared и personal branches;
+- webhook secret для `rhizome-test`.
+
+Отсутствие access/credentials даёт `BLOCK`, но не разрешает придумывать
+multi-workspace архитектуру.
 
 ## Scope
 
-- модели `workspace`, membership и GitHub repository binding;
-- implicit `member` capabilities для active membership;
-- независимые, совмещаемые workspace assignments `editor` и `reviewer`;
-- system `admin` capability override согласно ADR-007;
+- singleton repository binding/configuration;
 - GitHub App authentication на backend;
-- шифруемое/секретное хранение credentials вне БД и Git;
 - проверка installation/repository access и default branch;
-- создание/обнаружение согласованного personal Git state пользователя;
-- сохранение repository, branch и commit SHA identifiers;
-- понятные состояния sync: ready, pending, rate-limited, unavailable, error;
-- обработка GitHub timeout, pagination и rate limit;
-- audit значимых admin операций;
-- frontend workspace list и repository status без Git-жаргона там, где он не
-  нужен пользователю.
+- создание/обнаружение personal state ровно для authenticated user UUID;
+- сохранение branch/revision identifiers и observed commit SHA;
+- sync states: ready, pending, rate-limited, unavailable, error;
+- timeout, pagination и rate-limit handling;
+- cryptographically verified, idempotent webhook receiver;
+- audit admin repository-binding operations;
+- frontend repository/sync status без обязательного Git-жаргона.
 
 ## API baseline
 
 ```text
-GET  /api/workspaces
-GET  /api/workspaces/{id}/repo/status
-POST /api/workspaces/{id}/repo/connect      # admin-only if selected by design
-GET  /api/workspaces/{id}/members
-PATCH /api/workspaces/{id}/members/{user_id}/groups
-POST /api/webhooks/github                   # minimal verified receiver
+GET  /api/repository/status
+POST /api/repository/connect      # admin-only setup
+POST /api/webhooks/github
 ```
-
-Точные admin endpoints определяются после blocking ADR.
 
 ## Security requirements
 
-- backend проверяет active account, concrete capability и workspace membership;
-- только system `admin` назначает/отзывает `editor` и `reviewer` в MVP;
-- workspace group assignment не может повысить пользователя до system `admin`;
-- revoked group перестаёт давать capability существующей session без
-  необходимости повторного login;
-- GitHub private key/token не возвращается в API и не логируется;
-- GitHub App получает только минимальные permissions;
-- webhook signature проверяется криптографически до обработки payload;
-- repository/installation identifiers нельзя подменить через request;
-- SSRF и произвольный Git remote запрещены;
-- rate-limit и upstream errors не раскрывают секреты;
-- конечному пользователю не выдаются GitHub credentials или прямой repository
-  access в обход GraphNotes.
+- backend проверяет active user и global role;
+- repository/installation identifiers берутся из trusted binding, не request;
+- private key/token/webhook secret не возвращаются в API/логи;
+- GitHub App имеет минимальные permissions;
+- invalid webhook signature rejected before payload processing;
+- arbitrary remote URL и SSRF запрещены;
+- user cannot address another user's personal branch;
+- public source repository GraphNotes не определяет visibility knowledge repo.
 
 ## Data and consistency
 
-- workspace binding хранит stable GitHub identifiers, не только display names;
-- наблюдавшийся commit SHA записывается вместе со статусом синхронизации;
-- повторный webhook не создаёт дублирующие события;
-- GitHub остаётся источником истины Git-состояния;
+- binding хранит stable GitHub identifiers, не только display names;
+- personal state ownership связан с internal user UUID;
+- repeated webhook delivery idempotent;
+- GitHub остаётся источником истины Git history;
 - Stage не создаёт собственный Git/merge engine.
 
 ## Out of scope
 
-- загрузка и парсинг Markdown;
+- workspace/multi-tenant knowledge repositories;
+- Markdown import/parser;
 - note index и graph API;
-- Pull Request review/merge UX;
-- graph diff;
-- Telegram/OAuth login.
+- proposal review/merge;
+- graph diff.
 
 ## Verification
 
 - migration upgrade/downgrade/re-upgrade;
-- membership isolation и capability matrix для `member`, `editor`, `reviewer`,
-  combined `editor+reviewer` и `admin`;
-- cross-workspace assignment, self-escalation и revoked-group negatives;
-- работа с тестовой GitHub App installation/repository;
-- invalid webhook signature rejected;
-- duplicate webhook idempotent;
-- revoked/expired credential, timeout и rate limit дают наблюдаемый статус;
-- API не раскрывает credentials;
-- exact SHA проходит Compose и integration checks на `rhizome-test`;
-- backend/PostgreSQL exposure не расширен.
+- one shared branch and distinct personal branches for two users;
+- cross-user personal branch access rejected;
+- invalid/duplicate webhook cases;
+- revoked credential, timeout and rate-limit status;
+- no credential leakage;
+- exact SHA integration with test GitHub App on `rhizome-test`;
+- backend/PostgreSQL exposure unchanged.
 
 ## Definition of Done
 
-- blocking ADR принят и документы синхронизированы;
-- пользователь видит только разрешённые workspaces;
-- effective permissions являются суммой active groups и ограничены workspace;
-- backend безопасно читает согласованный GitHub repository status;
-- personal/shared Git states адресуются однозначно;
-- failure modes видимы и повторяемы;
-- Technical Observer matrix не содержит обязательных `FAIL/NOT VERIFIED`;
-- создан `STAGE3_COMPLETED.md` с identifiers без secrets и observed results.
+- installation addresses exactly one knowledge repository;
+- one shared and one per-user personal Git state are unambiguous;
+- failure states are observable/recoverable;
+- no workspace or multi-shared-rhizome entities were introduced;
+- Technical Observer matrix has no mandatory `FAIL/NOT VERIFIED`;
+- `STAGE3_COMPLETED.md` records identifiers without secrets and observed facts.

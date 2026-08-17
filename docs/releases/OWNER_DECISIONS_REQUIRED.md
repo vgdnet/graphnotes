@@ -1,7 +1,7 @@
 # Owner decisions required before v0.1.0
 
 Статус: OPEN INPUTS
-Обновлено: 2026-08-17
+Обновлено: 2026-08-18
 
 Эти решения нельзя принимать техническому или Stage-воркеру самостоятельно.
 Пока обязательное решение отсутствует, соответствующий Stage имеет `BLOCK`.
@@ -9,13 +9,13 @@
 ## Before Stage 3
 
 - private/public visibility knowledge repositories;
-- один repository на workspace или другая модель изоляции;
 - GitHub App installation ownership и test installation;
 - минимальные GitHub permissions;
 - основная и personal branch naming/lifecycle;
-- кто создаёт workspace и привязывает repository.
+- deployment configuration for the one knowledge repository.
 
-Результат: Accepted ADR до реализации Stage 3.
+Модель одной общей ризомы и одного repository уже принята ADR-007; Stage 3 не
+должен снова открывать вопрос workspace/multiple shared repositories.
 
 ## Before Stage 6 final UX
 

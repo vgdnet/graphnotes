@@ -1,7 +1,7 @@
 # GraphNotes — канонический контекст Technical Observer
 
 Статус: ACTIVE
-Обновлено: 2026-08-17
+Обновлено: 2026-08-18
 
 Этот файл задаёт рабочий регламент отдельного Technical Observer проекта
 GraphNotes. Его можно передать новому воркеру целиком. Он не заменяет
@@ -76,6 +76,22 @@ ADR. Глобальное изменение должно быть явно пр
 
 Запрещён второй канонический графовый файл, включая `graph.json`.
 
+### Rhizome and RBAC model
+
+- exactly one shared rhizome per installation;
+- exactly one personal rhizome per user;
+- no workspace/organization/team/community/multiple-shared entities;
+- global hierarchical roles `user < editor < admin`;
+- editor/admin may edit shared and review proposals;
+- proposal author cannot approve own proposal regardless of role;
+- editorial and administrative actions are audited;
+- derived records distinguish `shared`, owned `personal`, and immutable
+  `proposal` revisions.
+
+GitHub/PostgreSQL atomicity must not be overstated. Observer verifies a durable
+state machine, idempotent reconciliation, index-before-visible shared revision
+switch, and recovery from merge/index failure.
+
 ### Среды и доставка
 
 - `nord` — рабочая станция для создания и ревью исходного кода, веток,
@@ -136,7 +152,8 @@ Observer проверяет diff на:
 - выход за границы Stage и преждевременную реализацию следующих стадий;
 - изменение архитектуры без принятого ADR;
 - второй источник истины;
-- ослабление authentication, authorization или workspace isolation;
+- ослабление authentication, global RBAC, personal ownership или разделения
+  shared/personal/proposal layers;
 - утечки секретов, персональных данных и чувствительных значений в логах;
 - небезопасные uploads, webhooks, cookies, токены и GitHub credentials;
 - несовместимые лицензии и незафиксированные зависимости;
@@ -146,6 +163,9 @@ Observer проверяет diff на:
 - отсутствие негативных тестов и проверок failure paths;
 - случайное удаление защитных проверок;
 - отсутствие связи результата с точным commit SHA.
+- accidental workspace/multiple-shared-rhizome abstraction;
+- partial publication visibility or self-approval path;
+- unbounded shared graph/history/proposal queries and silent data growth.
 
 ## 5. Stage gate
 

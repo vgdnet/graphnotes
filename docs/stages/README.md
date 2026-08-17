@@ -1,7 +1,7 @@
 # GraphNotes stage specifications
 
 Статус: CANONICAL ROADMAP INDEX
-Обновлено: 2026-08-17
+Обновлено: 2026-08-18
 
 Всего в roadmap **10 стадий: Stage 0–9**.
 
@@ -10,7 +10,7 @@
 | 0 | Infrastructure | Подготовлена базовая production-инфраструктура | historical |
 | 1 | Project Bootstrap | Запускаемый skeleton приложения | completed |
 | 2 | Password Authentication | Безопасный login/password flow | `v0.1.0-dev.2` |
-| 3 | GitHub Integration | Workspace связан с GitHub knowledge repository | `v0.1.0-dev.3` |
+| 3 | GitHub Integration | Installation связана с одним knowledge repository; one personal state per user | `v0.1.0-dev.3` |
 | 4 | Markdown Import | Безопасный импорт Markdown в личное Git-состояние | `v0.1.0-dev.4` |
 | 5 | Graph Engine | Восстановимый производный индекс и Graph API | `v0.1.0-dev.5` |
 | 6 | Personal Graph | Личный и общественный граф доступны в UI | `v0.1.0-dev.6` |
@@ -37,7 +37,7 @@ completion artifact.
 ## Общие неизменяемые правила
 
 - Markdown/Git — источник истины; граф и PostgreSQL-индекс производны;
-- backend проверяет authentication, role и workspace membership;
+- backend проверяет authentication, global role, personal ownership и layer;
 - прямой GitHub-доступ конечному пользователю не выдаётся;
 - новая инфраструктура вне MVP stack требует явного решения;
 - секреты не коммитятся и не попадают в API/логи;

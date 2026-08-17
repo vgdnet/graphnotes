@@ -1,6 +1,6 @@
 # GraphNotes - MASTER CONTEXT
 
-Updated: 2026-08-17
+Updated: 2026-08-18
 Status: canonical architecture baseline
 
 This file is the canonical handoff context for GraphNotes across ChatGPT/Codex sessions.
@@ -11,7 +11,8 @@ implements those requirements. Cross-cutting decisions and rationale are stored
 in `docs/decisions/ADR-*.md`.
 
 ## 1. Product
-GraphNotes is a multi-user system for Markdown knowledge bases and relationship graphs (rhizomes).
+GraphNotes is a multi-user system with one shared Markdown knowledge rhizome and
+one personal rhizome per user.
 
 Core data flow:
 
@@ -19,9 +20,9 @@ Core data flow:
 Markdown -> Parser -> PostgreSQL index -> Graph API -> Web UI
 ```
 
-Users eventually have personal changes/graphs and can propose selected changes
-into a shared knowledge base. Workspace reviewers review and merge proposals;
-workspace editors may directly edit shared Markdown through audited Git commits.
+Users develop personal changes/graphs and propose selected changes into the one
+shared knowledge base. Global editors review proposals and may directly edit
+shared Markdown through audited Git commits.
 
 ## 2. Critical data rule
 Markdown is the primary/canonical knowledge data.
@@ -80,7 +81,7 @@ GitHub should handle:
 GraphNotes should handle:
 - application users and permissions
 - Markdown import
-- mapping users/workspaces to Git resources
+- mapping the installation and users to shared/personal Git revisions
 - graph indexing
 - personal/shared rhizome UX
 - review workflow in human language
@@ -95,7 +96,8 @@ main           = approved shared knowledge base
 user/<uuid>    = a user's proposed/personal changes
 ```
 
-This is an MVP model, not a permanent security boundary. If direct Git access or stricter isolation is introduced later, private repositories per user/workspace may replace this model.
+This is an MVP model, not a permanent security boundary. The current product
+does not contain workspaces or multiple shared knowledge repositories.
 
 ## 5. Authentication - accepted decision
 MVP authentication is owned by GraphNotes and uses username/password.
@@ -107,25 +109,36 @@ MVP requirements planned for Stage 2:
 - access/refresh token or an equivalently secure session model
 - `/me`
 - logout
-- base workspace group: `member`
-- independent workspace groups: `editor`, `reviewer`
-- system-wide superuser group: `admin`
+- global roles: `user`, `editor`, `admin`
 - email can be nullable/reserved initially for future recovery/notifications
 
 Telegram is NOT removed from the roadmap.
 Telegram remains a future optional identity provider linked to the existing internal user UUID.
 Telegram is not part of the MVP implementation unless this decision is explicitly changed.
 
-## 5.1 Permission model - accepted decision
+## 5.1 Permission and rhizome model - accepted decision
 
-Authorization uses additive groups and explicit capabilities, not a single
-ordered role enum. Every active workspace membership has base `member`
-capabilities. `editor` grants direct shared-rhizome editing; `reviewer` grants
-proposal decisions. The groups are independent and may be combined. System
-`admin` has all capabilities in all workspaces and manages group assignments.
+Authorization uses global `user`, `editor`, and `admin` RBAC. There is exactly
+one shared rhizome and exactly one personal rhizome per user. `editor` includes
+direct shared editing and proposal review. `admin` includes all editor/user
+rights plus system administration.
 
-All shared writes remain audited Markdown/Git changes followed by re-indexing.
-Proposal authors cannot approve their own proposals. See ADR-007.
+All shared writes remain audited Markdown/Git changes followed by revisioned
+re-indexing. Editors/admins cannot approve their own proposals. There are no
+workspace, organization, team or multi-shared-rhizome entities. See ADR-007.
+
+Derived data explicitly separates `shared`, per-owner `personal`, and immutable
+`proposal` revisions. Accepted publication switches the visible shared revision
+only after the merged revision is fully indexed, so readers never see partial
+proposal application.
+
+## 5.2 Single shared rhizome growth
+
+One shared rhizome is a fixed product boundary, not a reason to load all data in
+one request. Scale through bounded/paginated Graph APIs, PostgreSQL indexes,
+incremental affected-set re-indexing, immutable revision references and
+proposal/audit retention policies. Record performance/capacity baselines before
+adding infrastructure excluded from the MVP.
 
 ## 6. Scope discipline
 Not needed for the initial MVP unless actual load/features justify them:

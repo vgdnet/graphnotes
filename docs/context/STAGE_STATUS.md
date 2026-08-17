@@ -1,6 +1,6 @@
 # GraphNotes - Stage Status
 
-Updated: 2026-08-17
+Updated: 2026-08-18
 
 ## Stage 0 - Infrastructure
 Status: DONE
@@ -129,7 +129,7 @@ MVP auth:
 - access/refresh auth or secure session equivalent
 - `/me`
 - logout
-- user/editor/admin roles
+- global hierarchical roles `user < editor < admin`
 
 Telegram remains future scope.
 
@@ -138,3 +138,10 @@ Current implementation direction:
 - HttpOnly, SameSite cookies; Secure defaults on and is disabled explicitly
   only for the HTTP-only `rhizome-test` environment
 - Argon2 password hashing and normalized unique usernames
+
+Remaining before Stage 2 completion under PRODUCT_SPEC 1.2 / ADR-007:
+- admin-only user list and global role/active-state management
+- safe initial-admin bootstrap and last-admin recovery protection
+- audit events for role/blocking changes and privileged actions
+- negative RBAC tests for `user`, `editor`, and `admin`
+- exact-SHA migration/frontend/integration verification on `rhizome-test`

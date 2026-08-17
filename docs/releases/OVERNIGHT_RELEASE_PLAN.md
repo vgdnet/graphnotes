@@ -1,7 +1,7 @@
 # GraphNotes overnight release plan
 
 Status: DRAFT / GATED
-Prepared: 2026-08-17
+Prepared: 2026-08-18
 
 ## Target
 
@@ -16,8 +16,7 @@ Prepared: 2026-08-17
 
 ## Why full MVP cannot be guaranteed by time
 
-- Stage 3 требует отдельного принятого решения по visibility и изоляции
-  knowledge-репозиториев GitHub;
+- Stage 3 требует configured test GitHub App и единого knowledge repository;
 - GitHub App/credentials и минимальные permissions должны быть предоставлены и
   проверены, их нельзя выдумать;
 - Stage 4–8 содержат самостоятельные data, parser, graph и merge boundaries;
@@ -34,7 +33,7 @@ Prepared: 2026-08-17
 | Stage | Обязательный результат | Gate перед следующим Stage |
 | --- | --- | --- |
 | 2 | Password auth end-to-end | auth/security/migration PASS |
-| 3 | Workspace + GitHub App integration | repository isolation ADR + real test installation |
+| 3 | One repository + GitHub App integration | real test installation and one personal state per user |
 | 4 | Safe MD/ZIP import into personal Git state | hostile upload suite + commit consistency |
 | 5 | Rebuildable derived graph index/API | rebuild equivalence + SHA consistency |
 | 6 | Personal/shared Cytoscape UX | browser/isolation/scale PASS |
@@ -79,7 +78,7 @@ Prepared: 2026-08-17
 - rotation и хранение только hash refresh/session secret;
 - inactive user rejected на login, refresh и authenticated request;
 - HttpOnly/SameSite/Secure cookie policy по environment;
-- role enum `user/editor/admin` без преждевременной workspace-модели;
+- global hierarchical `user/editor/admin` RBAC and safe initial-admin bootstrap;
 - миграция `upgrade`, `downgrade`, повторный `upgrade` на disposable DB;
 - негативные auth-тесты и отсутствие secrets/password hashes в API;
 - frontend register/login/reload/me/logout flow, а не только backend `curl`.
@@ -126,7 +125,8 @@ Prepared: 2026-08-17
 - тесты или build не проходят;
 - текущая ветка содержит несвязанные или неизвестные изменения;
 - candidate на `rhizome-test` отличается от проверенного SHA;
-- для перехода к Stage 3 нет принятого ADR по GitHub repository isolation.
+- для Stage 3 отсутствуют test GitHub App/repository credentials или
+  configuration единого knowledge repository.
 
 Нельзя автоматически переходить к следующему Stage после `BLOCK` и нельзя
 компенсировать незавершённое требование записью в known issues.
