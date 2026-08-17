@@ -3,12 +3,18 @@
 ## Canonical context
 Before making architectural or cross-cutting changes, read:
 
-1. `docs/context/MASTER_CONTEXT.md`
-2. `docs/context/ENVIRONMENTS.md`
-3. `docs/context/STAGE_STATUS.md`
-4. the active file in `docs/stages/`
+1. `docs/product/PRODUCT_SPEC.md`
+2. `docs/context/MASTER_CONTEXT.md`
+3. `docs/context/ENVIRONMENTS.md`
+4. `docs/context/STAGE_STATUS.md`
+5. the active file in `docs/stages/`
 
 If code or an old document conflicts with these files, do not silently choose a new architecture. Report the conflict and ask for a decision when it materially changes the project.
+
+Product requirements belong in `PRODUCT_SPEC.md`; accepted cross-cutting
+decisions and their rationale belong in ADRs. A global product or architecture
+change must update the relevant ADR/context/specification together after an
+explicit decision. Discussion alone is not an accepted requirement.
 
 ## Product principle
 GraphNotes is a multi-user Markdown knowledge system with personal and shared rhizomes.

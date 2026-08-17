@@ -5,6 +5,11 @@ Status: canonical architecture baseline
 
 This file is the canonical handoff context for GraphNotes across ChatGPT/Codex sessions.
 
+The canonical product requirements are maintained in
+`docs/product/PRODUCT_SPEC.md`. This file defines the accepted architecture that
+implements those requirements. Cross-cutting decisions and rationale are stored
+in `docs/decisions/ADR-*.md`.
+
 ## 1. Product
 GraphNotes is a multi-user system for Markdown knowledge bases and relationship graphs (rhizomes).
 
