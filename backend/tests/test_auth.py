@@ -1,11 +1,16 @@
 from collections.abc import AsyncIterator
 
+from fastapi import Response
 from httpx import ASGITransport, AsyncClient
+from pytest import MonkeyPatch
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from app.api.auth import set_session_cookie
+from app.core.config import settings
 from app.db.session import get_db_session
 from app.main import app
+from app.models.auth_session import AuthSession
 from app.models.user import User
 from app.services.auth import verify_password
 
@@ -23,13 +28,13 @@ async def test_registration_session_refresh_and_logout(
             "username": "Alice.Example",
             "password": "correct horse battery staple",
             "display_name": "Alice",
-            "email": "Alice@Example.test",
+            "email": "Alice@Example.com",
         },
     )
 
     assert registration.status_code == 201
     assert registration.json()["username"] == "alice.example"
-    assert registration.json()["email"] == "alice@example.test"
+    assert registration.json()["email"] == "alice@example.com"
     assert registration.json()["role"] == "user"
     assert "password" not in registration.text
     assert "httponly" in registration.headers["set-cookie"].lower()
@@ -42,6 +47,11 @@ async def test_registration_session_refresh_and_logout(
         user = result.scalar_one()
         assert user.password_hash != "correct horse battery staple"
         assert verify_password(user.password_hash, "correct horse battery staple")
+        auth_session = (await database.execute(select(AuthSession))).scalar_one()
+        raw_token = client.cookies.get("graphnotes_session")
+        assert raw_token
+        assert auth_session.token_hash != raw_token
+        assert raw_token not in auth_session.token_hash
 
     duplicate = await client.post(
         "/auth/register",
@@ -120,6 +130,9 @@ async def test_login_failures_and_inactive_account(
         await database.commit()
 
     assert (await client.get("/users/me")).status_code == 403
+    inactive_refresh = await client.post("/auth/refresh")
+    assert inactive_refresh.status_code == 403
+    assert client.cookies.get("graphnotes_session") is None
     await client.post("/auth/logout")
     inactive_login = await client.post(
         "/auth/login",
@@ -155,3 +168,17 @@ async def test_registration_validation(
         },
     )
     assert invalid_username.status_code == 422
+
+
+def test_cookie_secure_policy(monkeypatch: MonkeyPatch) -> None:
+    monkeypatch.setattr(settings, "cookie_secure", True)
+    secure_response = Response()
+    set_session_cookie(secure_response, "token")
+    assert "Secure" in secure_response.headers["set-cookie"]
+    assert "HttpOnly" in secure_response.headers["set-cookie"]
+    assert "SameSite=lax" in secure_response.headers["set-cookie"]
+
+    monkeypatch.setattr(settings, "cookie_secure", False)
+    test_response = Response()
+    set_session_cookie(test_response, "token")
+    assert "Secure" not in test_response.headers["set-cookie"]
