@@ -40,14 +40,30 @@ Implemented locally on `nord` as of 2026-08-17:
 - Git-primary deployment instructions, SSH/rsync fallback instructions and an Nginx location example
 - canonical AGPL-3.0 license and license ADR
 - GitHub delivery/read-only production security ADR
+- canonical `rhizome-test` Compose overlay with configurable frontend LAN bind
+
+Stage 1 integration results on `rhizome-test`:
+- tested revision before this change: `5c9ec1b`
+- PASS: clean clone from the public GitHub repository
+- PASS: `docker compose config` validated
+- PASS: backend image builds
+- PASS: frontend image builds
+- PASS: PostgreSQL healthy
+- PASS: backend healthy
+- PASS: frontend healthy
+- PASS: `GET /health` returned HTTP 200
+- PASS: `GET /health/db` returned HTTP 200 and confirmed database reachable
+- PASS: frontend `/api/health` proxy returned HTTP 200
+- PASS: Alembic current revision is `0001_bootstrap (head)`
+- PASS: PostgreSQL `alembic_version` is `0001_bootstrap`
+- PASS: PostgreSQL Docker volume persistence verified across `docker compose down/up`
+- PASS: frontend accessed from `nord` by browser and curl at `http://172.16.13.14:8080`
+- PASS: backend remains bound only to `127.0.0.1:8000`
+- PASS: PostgreSQL has no published host port
 
 Still required before Stage 1 completion:
-- initialize/reconcile the real Git repository and Stage 1 branch
 - verify the GitHub remote `https://github.com/vgdnet/graphnotes`
-- configure read-only repository consumption on `rhizome-test`
-- deploy the candidate Git revision to `rhizome-test`
-- run Docker image builds and the full Compose stack on `rhizome-test`
-- verify a real backend-to-PostgreSQL connection and Alembic upgrade on `rhizome-test`
+- deploy and verify the post-`5c9ec1b` revision using the canonical `rhizome-test` Compose overlay
 - approve the tested Git revision before promotion
 - inspect and reconcile `/opt/graphnotes` on `rhizome`
 - ensure `rhizome` has no GitHub credentials capable of push

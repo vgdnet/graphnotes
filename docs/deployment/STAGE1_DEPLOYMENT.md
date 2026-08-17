@@ -1,7 +1,7 @@
 # Stage 1 deployment
 
-The same working tree can be delivered to `rhizome` by Git or by copying it over
-SSH. Neither method changes the runtime layout.
+Git is the canonical delivery mechanism from `nord` through `rhizome-test` to
+`rhizome`. SSH/rsync is fallback/bootstrap only.
 
 ## Runtime contract
 
@@ -9,8 +9,56 @@ SSH. Neither method changes the runtime layout.
 - PostgreSQL is reachable only on the internal Compose network.
 - Backend binds to `127.0.0.1:8000` on the host.
 - Frontend binds to `127.0.0.1:8080` on the host.
+- PostgreSQL publishes no host port.
+- The production-safe `compose.yaml` keeps these bindings unchanged.
 - Existing host Nginx should proxy its chosen public route to
   `http://127.0.0.1:8080` after its current configuration is inspected.
+
+## Rhizome-test integration deployment
+
+`nord` (`172.16.13.205/24`) and `rhizome-test` (`172.16.13.14/24`) are currently
+reachable on the same `172.16.13.0/24` network. The canonical integration
+overlay adds a frontend-only LAN binding while retaining the base loopback
+binding:
+
+```text
+127.0.0.1:8080       -> frontend:80
+172.16.13.14:8080    -> frontend:80
+127.0.0.1:8000       -> backend:8000
+no host port         -> PostgreSQL
+```
+
+Deploy the integration stack with:
+
+```bash
+docker compose \
+  -f compose.yaml \
+  -f deploy/compose.rhizome-test.yaml \
+  up -d
+```
+
+The overlay uses `${GRAPHNOTES_TEST_BIND_IP:-172.16.13.14}`. Set
+`GRAPHNOTES_TEST_BIND_IP` in the untracked `.env` only when the test VM address
+changes.
+
+Local `compose.override.yaml` files are not part of the canonical deployment,
+must not be required, and must not replace the committed integration overlay.
+
+Validate the merged configuration before startup:
+
+```bash
+docker compose \
+  -f compose.yaml \
+  -f deploy/compose.rhizome-test.yaml \
+  config
+```
+
+From `nord`, verify frontend and proxy reachability with:
+
+```bash
+curl --fail http://172.16.13.14:8080/
+curl --fail http://172.16.13.14:8080/api/health
+```
 
 ## Git delivery
 
@@ -48,7 +96,7 @@ an explicit home outside the deployment tree.
 
 Create `.env` directly on `rhizome`; never copy a developer secret file into Git.
 
-## First target verification
+## Stable target verification
 
 Run these only after inspecting the target:
 

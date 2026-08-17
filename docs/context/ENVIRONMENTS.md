@@ -5,6 +5,7 @@ Updated: 2026-08-17
 ## 1. nord - development workstation
 Platform and tools:
 - Ubuntu
+- address: `172.16.13.205/24`
 - user: `efimov`
 - hostname: `nord`
 - Codex is installed locally
@@ -24,7 +25,8 @@ Project location:
 ## 2. rhizome-test - integration and test environment
 Platform and address:
 - Debian 13 KVM
-- address: `172.16.13.14`
+- address: `172.16.13.14/24`
+- currently reachable from `nord` on the shared `172.16.13.0/24` network
 
 Role:
 - integration and deployment testing
@@ -39,6 +41,23 @@ Rules:
 - normally consume the GitHub repository read-only
 - clone, fetch and check out candidate revisions from GitHub
 - do not treat this environment or its working tree as canonical source
+- use `compose.yaml` together with `deploy/compose.rhizome-test.yaml`
+- expose frontend to `nord` at `http://172.16.13.14:8080`
+- keep backend bound only to `127.0.0.1:8000`
+- do not publish a PostgreSQL host port
+- local `compose.override.yaml` files are non-canonical and must not be required
+
+Canonical integration command:
+
+```bash
+docker compose \
+  -f compose.yaml \
+  -f deploy/compose.rhizome-test.yaml \
+  up -d
+```
+
+The frontend bind address can be changed through `GRAPHNOTES_TEST_BIND_IP`; its
+canonical default is `172.16.13.14`.
 
 ## 3. rhizome - stable target
 Platform and known facts:

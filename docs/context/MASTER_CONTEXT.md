@@ -121,9 +121,18 @@ Start simple. Add infrastructure only for measured/observed needs.
 
 ## 7. Development model
 The canonical environment topology is:
-- `nord`: Ubuntu development workstation with Codex and VS Code; primary source authoring
-- `rhizome-test`: Debian 13 KVM at `172.16.13.14`; integration, deployment, migration and destructive testing
+- `nord`: Ubuntu development workstation at `172.16.13.205/24` with Codex and VS Code; primary source authoring
+- `rhizome-test`: Debian 13 KVM at `172.16.13.14/24`; integration, deployment, migration and destructive testing
 - `rhizome`: Debian 13 stable target for approved builds and early user testing
+
+`nord` and `rhizome-test` are currently reachable on the same
+`172.16.13.0/24` network. The canonical integration deployment combines
+`compose.yaml` with `deploy/compose.rhizome-test.yaml`. This exposes only the
+frontend to the shared network at `http://172.16.13.14:8080`; backend remains on
+`127.0.0.1:8000`, and PostgreSQL has no published host port. The bind IP is
+configurable through `GRAPHNOTES_TEST_BIND_IP` with `172.16.13.14` as its
+default. Local `compose.override.yaml` files are not canonical and are not
+required for deployment.
 
 The canonical delivery workflow is:
 

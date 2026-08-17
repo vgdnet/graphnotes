@@ -64,6 +64,9 @@ Introduce them only after a documented need and explicit approval.
 - `rhizome-test` normally clones/fetches/checks out read-only and must not be treated as canonical source.
 - `rhizome` Git access must be read-only. Never configure credentials capable of push there.
 - Production receives only approved commits or tags; do not edit source ad hoc on `rhizome`.
+- Keep `compose.yaml` production-safe: backend and frontend bind to loopback, and PostgreSQL publishes no host port.
+- For `rhizome-test`, use the canonical `deploy/compose.rhizome-test.yaml` overlay to add the configured LAN binding for frontend only.
+- Local `compose.override.yaml` files are non-canonical and must not be required for integration deployment.
 - Do not implement later-stage features early unless necessary for the current stage.
 - Keep changes reviewable and logically grouped.
 - Before editing, inspect existing files and `git status`.
@@ -92,7 +95,7 @@ At the end of each stage:
 ## Environments
 Do not confuse the environments:
 - `nord`: Ubuntu development workstation with Codex and VS Code; primary source authoring location
-- `rhizome-test`: Debian 13 KVM at `172.16.13.14`; integration, deployment, migration and destructive testing environment
+- `rhizome-test`: Debian 13 KVM at `172.16.13.14/24`; integration, deployment, migration and destructive testing environment
 - `rhizome`: Debian 13 stable target for approved builds and early user testing
 
 Code is authored and reviewed on `nord`, pushed to GitHub, consumed read-only on `rhizome-test`, and promoted to `rhizome` only as an approved commit or tag. Do not use `rhizome` for destructive experiments or bypass `rhizome-test` for new feature code. Avoid ad-hoc source edits directly on either target.

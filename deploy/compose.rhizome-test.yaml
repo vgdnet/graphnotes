@@ -1,0 +1,4 @@
+services:
+  frontend:
+    ports:
+      - "${GRAPHNOTES_TEST_BIND_IP:-172.16.13.14}:8080:80"
