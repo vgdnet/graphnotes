@@ -13,6 +13,8 @@ Platform and tools:
 Role:
 - primary source-code authoring environment
 - local Git repository
+- GitHub write access
+- branches, commits and pushes
 - Codex runs against the local repository
 - user reviews/modifies code in VS Code
 
@@ -34,7 +36,9 @@ Role:
 Rules:
 - every new feature revision must be tested here before deployment to `rhizome`
 - failures and destructive experiments belong here, not on `rhizome`
-- deployment should normally pull or check out the candidate revision from the Git remote
+- normally consume the GitHub repository read-only
+- clone, fetch and check out candidate revisions from GitHub
+- do not treat this environment or its working tree as canonical source
 
 ## 3. rhizome - stable target
 Platform and known facts:
@@ -50,9 +54,12 @@ Role:
 
 Rules:
 - deploy only a revision already validated on `rhizome-test`
+- Git repository access must be read-only
+- do not configure GitHub credentials capable of push
+- receive only approved commits or tags
 - do not use this host for destructive experiments
 - do not use this host as the first environment for migrations or new feature code
-- avoid ad-hoc source edits; deploy approved Git revisions
+- do not make ad-hoc source edits
 
 Important:
 - exact Stage 0 package versions, Nginx configuration, firewall rules, ports and files are NOT fully recorded in this context package
@@ -63,11 +70,14 @@ Important:
 
 ```text
 nord
-  -> Git remote
+  -> GitHub
       -> rhizome-test
           -> approved revision
               -> rhizome
 ```
+
+Canonical public repository:
+`https://github.com/vgdnet/graphnotes`
 
 Git is the primary delivery mechanism. SSH/rsync is permitted only as a fallback
 or bootstrap mechanism when Git delivery is not yet available. A fallback copy
@@ -77,4 +87,4 @@ revision on `rhizome-test` before promotion to `rhizome`.
 ## 5. Source-of-truth rule
 Once the local repository is established, source edits should normally originate from the Git working tree on `nord`, not from direct ad-hoc editing in `/opt/graphnotes` on Rhizome.
 
-The Git remote and approved revision are the source of truth for delivery across environments. Promote the same reviewed revision from `rhizome-test` to `rhizome`; do not rebuild an untracked variant directly on the stable target.
+The public GitHub repository and approved revision are the source of truth for delivery across environments. Promote the same reviewed commit or tag from `rhizome-test` to `rhizome`; do not rebuild an untracked variant directly on the stable target.

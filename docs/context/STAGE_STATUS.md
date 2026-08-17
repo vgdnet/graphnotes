@@ -16,7 +16,15 @@ Branch: `feature/01-project-bootstrap`
 Primary authoring environment: `nord`
 Target integration environment: `rhizome-test` (`172.16.13.14`)
 Stable deployment target: `rhizome`
-Delivery path: `nord -> Git remote -> rhizome-test -> approved revision -> rhizome`
+Canonical repository: `https://github.com/vgdnet/graphnotes` (public)
+Delivery path: `nord -> GitHub -> rhizome-test -> approved revision -> rhizome`
+
+Accepted project decisions:
+- canonical license: GNU Affero General Public License v3.0 (`AGPL-3.0`)
+- GitHub is the canonical source delivery mechanism
+- `rhizome-test` normally consumes candidate revisions read-only
+- `rhizome` Git access is read-only and must not use push-capable credentials
+- SSH/rsync is fallback/bootstrap only
 
 Goal:
 Create a minimal, clean, testable GraphNotes application repository and application stack.
@@ -30,15 +38,19 @@ Implemented locally on `nord` as of 2026-08-17:
 - Compose topology for PostgreSQL, backend and frontend
 - loopback-only host bindings for frontend/backend and no PostgreSQL host port
 - Git-primary deployment instructions, SSH/rsync fallback instructions and an Nginx location example
+- canonical AGPL-3.0 license and license ADR
+- GitHub delivery/read-only production security ADR
 
 Still required before Stage 1 completion:
 - initialize/reconcile the real Git repository and Stage 1 branch
-- configure the Git remote used by all three environments
+- verify the GitHub remote `https://github.com/vgdnet/graphnotes`
+- configure read-only repository consumption on `rhizome-test`
 - deploy the candidate Git revision to `rhizome-test`
 - run Docker image builds and the full Compose stack on `rhizome-test`
 - verify a real backend-to-PostgreSQL connection and Alembic upgrade on `rhizome-test`
 - approve the tested Git revision before promotion
 - inspect and reconcile `/opt/graphnotes` on `rhizome`
+- ensure `rhizome` has no GitHub credentials capable of push
 - deploy only the approved revision to `rhizome`
 - inspect, test and integrate the existing Rhizome Nginx configuration without destructive experiments
 - write `docs/stages/STAGE1_COMPLETED.md` with observed runtime facts

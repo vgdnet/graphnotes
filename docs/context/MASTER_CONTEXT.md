@@ -30,6 +30,11 @@ GitHub Markdown
       -> graph representation
 ```
 
+## 2.1 Project license
+GraphNotes is open-source software licensed under GNU Affero General Public
+License v3.0 (`AGPL-3.0`). The canonical license text is the repository-root
+`LICENSE` file. See `docs/decisions/ADR-005-agpl-3-license.md`.
+
 ## 3. MVP architecture
 Target application stack:
 
@@ -124,13 +129,15 @@ The canonical delivery workflow is:
 
 ```text
 nord
-  -> Git remote
+  -> GitHub
       -> rhizome-test
           -> approved revision
               -> rhizome
 ```
 
-Git is the primary delivery mechanism. SSH/rsync is a fallback or bootstrap mechanism only. Every new feature revision must pass the applicable integration, deployment and migration checks on `rhizome-test` before the same approved revision is deployed to `rhizome`. Do not use `rhizome` for destructive experiments or as the first test target for new code.
+The canonical public repository is `https://github.com/vgdnet/graphnotes`.
+
+Git is the primary delivery mechanism. SSH/rsync is a fallback or bootstrap mechanism only. `nord` owns source development and GitHub write operations. `rhizome-test` normally consumes candidate revisions read-only and is never canonical source. `rhizome` Git access must be read-only, with no credentials capable of push, and it receives only commits or tags approved on `rhizome-test`. Every new feature revision must pass the applicable integration, deployment and migration checks on `rhizome-test` before the same approved revision is deployed to `rhizome`. Do not use `rhizome` for destructive experiments, first-run migrations or ad-hoc source edits. See `docs/decisions/ADR-006-production-git-readonly.md`.
 
 ## 8. Stage roadmap
 - Stage 0 - Infrastructure - DONE

@@ -17,6 +17,12 @@ Markdown is the source of truth for knowledge content.
 The graph is derived from Markdown and indexed for fast display/querying.
 Do not introduce a second canonical graph file such as `graph.json`.
 
+## License
+GraphNotes is open-source software licensed under GNU Affero General Public
+License v3.0 (`AGPL-3.0`). The repository-root `LICENSE` file and
+`docs/decisions/ADR-005-agpl-3-license.md` are canonical. Do not add
+project-owned code under an incompatible license.
+
 ## MVP stack
 - Backend: FastAPI / Python
 - Frontend: React + TypeScript
@@ -50,9 +56,14 @@ Introduce them only after a documented need and explicit approval.
 - One development stage per feature branch.
 - Current stage determines scope.
 - Git is the primary delivery mechanism between environments.
-- The canonical delivery path is `nord -> Git remote -> rhizome-test -> approved revision -> rhizome`.
+- The canonical public repository is `https://github.com/vgdnet/graphnotes`.
+- The canonical delivery path is `nord -> GitHub -> rhizome-test -> approved revision -> rhizome`.
 - Every new feature revision must pass integration, deployment and migration testing on `rhizome-test` before deployment to `rhizome`.
 - SSH/rsync is a fallback or bootstrap delivery mechanism only.
+- `nord` may have GitHub write credentials and owns branches, commits and pushes.
+- `rhizome-test` normally clones/fetches/checks out read-only and must not be treated as canonical source.
+- `rhizome` Git access must be read-only. Never configure credentials capable of push there.
+- Production receives only approved commits or tags; do not edit source ad hoc on `rhizome`.
 - Do not implement later-stage features early unless necessary for the current stage.
 - Keep changes reviewable and logically grouped.
 - Before editing, inspect existing files and `git status`.
@@ -84,4 +95,4 @@ Do not confuse the environments:
 - `rhizome-test`: Debian 13 KVM at `172.16.13.14`; integration, deployment, migration and destructive testing environment
 - `rhizome`: Debian 13 stable target for approved builds and early user testing
 
-Code is authored and reviewed on `nord`, delivered through the Git remote to `rhizome-test`, and promoted to `rhizome` only as an approved revision. Do not use `rhizome` for destructive experiments or bypass `rhizome-test` for new feature code. Avoid ad-hoc source edits directly on either target.
+Code is authored and reviewed on `nord`, pushed to GitHub, consumed read-only on `rhizome-test`, and promoted to `rhizome` only as an approved commit or tag. Do not use `rhizome` for destructive experiments or bypass `rhizome-test` for new feature code. Avoid ad-hoc source edits directly on either target.
