@@ -13,6 +13,8 @@ type User = {
   is_active: boolean;
 };
 
+type AdminUsersResponse = { users: User[] };
+
 async function readError(response: Response): Promise<string> {
   try {
     const body = (await response.json()) as { detail?: unknown };
@@ -30,6 +32,8 @@ export function App() {
   const [mode, setMode] = useState<AuthMode>("login");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const [adminUsers, setAdminUsers] = useState<User[]>([]);
+  const [adminLoading, setAdminLoading] = useState(false);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -62,6 +66,30 @@ export function App() {
 
     return () => controller.abort();
   }, []);
+
+  useEffect(() => {
+    if (user?.role !== "admin") {
+      setAdminUsers([]);
+      return;
+    }
+
+    const controller = new AbortController();
+    setAdminLoading(true);
+    void fetch("/api/admin/users", { signal: controller.signal })
+      .then(async (response) => {
+        if (!response.ok) throw new Error(await readError(response));
+        return (await response.json()) as AdminUsersResponse;
+      })
+      .then((body) => setAdminUsers(body.users))
+      .catch((requestError: unknown) => {
+        if (!(requestError instanceof DOMException && requestError.name === "AbortError")) {
+          setError(requestError instanceof Error ? requestError.message : "Ошибка соединения");
+        }
+      })
+      .finally(() => setAdminLoading(false));
+
+    return () => controller.abort();
+  }, [user?.role]);
 
   async function submitAuth(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -114,6 +142,31 @@ export function App() {
     }
   }
 
+  async function updateManagedUser(
+    managedUser: User,
+    change: { role?: User["role"]; is_active?: boolean },
+  ) {
+    setSubmitting(true);
+    setError("");
+    try {
+      const response = await fetch(`/api/admin/users/${managedUser.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(change),
+      });
+      if (!response.ok) throw new Error(await readError(response));
+      const updated = (await response.json()) as User;
+      setAdminUsers((users) => users.map((item) => item.id === updated.id ? updated : item));
+      if (updated.id === user?.id) {
+        setUser(updated.is_active ? updated : null);
+      }
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "Ошибка соединения");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
   return (
     <main className="shell">
       <header className="topbar">
@@ -130,28 +183,79 @@ export function App() {
       {authChecking ? (
         <section className="loading" aria-live="polite">Загружаем вашу ризому…</section>
       ) : user ? (
-        <section className="workspace">
-          <div className="workspace__intro">
-            <p className="eyebrow">Личная ризома</p>
-            <h1>Здравствуйте, {user.display_name}</h1>
-            <p className="summary">
-              Ваше пространство готово. Следующим шагом здесь появятся Markdown-заметки
-              и связи между ними.
-            </p>
-          </div>
-          <aside className="profile-card">
-            <div className="avatar" aria-hidden="true">
-              {user.display_name.slice(0, 1).toUpperCase()}
+        <>
+          <section className="workspace">
+            <div className="workspace__intro">
+              <p className="eyebrow">Личная ризома</p>
+              <h1>Здравствуйте, {user.display_name}</h1>
+              <p className="summary">
+                Ваше пространство готово. Следующим шагом здесь появятся Markdown-заметки
+                и связи между ними.
+              </p>
             </div>
-            <div>
-              <strong>{user.display_name}</strong>
-              <span>@{user.username} · {user.role}</span>
-            </div>
-            <button className="button button--quiet" onClick={() => void logout()} disabled={submitting}>
-              Выйти
-            </button>
-          </aside>
-        </section>
+            <aside className="profile-card">
+              <div className="avatar" aria-hidden="true">
+                {user.display_name.slice(0, 1).toUpperCase()}
+              </div>
+              <div>
+                <strong>{user.display_name}</strong>
+                <span>@{user.username} · {user.role}</span>
+              </div>
+              <button className="button button--quiet" onClick={() => void logout()} disabled={submitting}>
+                Выйти
+              </button>
+            </aside>
+          </section>
+          {user.role === "admin" && (
+            <section className="admin-panel" aria-labelledby="admin-heading">
+              <div>
+                <p className="eyebrow">Администрирование</p>
+                <h2 id="admin-heading">Пользователи</h2>
+                <p className="admin-panel__hint">Роли глобальны: editor включает права user, admin — все права.</p>
+              </div>
+              {error && <p className="form-error" role="alert">{error}</p>}
+              {adminLoading ? (
+                <p className="admin-panel__hint">Загружаем пользователей…</p>
+              ) : (
+                <div className="user-list">
+                  {adminUsers.map((managedUser) => (
+                    <article className="user-row" key={managedUser.id}>
+                      <div className="user-row__identity">
+                        <strong>{managedUser.display_name}</strong>
+                        <span>@{managedUser.username}</span>
+                      </div>
+                      <label>
+                        Роль
+                        <select
+                          value={managedUser.role}
+                          disabled={submitting}
+                          onChange={(event) => void updateManagedUser(
+                            managedUser,
+                            { role: event.target.value as User["role"] },
+                          )}
+                        >
+                          <option value="user">user</option>
+                          <option value="editor">editor</option>
+                          <option value="admin">admin</option>
+                        </select>
+                      </label>
+                      <button
+                        className={managedUser.is_active ? "button button--danger" : "button button--quiet"}
+                        disabled={submitting}
+                        onClick={() => void updateManagedUser(
+                          managedUser,
+                          { is_active: !managedUser.is_active },
+                        )}
+                      >
+                        {managedUser.is_active ? "Заблокировать" : "Активировать"}
+                      </button>
+                    </article>
+                  ))}
+                </div>
+              )}
+            </section>
+          )}
+        </>
       ) : (
         <section className="auth-layout">
           <div className="hero-copy">

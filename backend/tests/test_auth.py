@@ -10,7 +10,9 @@ from app.core.config import settings
 from app.db.session import get_db_session
 from app.main import app
 from app.models.auth_session import AuthSession
+from app.models.audit_event import AuditEvent
 from app.models.user import User
+from app.services.admin import AdminBootstrapError, bootstrap_admin
 from app.services.auth import verify_password
 from app.services.session_cookie import set_session_cookie
 
@@ -92,6 +94,12 @@ async def test_registration_session_refresh_and_logout(
     assert logout.status_code == 204
     assert (await client.get("/users/me")).status_code == 401
 
+    async with session_factory() as database:
+        actions = set((await database.scalars(select(AuditEvent.action))).all())
+        assert "auth.registration_succeeded" in actions
+        assert "auth.registration_failed" in actions
+        assert "auth.logout" in actions
+
 
 async def test_login_failures_and_inactive_account(
     auth_test_context: tuple[
@@ -116,6 +124,13 @@ async def test_login_failures_and_inactive_account(
     )
     assert bad_password.status_code == 401
     assert bad_password.json() == {"detail": "invalid username or password"}
+
+    unknown_user = await client.post(
+        "/auth/login",
+        json={"username": "unknown-user", "password": "not the password"},
+    )
+    assert unknown_user.status_code == 401
+    assert unknown_user.json() == {"detail": "invalid username or password"}
 
     login = await client.post(
         "/auth/login",
@@ -156,6 +171,11 @@ async def test_login_failures_and_inactive_account(
     )
     assert inactive_login.status_code == 403
 
+    async with session_factory() as database:
+        actions = (await database.scalars(select(AuditEvent.action))).all()
+        assert "auth.login_succeeded" in actions
+        assert actions.count("auth.login_failed") == 3
+
 
 async def test_registration_validation(
     auth_test_context: tuple[
@@ -175,6 +195,16 @@ async def test_registration_validation(
     )
     assert short_password.status_code == 422
 
+    long_password = await client.post(
+        "/auth/register",
+        json={
+            "username": "valid-user",
+            "password": "x" * 129,
+            "display_name": "Valid User",
+        },
+    )
+    assert long_password.status_code == 422
+
     invalid_username = await client.post(
         "/auth/register",
         json={
@@ -184,6 +214,177 @@ async def test_registration_validation(
         },
     )
     assert invalid_username.status_code == 422
+
+    attempted_escalation = await client.post(
+        "/auth/register",
+        json={
+            "username": "ordinary-user",
+            "password": "a sufficiently long password",
+            "display_name": "Ordinary User",
+            "role": "admin",
+        },
+    )
+    assert attempted_escalation.status_code == 201
+    assert attempted_escalation.json()["role"] == "user"
+
+
+async def test_admin_rbac_management_last_admin_and_audit(
+    auth_test_context: tuple[
+        AsyncClient,
+        async_sessionmaker[AsyncSession],
+    ],
+) -> None:
+    admin_client, session_factory = auth_test_context
+    admin_registration = await admin_client.post(
+        "/auth/register",
+        json={
+            "username": "initial-admin",
+            "password": "initial admin password",
+            "display_name": "Initial Admin",
+        },
+    )
+    admin_id = admin_registration.json()["id"]
+    assert (await admin_client.get("/admin/users")).status_code == 403
+
+    async with session_factory() as database:
+        bootstrapped = await bootstrap_admin(database, "INITIAL-ADMIN")
+        assert bootstrapped.role == "admin"
+
+    assert (await admin_client.get("/admin/users")).status_code == 200
+
+    async with AsyncClient(
+        transport=ASGITransport(app=app),
+        base_url="http://testserver",
+    ) as managed_client:
+        managed_registration = await managed_client.post(
+            "/auth/register",
+            json={
+                "username": "managed-user",
+                "password": "managed user password",
+                "display_name": "Managed User",
+                "role": "admin",
+            },
+        )
+        managed_id = managed_registration.json()["id"]
+        assert managed_registration.json()["role"] == "user"
+        assert (await managed_client.get("/admin/users")).status_code == 403
+
+        users_response = await admin_client.get("/admin/users")
+        assert users_response.status_code == 200
+        assert len(users_response.json()["users"]) == 2
+        assert "password_hash" not in users_response.text
+        assert "token_hash" not in users_response.text
+
+        editor_update = await admin_client.patch(
+            f"/admin/users/{managed_id}",
+            json={"role": "editor"},
+        )
+        assert editor_update.status_code == 200
+        assert editor_update.json()["role"] == "editor"
+        assert (await managed_client.get("/admin/users")).status_code == 403
+        forbidden_patch = await managed_client.patch(
+            f"/admin/users/{managed_id}",
+            json={"role": "admin"},
+        )
+        assert forbidden_patch.status_code == 403
+
+        admin_update = await admin_client.patch(
+            f"/admin/users/{managed_id}",
+            json={"role": "admin"},
+        )
+        assert admin_update.status_code == 200
+        assert (await managed_client.get("/admin/users")).status_code == 200
+
+        demote_initial = await managed_client.patch(
+            f"/admin/users/{admin_id}",
+            json={"role": "user"},
+        )
+        assert demote_initial.status_code == 200
+
+        block_initial = await managed_client.patch(
+            f"/admin/users/{admin_id}",
+            json={"is_active": False},
+        )
+        assert block_initial.status_code == 200
+        assert (await admin_client.get("/users/me")).status_code == 401
+        reactivate_initial = await managed_client.patch(
+            f"/admin/users/{admin_id}",
+            json={"is_active": True},
+        )
+        assert reactivate_initial.status_code == 200
+
+        block_last_admin = await managed_client.patch(
+            f"/admin/users/{managed_id}",
+            json={"is_active": False},
+        )
+        assert block_last_admin.status_code == 409
+        assert "last active admin" in block_last_admin.json()["detail"]
+        demote_last_admin = await managed_client.patch(
+            f"/admin/users/{managed_id}",
+            json={"role": "editor"},
+        )
+        assert demote_last_admin.status_code == 409
+
+        empty_update = await managed_client.patch(
+            f"/admin/users/{admin_id}",
+            json={},
+        )
+        assert empty_update.status_code == 422
+
+    async with session_factory() as database:
+        events = (await database.scalars(select(AuditEvent))).all()
+        actions = {event.action for event in events}
+        assert "admin.bootstrap_succeeded" in actions
+        assert "admin.user_role_changed" in actions
+        assert "admin.user_active_changed" in actions
+        serialized_events = " ".join(
+            f"{event.action} {event.subject_username} {event.details}"
+            for event in events
+        )
+        assert "initial admin password" not in serialized_events
+        assert "managed user password" not in serialized_events
+        assert "graphnotes_session" not in serialized_events
+
+
+async def test_admin_bootstrap_refuses_escalation_and_supports_recovery(
+    auth_test_context: tuple[
+        AsyncClient,
+        async_sessionmaker[AsyncSession],
+    ],
+) -> None:
+    client, session_factory = auth_test_context
+    for username in ("first-admin", "recovery-admin"):
+        await client.post(
+            "/auth/register",
+            json={
+                "username": username,
+                "password": "a sufficiently long password",
+                "display_name": username,
+            },
+        )
+
+    async with session_factory() as database:
+        await bootstrap_admin(database, "first-admin")
+
+    async with session_factory() as database:
+        try:
+            await bootstrap_admin(database, "recovery-admin")
+        except AdminBootstrapError as exc:
+            assert "active admin already exists" in str(exc)
+        else:
+            raise AssertionError("bootstrap bypassed an existing active admin")
+
+    async with session_factory() as database:
+        first_admin = await database.scalar(
+            select(User).where(User.username == "first-admin")
+        )
+        assert first_admin is not None
+        first_admin.is_active = False
+        await database.commit()
+
+    async with session_factory() as database:
+        recovered = await bootstrap_admin(database, "recovery-admin")
+        assert recovered.role == "admin"
 
 
 def test_cookie_secure_policy(monkeypatch: MonkeyPatch) -> None:

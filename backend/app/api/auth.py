@@ -13,6 +13,7 @@ from app.core.config import settings
 from app.models.auth_session import AuthSession
 from app.models.user import User
 from app.schemas.auth import LoginRequest, RegisterRequest, UserResponse
+from app.services.audit import record_audit_event
 from app.services.auth import (
     DUMMY_PASSWORD_HASH,
     hash_password,
@@ -51,12 +52,26 @@ async def register(
 
     try:
         await database.flush()
+        record_audit_event(
+            database,
+            action="auth.registration_succeeded",
+            actor_user_id=user.id,
+            target_user_id=user.id,
+            subject_username=user.username,
+        )
         auth_session, token = new_auth_session(user.id)
         database.add(auth_session)
         await database.commit()
         await database.refresh(user)
     except IntegrityError as exc:
         await database.rollback()
+        record_audit_event(
+            database,
+            action="auth.registration_failed",
+            subject_username=payload.username,
+            details={"reason": "username_conflict"},
+        )
+        await database.commit()
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="username is already registered",
@@ -83,11 +98,27 @@ async def login(
     )
 
     if user is None or not password_valid:
+        record_audit_event(
+            database,
+            action="auth.login_failed",
+            target_user_id=user.id if user is not None else None,
+            subject_username=payload.username,
+            details={"reason": "invalid_credentials"},
+        )
+        await database.commit()
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="invalid username or password",
         )
     if not user.is_active:
+        record_audit_event(
+            database,
+            action="auth.login_failed",
+            target_user_id=user.id,
+            subject_username=user.username,
+            details={"reason": "inactive_account"},
+        )
+        await database.commit()
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="account is inactive",
@@ -95,6 +126,13 @@ async def login(
 
     auth_session, token = new_auth_session(user.id)
     database.add(auth_session)
+    record_audit_event(
+        database,
+        action="auth.login_succeeded",
+        actor_user_id=user.id,
+        target_user_id=user.id,
+        subject_username=user.username,
+    )
     await database.commit()
     set_session_cookie(response, token)
     return user
@@ -166,6 +204,12 @@ async def logout(
         )
         auth_session = result.scalar_one_or_none()
         if auth_session is not None:
+            record_audit_event(
+                database,
+                action="auth.logout",
+                actor_user_id=auth_session.user_id,
+                target_user_id=auth_session.user_id,
+            )
             await database.delete(auth_session)
             await database.commit()
 

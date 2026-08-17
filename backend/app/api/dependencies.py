@@ -8,7 +8,7 @@ from sqlalchemy.orm import joinedload
 from app.core.config import settings
 from app.db.session import get_db_session
 from app.models.auth_session import AuthSession
-from app.models.user import User
+from app.models.user import User, UserRole
 from app.services.auth import hash_session_token, session_is_expired
 from app.services.session_cookie import session_cookie_deletion_header
 
@@ -62,3 +62,15 @@ async def get_current_user(
 
 
 CurrentUser = Annotated[User, Depends(get_current_user)]
+
+
+async def get_current_admin(user: CurrentUser) -> User:
+    if user.role != UserRole.ADMIN.value:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="administrator access required",
+        )
+    return user
+
+
+CurrentAdmin = Annotated[User, Depends(get_current_admin)]
