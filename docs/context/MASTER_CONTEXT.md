@@ -128,7 +128,8 @@ Start simple. Add infrastructure only for measured/observed needs.
 The canonical environment topology is:
 - `nord`: Ubuntu development workstation at `172.16.13.205/24` with Codex and VS Code; primary source authoring
 - `rhizome-test`: Debian 13 KVM at `172.16.13.14/24`; integration, deployment, migration and destructive testing
-- `rhizome`: Debian 13 stable target for approved builds and early user testing
+- `rhizome`: Debian 13 at `172.16.13.13/24`; stable target for approved builds
+  and early user testing
 
 `nord` and `rhizome-test` are currently reachable on the same
 `172.16.13.0/24` network. The canonical integration deployment combines

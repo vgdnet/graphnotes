@@ -1,9 +1,15 @@
 # Stage 1 - Project Bootstrap
 
-Status: CURRENT
+Status: COMPLETED
 Branch: `feature/01-project-bootstrap`
 Primary coding environment: `nord`
-Target integration host: `rhizome`
+Target integration host: `rhizome-test`
+
+Owner decision on 2026-08-17: deployment to stable `rhizome`
+(`172.16.13.13`) is deferred until a separate explicit request. Stage 1 is
+accepted based on reproducible integration and reboot validation on
+`rhizome-test` (`172.16.13.14`). This does not remove the promotion gate for a
+future stable deployment.
 
 ## Goal
 Build the minimal GraphNotes source repository and runnable application skeleton without implementing product business features early.
@@ -155,7 +161,9 @@ Before declaring Stage 1 complete, run and record the applicable checks:
 - Compose stack is valid and starts
 - PostgreSQL is persistent and not public on Rhizome
 - secrets are not committed
-- Rhizome integration is verified without damaging Stage 0 config
+- `rhizome-test` integration is verified, including reboot behavior
+- stable `rhizome` is inventoried read-only and left unchanged until deployment
+  is explicitly requested
 - stage completion handoff is written
 
 ## Required completion artifact

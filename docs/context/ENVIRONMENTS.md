@@ -68,14 +68,29 @@ it does not widen exposure to `0.0.0.0`.
 ## 3. rhizome - stable target
 Platform and known facts:
 - Debian 13
+- address: `172.16.13.13/24`
 - target host name: `rhizome`
 - GraphNotes directory exists at `/opt/graphnotes`
 - `/opt/graphnotes` is owned/usable as established during Stage 0
 - Stage 0 is complete
 
+Observed by read-only inspection on 2026-08-17:
+- SSH access as `root` is available from `nord`
+- `/opt/graphnotes` contains an old Git worktree with no commits and untracked
+  bootstrap-era files; it is not a deployable canonical checkout
+- `.env` and `.env.example` are empty
+- Docker Engine `29.7.2` and Docker Compose `v5.4.0` are installed
+- no GraphNotes containers are running
+- host Nginx is not installed or active
+
 Role:
 - stable target for approved builds
 - early user testing
+
+Current deployment decision:
+- do not deploy GraphNotes to `rhizome` yet
+- all feature integration and destructive testing remains on `rhizome-test`
+- stable deployment will happen only after a separate explicit owner decision
 
 Rules:
 - deploy only a revision already validated on `rhizome-test`

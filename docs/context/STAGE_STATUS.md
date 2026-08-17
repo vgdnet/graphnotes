@@ -11,7 +11,7 @@ Do not assume undocumented Stage 0 details.
 If deployment needs an exact host fact, inspect Rhizome.
 
 ## Stage 1 - Project Bootstrap
-Status: CURRENT / IN PROGRESS
+Status: DONE
 Branch: `feature/01-project-bootstrap`
 Primary authoring environment: `nord`
 Target integration environment: `rhizome-test` (`172.16.13.14`)
@@ -77,19 +77,26 @@ Stage 1 integration results on `rhizome-test`:
 - PASS: after reboot backend remained unavailable through
   `172.16.13.14:8000`; PostgreSQL still had no published host port
 
-Still required before Stage 1 completion:
-- approve the tested Git revision before promotion
-- inspect and reconcile `/opt/graphnotes` on `rhizome`
-- ensure `rhizome` has no GitHub credentials capable of push
-- deploy only the approved revision to `rhizome`
-- inspect, test and integrate the existing Rhizome Nginx configuration without destructive experiments
-- write `docs/stages/STAGE1_COMPLETED.md` with observed runtime facts
+Deferred until stable deployment is explicitly requested:
+- reconcile the old uncommitted `/opt/graphnotes` worktree without overwriting
+  unmanaged files
+- configure read-only Git access with no push-capable credentials
+- deploy only a revision validated on `rhizome-test`
+- install or configure host Nginx, validate with `nginx -t`, and verify the
+  end-to-end route
 
 Resolved integration issue:
 - the initial Compose-only deployment could lose the frontend LAN binding when
   Docker restored containers before `172.16.13.14` appeared during boot; the
   versioned systemd unit now waits for the address and repairs the frontend
   bindings, as verified by a real VM reboot on revision `aad3eb0`
+
+Completion decision:
+- the owner accepted revision `0152937` after integration validation
+- stable deployment to `rhizome` (`172.16.13.13`) is explicitly deferred; the
+  host was inventoried read-only and remains untouched
+- Stage 1 is complete as a reproducible bootstrap validated on
+  `rhizome-test`; eventual stable deployment retains the normal promotion gate
 
 Expected components:
 - FastAPI skeleton
@@ -113,7 +120,7 @@ Explicitly out of scope:
 - PR/merge workflow
 
 ## Stage 2 - Password Authentication
-Status: PLANNED
+Status: NEXT / PLANNED
 Branch: `feature/02-password-auth`
 
 MVP auth:
