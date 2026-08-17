@@ -433,7 +433,7 @@ ADR обязателен, если решение меняет хотя бы о�
 | ADR-003 | GitHub как Git-движок знаний | Не строим собственный Git/merge engine |
 | ADR-004 | Local-first development | Историческая база environment workflow; частично заменена ADR-006 |
 | ADR-005 | AGPL-3.0 | Каноническая open-source лицензия проекта |
-| ADR-006 | GitHub delivery и read-only production | `nord -> GitHub -> rhizome-test -> rhizome`; без push credentials на stable host |
+| ADR-006 | GitHub delivery и read-only production | `nord -> GitHub -> rhizome-test -> rhizome`; без push credentials на production host |
 
 ## 15. История ТЗ
 

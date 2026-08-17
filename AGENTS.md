@@ -9,6 +9,9 @@ Before making architectural or cross-cutting changes, read:
 4. `docs/context/STAGE_STATUS.md`
 5. the active file in `docs/stages/`
 
+When acting specifically as Technical Observer, also read and follow
+`docs/context/TECHNICAL_OBSERVER_CONTEXT.md`.
+
 If code or an old document conflicts with these files, do not silently choose a new architecture. Report the conflict and ask for a decision when it materially changes the project.
 
 Product requirements belong in `PRODUCT_SPEC.md`; accepted cross-cutting
@@ -67,9 +70,9 @@ Introduce them only after a documented need and explicit approval.
 - Every new feature revision must pass integration, deployment and migration testing on `rhizome-test` before deployment to `rhizome`.
 - SSH/rsync is a fallback or bootstrap delivery mechanism only.
 - `nord` may have GitHub write credentials and owns branches, commits and pushes.
-- `rhizome-test` normally clones/fetches/checks out read-only and must not be treated as canonical source.
+- `rhizome-test` is the development-runtime, integration, migration and test environment. It normally clones/fetches/checks out read-only and must not be treated as canonical source.
 - `rhizome` Git access must be read-only. Never configure credentials capable of push there.
-- Production receives only approved commits or tags; do not edit source ad hoc on `rhizome`.
+- `rhizome` is production and receives only approved commits or tags; do not edit source ad hoc there.
 - Keep `compose.yaml` production-safe: backend and frontend bind to loopback, and PostgreSQL publishes no host port.
 - For `rhizome-test`, use the canonical `deploy/compose.rhizome-test.yaml` overlay to add the configured LAN binding for frontend only.
 - Local `compose.override.yaml` files are non-canonical and must not be required for integration deployment.
@@ -101,7 +104,7 @@ At the end of each stage:
 ## Environments
 Do not confuse the environments:
 - `nord`: Ubuntu development workstation with Codex and VS Code; primary source authoring location
-- `rhizome-test`: Debian 13 KVM at `172.16.13.14/24`; integration, deployment, migration and destructive testing environment
-- `rhizome`: Debian 13 stable target for approved builds and early user testing
+- `rhizome-test`: Debian 13 KVM at `172.16.13.14/24`; development-runtime, integration, deployment, migration and destructive testing environment
+- `rhizome`: Debian 13 production target for approved revisions only
 
 Code is authored and reviewed on `nord`, pushed to GitHub, consumed read-only on `rhizome-test`, and promoted to `rhizome` only as an approved commit or tag. Do not use `rhizome` for destructive experiments or bypass `rhizome-test` for new feature code. Avoid ad-hoc source edits directly on either target.

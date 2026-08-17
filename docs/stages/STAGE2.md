@@ -59,7 +59,7 @@ without an ADR as long as the product and security model remains unchanged.
 - workspace membership and permissions
 - GitHub product integration
 - Markdown import, notes, graph, proposals, and moderation
-- stable deployment to `rhizome` unless separately requested
+- production deployment to `rhizome` unless separately requested
 
 ## Verification
 

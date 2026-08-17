@@ -22,13 +22,14 @@ Role:
 Project location:
 - local repository: `~/Projects/graphnotes`
 
-## 2. rhizome-test - integration and test environment
+## 2. rhizome-test - development-runtime, integration and test environment
 Platform and address:
 - Debian 13 KVM
 - address: `172.16.13.14/24`
 - currently reachable from `nord` on the shared `172.16.13.0/24` network
 
 Role:
+- runtime environment for in-progress Stage development revisions
 - integration and deployment testing
 - database migration testing
 - Docker/Compose and end-to-end validation
@@ -65,7 +66,7 @@ It waits for the exact configured bind IP and force-recreates only the frontend
 container from an existing image. This preserves the restricted LAN binding;
 it does not widen exposure to `0.0.0.0`.
 
-## 3. rhizome - stable target
+## 3. rhizome - production
 Platform and known facts:
 - Debian 13
 - address: `172.16.13.13/24`
@@ -84,13 +85,13 @@ Observed by read-only inspection on 2026-08-17:
 - host Nginx is not installed or active
 
 Role:
-- stable target for approved builds
-- early user testing
+- production target for approved revisions
+- stable user-facing operation
 
 Current deployment decision:
 - do not deploy GraphNotes to `rhizome` yet
 - all feature integration and destructive testing remains on `rhizome-test`
-- stable deployment will happen only after a separate explicit owner decision
+- production deployment will happen only after a separate explicit owner decision
 
 Rules:
 - deploy only a revision already validated on `rhizome-test`
@@ -127,4 +128,4 @@ revision on `rhizome-test` before promotion to `rhizome`.
 ## 5. Source-of-truth rule
 Once the local repository is established, source edits should normally originate from the Git working tree on `nord`, not from direct ad-hoc editing in `/opt/graphnotes` on Rhizome.
 
-The public GitHub repository and approved revision are the source of truth for delivery across environments. Promote the same reviewed commit or tag from `rhizome-test` to `rhizome`; do not rebuild an untracked variant directly on the stable target.
+The public GitHub repository and approved revision are the source of truth for delivery across environments. Promote the same reviewed commit or tag from `rhizome-test` to `rhizome`; do not rebuild an untracked variant directly in production.

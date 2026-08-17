@@ -127,9 +127,11 @@ Start simple. Add infrastructure only for measured/observed needs.
 ## 7. Development model
 The canonical environment topology is:
 - `nord`: Ubuntu development workstation at `172.16.13.205/24` with Codex and VS Code; primary source authoring
-- `rhizome-test`: Debian 13 KVM at `172.16.13.14/24`; integration, deployment, migration and destructive testing
-- `rhizome`: Debian 13 at `172.16.13.13/24`; stable target for approved builds
-  and early user testing
+- `rhizome-test`: Debian 13 KVM at `172.16.13.14/24`;
+  development-runtime, integration, deployment, migration and destructive
+  testing
+- `rhizome`: Debian 13 at `172.16.13.13/24`; production target for approved
+  revisions only
 
 `nord` and `rhizome-test` are currently reachable on the same
 `172.16.13.0/24` network. The canonical integration deployment combines
@@ -158,7 +160,7 @@ nord
 
 The canonical public repository is `https://github.com/vgdnet/graphnotes`.
 
-Git is the primary delivery mechanism. SSH/rsync is a fallback or bootstrap mechanism only. `nord` owns source development and GitHub write operations. `rhizome-test` normally consumes candidate revisions read-only and is never canonical source. `rhizome` Git access must be read-only, with no credentials capable of push, and it receives only commits or tags approved on `rhizome-test`. Every new feature revision must pass the applicable integration, deployment and migration checks on `rhizome-test` before the same approved revision is deployed to `rhizome`. Do not use `rhizome` for destructive experiments, first-run migrations or ad-hoc source edits. See `docs/decisions/ADR-006-production-git-readonly.md`.
+Git is the primary delivery mechanism. SSH/rsync is a fallback or bootstrap mechanism only. `nord` owns source authoring and GitHub write operations. `rhizome-test` is the development-runtime and test environment; it normally consumes candidate revisions read-only and is never canonical source. `rhizome` is production. Its Git access must be read-only, with no credentials capable of push, and it receives only commits or tags approved on `rhizome-test`. Every new feature revision must pass the applicable integration, deployment and migration checks on `rhizome-test` before the same approved revision is deployed to `rhizome`. Do not use `rhizome` for destructive experiments, first-run migrations or ad-hoc source edits. See `docs/decisions/ADR-006-production-git-readonly.md`.
 
 ## 8. Stage roadmap
 - Stage 0 - Infrastructure - DONE

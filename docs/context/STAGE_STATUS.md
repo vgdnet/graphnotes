@@ -15,7 +15,7 @@ Status: DONE
 Branch: `feature/01-project-bootstrap`
 Primary authoring environment: `nord`
 Target integration environment: `rhizome-test` (`172.16.13.14`)
-Stable deployment target: `rhizome`
+Production deployment target: `rhizome`
 Canonical repository: `https://github.com/vgdnet/graphnotes` (public)
 Delivery path: `nord -> GitHub -> rhizome-test -> approved revision -> rhizome`
 
@@ -77,7 +77,7 @@ Stage 1 integration results on `rhizome-test`:
 - PASS: after reboot backend remained unavailable through
   `172.16.13.14:8000`; PostgreSQL still had no published host port
 
-Deferred until stable deployment is explicitly requested:
+Deferred until production deployment is explicitly requested:
 - reconcile the old uncommitted `/opt/graphnotes` worktree without overwriting
   unmanaged files
 - configure read-only Git access with no push-capable credentials
@@ -93,10 +93,10 @@ Resolved integration issue:
 
 Completion decision:
 - the owner accepted revision `0152937` after integration validation
-- stable deployment to `rhizome` (`172.16.13.13`) is explicitly deferred; the
+- production deployment to `rhizome` (`172.16.13.13`) is explicitly deferred; the
   host was inventoried read-only and remains untouched
 - Stage 1 is complete as a reproducible bootstrap validated on
-  `rhizome-test`; eventual stable deployment retains the normal promotion gate
+  `rhizome-test`; eventual production deployment retains the normal promotion gate
 
 Expected components:
 - FastAPI skeleton
