@@ -10,6 +10,7 @@ from app.db.session import get_db_session
 from app.models.auth_session import AuthSession
 from app.models.user import User
 from app.services.auth import hash_session_token, session_is_expired
+from app.services.session_cookie import session_cookie_deletion_header
 
 DatabaseSession = Annotated[AsyncSession, Depends(get_db_session)]
 
@@ -21,12 +22,18 @@ async def get_current_user(
         Cookie(alias=settings.session_cookie_name),
     ] = None,
 ) -> User:
-    credentials_error = HTTPException(
+    missing_credentials_error = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="authentication required",
     )
     if not session_token:
-        raise credentials_error
+        raise missing_credentials_error
+
+    invalid_credentials_error = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="authentication required",
+        headers={"Set-Cookie": session_cookie_deletion_header()},
+    )
 
     result = await database.execute(
         select(AuthSession)
@@ -35,17 +42,20 @@ async def get_current_user(
     )
     auth_session = result.scalar_one_or_none()
     if auth_session is None:
-        raise credentials_error
+        raise invalid_credentials_error
 
     if session_is_expired(auth_session.expires_at):
         await database.delete(auth_session)
         await database.commit()
-        raise credentials_error
+        raise invalid_credentials_error
 
     if not auth_session.user.is_active:
+        await database.delete(auth_session)
+        await database.commit()
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="account is inactive",
+            headers={"Set-Cookie": session_cookie_deletion_header()},
         )
 
     return auth_session.user

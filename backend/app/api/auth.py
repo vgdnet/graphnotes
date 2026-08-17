@@ -21,30 +21,13 @@ from app.services.auth import (
     session_is_expired,
     verify_password,
 )
+from app.services.session_cookie import (
+    clear_session_cookie,
+    session_cookie_deletion_header,
+    set_session_cookie,
+)
 
 router = APIRouter(prefix="/auth", tags=["authentication"])
-
-
-def set_session_cookie(response: Response, token: str) -> None:
-    response.set_cookie(
-        key=settings.session_cookie_name,
-        value=token,
-        max_age=settings.session_ttl_hours * 60 * 60,
-        httponly=True,
-        secure=settings.cookie_secure,
-        samesite="lax",
-        path="/",
-    )
-
-
-def clear_session_cookie(response: Response) -> None:
-    response.delete_cookie(
-        key=settings.session_cookie_name,
-        httponly=True,
-        secure=settings.cookie_secure,
-        samesite="lax",
-        path="/",
-    )
 
 
 @router.post(
@@ -142,18 +125,18 @@ async def refresh_session(
         if auth_session is not None:
             await database.delete(auth_session)
             await database.commit()
-        clear_session_cookie(response)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="authentication required",
+            headers={"Set-Cookie": session_cookie_deletion_header()},
         )
     if not auth_session.user.is_active:
         await database.delete(auth_session)
         await database.commit()
-        clear_session_cookie(response)
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="account is inactive",
+            headers={"Set-Cookie": session_cookie_deletion_header()},
         )
 
     token = secrets.token_urlsafe(32)

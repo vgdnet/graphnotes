@@ -6,13 +6,13 @@ from pytest import MonkeyPatch
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from app.api.auth import set_session_cookie
 from app.core.config import settings
 from app.db.session import get_db_session
 from app.main import app
 from app.models.auth_session import AuthSession
 from app.models.user import User
 from app.services.auth import verify_password
+from app.services.session_cookie import set_session_cookie
 
 
 async def test_registration_session_refresh_and_logout(
@@ -123,16 +123,32 @@ async def test_login_failures_and_inactive_account(
     )
     assert login.status_code == 200
 
-    async with session_factory() as database:
-        result = await database.execute(select(User).where(User.username == "bob"))
-        user = result.scalar_one()
-        user.is_active = False
-        await database.commit()
+    async with AsyncClient(
+        transport=ASGITransport(app=app),
+        base_url="http://testserver",
+    ) as refresh_client:
+        second_login = await refresh_client.post(
+            "/auth/login",
+            json={
+                "username": "bob",
+                "password": "a sufficiently long password",
+            },
+        )
+        assert second_login.status_code == 200
 
-    assert (await client.get("/users/me")).status_code == 403
-    inactive_refresh = await client.post("/auth/refresh")
-    assert inactive_refresh.status_code == 403
-    assert client.cookies.get("graphnotes_session") is None
+        async with session_factory() as database:
+            result = await database.execute(
+                select(User).where(User.username == "bob")
+            )
+            user = result.scalar_one()
+            user.is_active = False
+            await database.commit()
+
+        assert (await client.get("/users/me")).status_code == 403
+        assert client.cookies.get("graphnotes_session") is None
+        inactive_refresh = await refresh_client.post("/auth/refresh")
+        assert inactive_refresh.status_code == 403
+        assert refresh_client.cookies.get("graphnotes_session") is None
     await client.post("/auth/logout")
     inactive_login = await client.post(
         "/auth/login",
