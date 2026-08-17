@@ -3,16 +3,18 @@
 Status: DRAFT / GATED
 Prepared: 2026-08-17
 
-## Honest target for the current night
+## Target
 
-Текущий безопасный результат — полностью закрытый и принятый Stage 2 на
-`rhizome-test`, готовый к checkpoint `v0.1.0-dev.2` после явного разрешения на
-tag.
+Ночной цикл может последовательно выполнять Stage 2–9 и дойти до `v0.1.0`
+только если каждый Stage полностью проходит свой gate, все blocking decisions
+уже приняты, внешние credentials/environments доступны, а владелец отдельно
+разрешает merge/tag/production deployment.
 
-Это не полный GraphNotes MVP и не production release. Полный `v0.1.0` требует
-Stage 3–9 и production gate.
+Цель — максимальный безопасный прогресс, а не объявление релиза к заданному
+времени. При первом непреодолимом gate воркер фиксирует точный checkpoint и
+останавливается с `BLOCK`.
 
-## Why full MVP cannot be promised overnight
+## Why full MVP cannot be guaranteed by time
 
 - Stage 3 требует отдельного принятого решения по visibility и изоляции
   knowledge-репозиториев GitHub;
@@ -23,9 +25,42 @@ Stage 3–9 и production gate.
 - `rhizome` ещё требует безопасного reconciliation `/opt/graphnotes`, read-only
   Git access, Nginx configuration и отдельного production approval.
 
-Скорость работы не отменяет эти gates.
+Скорость работы не отменяет эти gates. Если все prerequisites заранее
+предоставлены, воркер продолжает последовательно; иначе сохраняет последний
+проверенный Stage-checkpoint.
 
-## Night sequence: Stage 2
+## Stage sequence
+
+| Stage | Обязательный результат | Gate перед следующим Stage |
+| --- | --- | --- |
+| 2 | Password auth end-to-end | auth/security/migration PASS |
+| 3 | Workspace + GitHub App integration | repository isolation ADR + real test installation |
+| 4 | Safe MD/ZIP import into personal Git state | hostile upload suite + commit consistency |
+| 5 | Rebuildable derived graph index/API | rebuild equivalence + SHA consistency |
+| 6 | Personal/shared Cytoscape UX | browser/isolation/scale PASS |
+| 7 | Proposal/PR/review/merge | publication-scope decision + reconciliation PASS |
+| 8 | Correct graph diff | feature-complete MVP Observer PASS |
+| 9 | Hardening, CI/CD, recovery, production | RC rehearsal + owner production approval |
+
+Подробное исполнимое ТЗ каждой строки находится в
+`docs/stages/STAGE<N>.md`.
+
+## Stage execution algorithm
+
+Для каждой стадии без исключения:
+
+1. подтвердить accepted previous Stage и прочитать новый Stage-файл;
+2. проверить blocking decisions и credentials;
+3. создать/использовать только каноническую feature-ветку стадии;
+4. реализовать только её scope;
+5. выполнить локальные проверки и миграции;
+6. получить Technical Observer traceability matrix для stable candidate;
+7. проверить exact SHA на `rhizome-test`;
+8. исправить findings и повторить аудит;
+9. создать `STAGE<N>_COMPLETED.md` с observed evidence;
+10. только после принятия перейти к следующей стадии.
+
+## Detailed Stage 2 starting sequence
 
 ### 1. Stabilize the candidate
 
@@ -96,7 +131,7 @@ Stage 3–9 и production gate.
 Нельзя автоматически переходить к следующему Stage после `BLOCK` и нельзя
 компенсировать незавершённое требование записью в known issues.
 
-## Path from checkpoint to v0.1.0
+## Path from checkpoints to v0.1.0
 
 ```text
 v0.1.0-dev.2  Stage 2 authentication

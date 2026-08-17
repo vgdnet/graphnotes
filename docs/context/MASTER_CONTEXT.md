@@ -19,7 +19,9 @@ Core data flow:
 Markdown -> Parser -> PostgreSQL index -> Graph API -> Web UI
 ```
 
-Users eventually have personal changes/graphs and can propose selected changes into a shared knowledge base. Editors review and merge those changes.
+Users eventually have personal changes/graphs and can propose selected changes
+into a shared knowledge base. Workspace reviewers review and merge proposals;
+workspace editors may directly edit shared Markdown through audited Git commits.
 
 ## 2. Critical data rule
 Markdown is the primary/canonical knowledge data.
@@ -105,12 +107,25 @@ MVP requirements planned for Stage 2:
 - access/refresh token or an equivalently secure session model
 - `/me`
 - logout
-- roles: user / editor / admin
+- base workspace group: `member`
+- independent workspace groups: `editor`, `reviewer`
+- system-wide superuser group: `admin`
 - email can be nullable/reserved initially for future recovery/notifications
 
 Telegram is NOT removed from the roadmap.
 Telegram remains a future optional identity provider linked to the existing internal user UUID.
 Telegram is not part of the MVP implementation unless this decision is explicitly changed.
+
+## 5.1 Permission model - accepted decision
+
+Authorization uses additive groups and explicit capabilities, not a single
+ordered role enum. Every active workspace membership has base `member`
+capabilities. `editor` grants direct shared-rhizome editing; `reviewer` grants
+proposal decisions. The groups are independent and may be combined. System
+`admin` has all capabilities in all workspaces and manages group assignments.
+
+All shared writes remain audited Markdown/Git changes followed by re-indexing.
+Proposal authors cannot approve their own proposals. See ADR-007.
 
 ## 6. Scope discipline
 Not needed for the initial MVP unless actual load/features justify them:

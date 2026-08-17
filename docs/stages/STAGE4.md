@@ -7,7 +7,8 @@ Depends on: accepted Stage 3
 ## User outcome
 
 Пользователь безопасно загружает один Markdown-файл или ZIP-набор, получает
-понятный отчёт и видит импортированные заметки в своём личном Git-состоянии.
+понятный отчёт, видит импортированные заметки и редактирует Markdown в своём
+личном Git-состоянии.
 
 ## Scope
 
@@ -21,8 +22,13 @@ Depends on: accepted Stage 3
 - сохранение исходного Markdown без превращения БД в источник истины;
 - unresolved links сохраняются как производное состояние;
 - commit импортированных изменений в personal Git state пользователя;
+- просмотр и редактирование Markdown заметки с commit в personal Git state;
+- optimistic concurrency по ожидаемому Git SHA, без тихой перезаписи чужого
+  или более нового изменения;
 - import report: accepted, rejected, skipped, conflicted и warnings;
 - просмотр списка заметок и конкретной заметки в пределах workspace.
+- audit import/edit действий с actor, workspace, path и resulting SHA без
+  записи полного private content в audit log.
 
 ## API baseline
 
@@ -30,6 +36,7 @@ Depends on: accepted Stage 3
 POST /api/workspaces/{id}/upload-md
 GET  /api/workspaces/{id}/notes
 GET  /api/notes/{id}
+PUT  /api/notes/{id}
 ```
 
 ## Parser contract
@@ -46,6 +53,7 @@ GET  /api/notes/{id}
 
 - import разрешён только active workspace member;
 - пользователь пишет только в собственное personal state;
+- note edit не позволяет сменить workspace/owner/path через request payload;
 - MIME/extension/content validation не полагается только на имя файла;
 - временные файлы очищаются, права минимальны;
 - Markdown при отображении санитизируется против XSS;
@@ -57,6 +65,7 @@ GET  /api/notes/{id}
 - успешный отчёт связан с resulting commit SHA;
 - частичный failure не сообщает ложный полный успех;
 - повторная загрузка имеет определённое поведение;
+- stale edit rejected as conflict instead of overwriting newer Git state;
 - БД-состояние можно перестроить из committed Markdown;
 - Git commit failure не оставляет утверждённый индекс без канонического файла.
 
@@ -78,11 +87,14 @@ GET  /api/notes/{id}
 - workspace/user isolation;
 - rollback при Git/API/DB failure;
 - resulting Markdown и commit SHA проверены в test repository;
+- edit/reload/conflict flow проверен через frontend и Git history;
 - migration и full integration flow на `rhizome-test`.
 
 ## Definition of Done
 
 - пользователь завершает импорт через frontend;
+- пользователь редактирует существующую заметку без обхода Markdown/Git source
+  of truth;
 - отчёт точно отражает каждый файл;
 - imported Markdown находится в personal Git state;
 - parser contract покрыт fixtures и негативными тестами;

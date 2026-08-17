@@ -27,7 +27,9 @@ Depends on: accepted Stage 2
 ## Scope
 
 - модели `workspace`, membership и GitHub repository binding;
-- роли/права внутри workspace, не полагающиеся только на global role;
+- implicit `member` capabilities для active membership;
+- независимые, совмещаемые workspace assignments `editor` и `reviewer`;
+- system `admin` capability override согласно ADR-007;
 - GitHub App authentication на backend;
 - шифруемое/секретное хранение credentials вне БД и Git;
 - проверка installation/repository access и default branch;
@@ -45,6 +47,8 @@ Depends on: accepted Stage 2
 GET  /api/workspaces
 GET  /api/workspaces/{id}/repo/status
 POST /api/workspaces/{id}/repo/connect      # admin-only if selected by design
+GET  /api/workspaces/{id}/members
+PATCH /api/workspaces/{id}/members/{user_id}/groups
 POST /api/webhooks/github                   # minimal verified receiver
 ```
 
@@ -52,7 +56,11 @@ POST /api/webhooks/github                   # minimal verified receiver
 
 ## Security requirements
 
-- backend проверяет user, active status, global role и workspace membership;
+- backend проверяет active account, concrete capability и workspace membership;
+- только system `admin` назначает/отзывает `editor` и `reviewer` в MVP;
+- workspace group assignment не может повысить пользователя до system `admin`;
+- revoked group перестаёт давать capability существующей session без
+  необходимости повторного login;
 - GitHub private key/token не возвращается в API и не логируется;
 - GitHub App получает только минимальные permissions;
 - webhook signature проверяется криптографически до обработки payload;
@@ -81,7 +89,9 @@ POST /api/webhooks/github                   # minimal verified receiver
 ## Verification
 
 - migration upgrade/downgrade/re-upgrade;
-- membership isolation и negative authorization matrix;
+- membership isolation и capability matrix для `member`, `editor`, `reviewer`,
+  combined `editor+reviewer` и `admin`;
+- cross-workspace assignment, self-escalation и revoked-group negatives;
 - работа с тестовой GitHub App installation/repository;
 - invalid webhook signature rejected;
 - duplicate webhook idempotent;
@@ -94,6 +104,7 @@ POST /api/webhooks/github                   # minimal verified receiver
 
 - blocking ADR принят и документы синхронизированы;
 - пользователь видит только разрешённые workspaces;
+- effective permissions являются суммой active groups и ограничены workspace;
 - backend безопасно читает согласованный GitHub repository status;
 - personal/shared Git states адресуются однозначно;
 - failure modes видимы и повторяемы;
