@@ -45,8 +45,11 @@ Implemented locally on `nord` as of 2026-08-17:
   and repairs the frontend port bindings without exposing `0.0.0.0`
 
 Stage 1 integration results on `rhizome-test`:
-- tested revision before this change: `5c9ec1b`
+- initial integration revision: `5c9ec1b`
+- boot-race fix tested revision: `aad3eb0766b6952e9d9c87cbf2d98c0f5812fbad`
 - PASS: clean clone from the public GitHub repository
+- PASS: canonical public remote
+  `https://github.com/vgdnet/graphnotes.git` resolves the tested Stage 1 branch
 - PASS: `docker compose config` validated
 - PASS: backend image builds
 - PASS: frontend image builds
@@ -62,10 +65,19 @@ Stage 1 integration results on `rhizome-test`:
 - PASS: frontend accessed from `nord` by browser and curl at `http://172.16.13.14:8080`
 - PASS: backend remains bound only to `127.0.0.1:8000`
 - PASS: PostgreSQL has no published host port
+- PASS: backend test suite passed (`2 passed`) in a disposable container
+- PASS: backend and frontend images built for the tested revision
+- PASS: committed systemd unit is enabled and active
+- PASS: reboot test reproduced a six-second delay before
+  `172.16.13.14` appeared; the unit waited, force-recreated frontend, and
+  restored both expected frontend bindings automatically
+- PASS: after reboot all three containers became healthy, Alembic remained at
+  `0001_bootstrap`, and frontend plus `/api/health` returned HTTP 200 from
+  `nord`
+- PASS: after reboot backend remained unavailable through
+  `172.16.13.14:8000`; PostgreSQL still had no published host port
 
 Still required before Stage 1 completion:
-- verify the GitHub remote `https://github.com/vgdnet/graphnotes`
-- deploy and verify the post-`5c9ec1b` revision using the canonical `rhizome-test` Compose overlay
 - approve the tested Git revision before promotion
 - inspect and reconcile `/opt/graphnotes` on `rhizome`
 - ensure `rhizome` has no GitHub credentials capable of push
@@ -73,11 +85,11 @@ Still required before Stage 1 completion:
 - inspect, test and integrate the existing Rhizome Nginx configuration without destructive experiments
 - write `docs/stages/STAGE1_COMPLETED.md` with observed runtime facts
 
-Known integration issue being revalidated:
+Resolved integration issue:
 - the initial Compose-only deployment could lose the frontend LAN binding when
-  Docker restored containers before `172.16.13.14` appeared during boot;
-  the versioned systemd startup mechanism requires deployment and a successful
-  reboot test before this issue can be considered resolved
+  Docker restored containers before `172.16.13.14` appeared during boot; the
+  versioned systemd unit now waits for the address and repairs the frontend
+  bindings, as verified by a real VM reboot on revision `aad3eb0`
 
 Expected components:
 - FastAPI skeleton
