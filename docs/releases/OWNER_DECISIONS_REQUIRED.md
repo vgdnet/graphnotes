@@ -1,28 +1,37 @@
 # Owner decisions required before v0.1.0
 
 Статус: OPEN INPUTS
-Обновлено: 2026-08-18
+Обновлено: 2026-08-19
 
 Эти решения нельзя принимать техническому или Stage-воркеру самостоятельно.
 Пока обязательное решение отсутствует, соответствующий Stage имеет `BLOCK`.
 
 ## Before Stage 3
 
-- private/public visibility knowledge repositories;
-- GitHub App installation ownership и test installation;
+Принято ADR-008 (2026-08-19):
+
+- knowledge repository может быть публичным на чтение без аккаунта GraphNotes;
+- личная ризома = git пользователя (obsidian-git или аналог);
+- вклад в общую требует регистрации, connected git и очереди editor’ов;
+- ветки/механики merge остаются Git; UX — «предложить / принять / взять себе».
+
+Ещё нужно для реализации Stage 3:
+
+- GitHub App test installation и идентификатор shared repository;
 - минимальные GitHub permissions;
-- основная и personal branch naming/lifecycle;
-- deployment configuration for the one knowledge repository.
+- как именно подключается personal remote (fork, отдельный repo, App installation);
+- webhook secret для `rhizome-test`.
 
 Модель одной общей ризомы и одного repository уже принята ADR-007; Stage 3 не
 должен снова открывать вопрос workspace/multiple shared repositories.
 
 ## Before Stage 6 final UX
 
-- нужен ли отдельный local-neighborhood graph и его максимальная глубина;
+- нужен ли отдельный local-neighborhood graph **общей** ризомы и его глубина;
 - минимальный provenance, показываемый для node/edge;
 - редактирование через graph остаётся вне MVP, если отдельный ADR не принимает
   обратное решение.
+- локальный граф текущей заметки «как Obsidian» не требуется (ADR-008).
 
 Решения по глубине/provenance могут быть локальными требованиями Stage, если не
 меняют product model или security boundary.

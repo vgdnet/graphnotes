@@ -1,6 +1,10 @@
 # GraphNotes - Stage Status
 
-Updated: 2026-08-18
+Updated: 2026-08-19
+
+Product model ADR-008 (2026-08-19): GraphNotes is not an Obsidian clone.
+Personal knowledge is the user's git. Canonical note bodies are not stored in
+PostgreSQL. Current implementation stage remains Stage 2.
 
 ## Stage 0 - Infrastructure
 Status: DONE
@@ -139,9 +143,11 @@ Current implementation direction:
   only for the HTTP-only `rhizome-test` environment
 - Argon2 password hashing and normalized unique usernames
 
-Remaining before Stage 2 completion under PRODUCT_SPEC 1.2 / ADR-007:
-- admin-only user list and global role/active-state management
-- safe initial-admin bootstrap and last-admin recovery protection
-- audit events for role/blocking changes and privileged actions
-- negative RBAC tests for `user`, `editor`, and `admin`
+Remaining before Stage 2 completion under PRODUCT_SPEC 1.3 / ADR-007:
 - exact-SHA migration/frontend/integration verification on `rhizome-test`
+- completion artifact `STAGE2_COMPLETED.md` after those checks
+
+Stage 2 application code on this branch already includes admin user management,
+bootstrap CLI, audit and RBAC tests; do not start Stage 3 implementation until
+the owner asks. Do not implement graphs, GitHub App, or note APIs while
+documenting ADR-008.

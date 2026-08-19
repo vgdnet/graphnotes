@@ -2,6 +2,7 @@
 
 Status: Accepted
 Accepted: 2026-08-18
+Refined by: ADR-008 (personal rhizome is the user's Git remote; public read of shared knowledge)
 
 ## Context
 

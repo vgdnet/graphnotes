@@ -79,8 +79,10 @@ ADR. Глобальное изменение должно быть явно пр
 ### Rhizome and RBAC model
 
 - exactly one shared rhizome per installation;
-- exactly one personal rhizome per user;
+- exactly one personal rhizome per user (the user's git remote; ADR-008);
 - no workspace/organization/team/community/multiple-shared entities;
+- no canonical note bodies in PostgreSQL;
+- no Obsidian-class in-app editor unless a later ADR reverses ADR-008;
 - global hierarchical roles `user < editor < admin`;
 - editor/admin may edit shared and review proposals;
 - proposal author cannot approve own proposal regardless of role;

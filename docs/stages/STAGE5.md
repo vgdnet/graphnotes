@@ -3,6 +3,9 @@
 Status: PLANNED
 Branch: `feature/05-graph-engine`
 Depends on: accepted Stage 4
+Product model: ADR-007, ADR-008. Index Markdown from the shared knowledge
+repository and connected personal git remotes. Do not persist canonical note
+bodies in PostgreSQL.
 
 ## User outcome
 
@@ -15,7 +18,7 @@ unpublished states.
 Every indexed record belongs to an explicit immutable revision context:
 
 - `shared`: approved shared Git revision;
-- `personal`: Git revision owned by exactly one user;
+- `personal`: Git revision of exactly one user's connected remote;
 - `proposal`: preview of immutable proposal base/head revisions.
 
 Minimum identity includes layer, Git revision, Git path and, when applicable,

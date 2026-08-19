@@ -20,14 +20,16 @@ change must update the relevant ADR/context/specification together after an
 explicit decision. Discussion alone is not an accepted requirement.
 
 ## Product principle
-GraphNotes is a multi-user Markdown knowledge system with exactly one shared
-rhizome per installation and exactly one personal rhizome per user. Do not add
+GraphNotes is the shared-rhizome layer over Markdown in Git: one shared
+rhizome per installation, personal knowledge in the user's own git. Do not add
 workspace, organization, team, community or multiple-shared-rhizome entities
 without a new explicit product decision and ADR.
 
 Markdown is the source of truth for knowledge content.
 The graph is derived from Markdown and indexed for fast display/querying.
 Do not introduce a second canonical graph file such as `graph.json`.
+Do not store canonical note bodies in PostgreSQL.
+Do not implement an Obsidian-class editor in GraphNotes. See ADR-008.
 
 ## License
 GraphNotes is open-source software licensed under GNU Affero General Public

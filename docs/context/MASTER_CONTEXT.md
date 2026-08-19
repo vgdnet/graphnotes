@@ -1,6 +1,6 @@
 # GraphNotes - MASTER CONTEXT
 
-Updated: 2026-08-18
+Updated: 2026-08-19
 Status: canonical architecture baseline
 
 This file is the canonical handoff context for GraphNotes across ChatGPT/Codex sessions.
@@ -11,18 +11,20 @@ implements those requirements. Cross-cutting decisions and rationale are stored
 in `docs/decisions/ADR-*.md`.
 
 ## 1. Product
-GraphNotes is a multi-user system with one shared Markdown knowledge rhizome and
-one personal rhizome per user.
+GraphNotes is the shared-rhizome layer over Markdown in Git, not a second
+Obsidian. People author notes in their own vault/git. GraphNotes shows the one
+shared rhizome as a graph, lets a user take selected pieces into their git, and
+lets a group of editors merge proposals into that shared rhizome. See ADR-008.
 
 Core data flow:
 
 ```text
-Markdown -> Parser -> PostgreSQL index -> Graph API -> Web UI
+user git / shared git Markdown
+  -> Parser
+      -> PostgreSQL derived index
+          -> Graph API
+              -> Web UI
 ```
-
-Users develop personal changes/graphs and propose selected changes into the one
-shared knowledge base. Global editors review proposals and may directly edit
-shared Markdown through audited Git commits.
 
 ## 2. Critical data rule
 Markdown is the primary/canonical knowledge data.
@@ -32,7 +34,7 @@ The graph is derived data.
 Do not merge graph files. Merge Markdown/Git changes, then re-index affected notes and links.
 
 ```text
-GitHub Markdown
+shared git Markdown and user git Markdown
       -> parser
       -> note index / links / tags in PostgreSQL
       -> graph representation
@@ -80,24 +82,28 @@ GitHub should handle:
 
 GraphNotes should handle:
 - application users and permissions
-- Markdown import
-- mapping the installation and users to shared/personal Git revisions
+- binding one shared knowledge repository and connected personal git remotes
+- taking selected shared notes into the user's git
 - graph indexing
-- personal/shared rhizome UX
-- review workflow in human language
-- graph diff / merge preview
+- shared-graph UX and personal overlay (links to shared)
+- editor proposal queue in human language
+- graph diff / merge preview for editors
 
 Do not build a custom Git/version/3-way-merge engine for the MVP.
+Do not build an Obsidian-class in-app editor.
+Do not store canonical note bodies in PostgreSQL.
 
-Initial product branch concept:
+Initial product git concept:
 
 ```text
-main           = approved shared knowledge base
-user/<uuid>    = a user's proposed/personal changes
+shared knowledge repo default branch  = approved shared rhizome
+user's own git remote                 = personal rhizome (Obsidian/obsidian-git)
+proposal                              = Git-backed request into shared, queued for editors
 ```
 
-This is an MVP model, not a permanent security boundary. The current product
-does not contain workspaces or multiple shared knowledge repositories.
+The `user/<uuid>` branch-on-shared-repo sketch is not the product story.
+The current product does not contain workspaces or multiple shared knowledge
+repositories.
 
 ## 5. Authentication - accepted decision
 MVP authentication is owned by GraphNotes and uses username/password.
@@ -125,7 +131,12 @@ rights plus system administration.
 
 All shared writes remain audited Markdown/Git changes followed by revisioned
 re-indexing. Editors/admins cannot approve their own proposals. There are no
-workspace, organization, team or multi-shared-rhizome entities. See ADR-007.
+workspace, organization, team or multi-shared-rhizome entities. See ADR-007
+and ADR-008.
+
+Personal knowledge is the user's git, not a GraphNotes-hosted vault. Public
+read of the shared knowledge repository does not require a GraphNotes account.
+Proposing and editorial merge do.
 
 Derived data explicitly separates `shared`, per-owner `personal`, and immutable
 `proposal` revisions. Accepted publication switches the visible shared revision
@@ -195,15 +206,17 @@ Git is the primary delivery mechanism. SSH/rsync is a fallback or bootstrap mech
 - Stage 1 - Project Bootstrap - DONE
 - Stage 2 - Password Authentication - CURRENT
 - Stage 3 - GitHub Integration
-- Stage 4 - Markdown Import
+- Stage 4 - Personal git connect / take from shared (ZIP fallback)
 - Stage 5 - Graph Engine
-- Stage 6 - Personal Graph
-- Stage 7 - Publish / Pull Request / Merge
-- Stage 8 - Graph Diff
+- Stage 6 - Shared graph + personal overlay (links to shared)
+- Stage 7 - Editor proposal queue / merge / rollback (core product)
+- Stage 8 - Graph Diff for editors
 - Stage 9 - Production Hardening / CI/CD
 
 ## 9. Stage branches
-Recommended source-code branches:
+Recommended source-code branch **names** stay historical so later stages do not
+rename remotes. Product meaning of Stages 4, 6 and 7 is ADR-008, not the old
+branch titles.
 
 ```text
 main

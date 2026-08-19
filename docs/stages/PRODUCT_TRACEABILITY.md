@@ -1,7 +1,7 @@
 # Product requirements to Stage traceability
 
 Статус: DERIVED / MAINTAINED
-Источник: `docs/product/PRODUCT_SPEC.md` version 1.2
+Источник: `docs/product/PRODUCT_SPEC.md` version 1.3
 
 Матрица маршрутизирует канонические требования в Stage-файлы и не изменяет
 `PRODUCT_SPEC.md`.
@@ -11,11 +11,12 @@
 | Requirement | Owning Stage | Acceptance evidence |
 | --- | --- | --- |
 | Exactly one shared rhizome | 3, 5, 6 | singleton Git binding; one shared revision pointer/API |
-| Exactly one personal rhizome per user | 3, 4, 5, 6 | UUID-owned Git state and derived personal layer |
+| Exactly one personal rhizome per user | 3, 4, 5, 6 | connected personal git remote and derived overlay |
 | No workspace/multiple shared graphs | every Stage | absence of workspace entities/routes/IDs |
+| No canonical note bodies in PostgreSQL | every Stage | Git/Markdown remains source of truth (ADR-008) |
 | Markdown/Git source of truth | 4, 5, 7, 8 | committed Markdown, rebuild equivalence, no graph merge file |
-| `user` outcome | 2, 4, 6, 7 | auth, personal edit, shared read, proposal E2E |
-| `editor` outcome | 2, 7, 8 | direct shared edit plus review/diff E2E |
+| `user` outcome | 2, 4, 6, 7 | auth, take-from-shared, shared graph, proposal E2E |
+| `editor` outcome | 2, 7, 8 | proposal queue, human diff, merge/rollback |
 | `admin` outcome | 2, 5, 7, 9 | user/role/block management plus inherited editor/user rights and audited operations |
 | Self-approval forbidden | 7 | editor/admin author negative tests |
 
@@ -24,11 +25,11 @@
 | PRODUCT_SPEC section | Requirement group | Owning Stage |
 | --- | --- | --- |
 | 6.1 | UUID account, password hash, session, active state, global RBAC | 2 |
-| 6.2 | one GitHub repository, shared branch, one personal state per user | 3 |
-| 6.3 | safe import and personal Markdown editing | 4 |
+| 6.2 | one GitHub knowledge repository; connect personal git; public read allowed | 3 |
+| 6.3 | take-from-shared; ZIP/MD fallback ingest | 4 |
 | 6.4 | revisioned shared/personal/proposal derived index and rebuild | 5 |
-| 6.5 | bounded personal/shared Graph API and Cytoscape UI | 5, 6 |
-| 6.6 | proposal, direct shared edit, review, atomic publication, reconciliation | 7 |
+| 6.5 | bounded shared Graph API, personal overlay, Cytoscape UI | 5, 6 |
+| 6.6 | proposal queue, review, atomic publication, reconciliation, rollback | 7 |
 | 6.6 | textual and graph impact before publication | 7, 8 |
 | 6.7 | audit, history, idempotency and recovery | 2, 3, 5, 7, 9 |
 
@@ -37,11 +38,11 @@
 | Endpoint group | Stage |
 | --- | --- |
 | auth, current user, admin user/role management | 2 |
-| repository status/connect/webhook | 3 |
-| personal import/note CRUD | 4 |
+| repository status/connect/webhook; personal git connect | 3 |
+| take-from-shared; ZIP/MD fallback; read-only personal notes | 4 |
 | personal/shared Graph API and rebuild | 5 |
-| personal/shared graph UI | 6 |
-| proposals, decisions and editor/admin shared CRUD | 7 |
+| shared graph UI and personal overlay | 6 |
+| proposals, decisions, rollback | 7 |
 | proposal graph diff | 8 |
 | operational/release controls | 9 |
 
@@ -51,16 +52,16 @@
 | --- | --- |
 | Register/login; no plaintext password | 2 |
 | Global `user/editor/admin` hierarchy | 2 |
-| Isolated editable personal rhizome | 3, 4 |
-| One shared rhizome readable by users | 3, 5, 6 |
-| Safe MD/ZIP import committed to personal Git state | 4 |
+| Isolated connected personal git | 3, 4 |
+| One shared rhizome readable (clone without account if public) | 3, 5, 6 |
+| Take selected shared pieces into personal git | 4 |
+| Safe MD/ZIP fallback committed to personal git | 4 |
 | Links/tags/properties/unresolved projection | 4, 5 |
-| Revision-linked rebuildable index | 5 |
-| Personal/shared graph UX | 6 |
+| Revision-linked rebuildable index; no note bodies in PostgreSQL | 5 |
+| Shared graph + personal overlay UX | 6 |
 | User creates proposal | 7 |
-| Editor/admin direct shared editing | 7 |
-| Editor/admin sees textual and graph impact | 7, 8 |
-| Editor/admin approves/rejects/returns with reason | 7 |
+| Editor queue: approve/reject/return/rollback | 7 |
+| Editor sees textual and graph impact | 7, 8 |
 | Author cannot self-approve | 7 |
 | Shared publication is atomic to readers | 7 |
 | Shared index reaches merged SHA | 7 |
@@ -89,8 +90,10 @@
 | Question | Latest decision point |
 | --- | --- |
 | Selected changes vs whole personal diff | before Stage 7 |
-| Local graph depth/provenance/visual states | Stage 6/8 UX finalization |
+| Local overlay/provenance/visual states | Stage 6/8 UX finalization |
+| How personal remote is connected (fork vs separate repo) | before Stage 3 implementation |
 | Editing through graph | excluded unless new ADR before implementation |
+| In-app Obsidian-class editor | excluded (ADR-008) |
 | Real-time collaboration | post-MVP unless roadmap changes |
 
 ## Final completeness rule

@@ -4,6 +4,9 @@ Status: CURRENT
 Branch: `feature/02-password-auth`
 Primary coding environment: `nord`
 Integration host: `rhizome-test` (`172.16.13.14`)
+Product model: ADR-008 — account is required to connect git, take via UI,
+propose, and act as editor. Public clone of a public knowledge repository does
+not require a GraphNotes account.
 
 ## User outcome
 

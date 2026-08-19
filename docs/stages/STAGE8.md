@@ -3,6 +3,9 @@
 Status: PLANNED
 Branch: `feature/08-graph-diff`
 Depends on: accepted Stage 7
+Product model: ADR-008. Graph Diff is an **editor** tool after people can live
+in the shared graph and overlay (Stage 6) and the proposal queue exists
+(Stage 7).
 
 ## User outcome
 
