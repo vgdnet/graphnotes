@@ -184,8 +184,8 @@ refresh after git/Obsidian push). See `docs/stages/STAGE5_COMPLETED.md` and
 `docs/deployment/STAGE5_INDEX.md`.
 
 ## Stage 6 - Shared graph + personal overlay
-Status: PLANNED
+Status: CURRENT
 Branch: `feature/06-personal-graph`
 
 Cytoscape shared graph and overlay of the caller's git onto the shared rhizome.
-Depends on accepted Stage 5. Follow `docs/stages/STAGE6.md`.
+Follow `docs/stages/STAGE6.md`. Owner accepted Stage 5 live rebuild.

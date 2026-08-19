@@ -8,6 +8,9 @@ importers:
 
   .:
     dependencies:
+      cytoscape:
+        specifier: 3.34.1
+        version: 3.34.1
       react:
         specifier: latest
         version: 19.2.8
@@ -272,6 +275,9 @@ packages:
 
   csstype@3.2.3:
     resolution: {integrity: sha512-z1HGKcYy2xA8AGQfwrn0PAy+PB7X/GSj3UVJW9qKyn43xWa+gl5nXmU4qqLMRzWVLFC8KusUX8T/0kCiOYpAIQ==}
+
+  cytoscape@3.34.1:
+    resolution: {integrity: sha512-Lr0RvH9H75y9ar8h9Toy6u4lxRSCcxUq+hHcQ26sVWo6BnaQp1gwEZOYqwuYTZhyW7npyKnNLP8oJ2p1/3OZ7g==}
 
   detect-libc@2.1.2:
     resolution: {integrity: sha512-Btj2BOOO83o3WyH59e8MgXsxEQVcarkUOpEYrubB0urwnN10yQ364rsiByU11nZlqWYZm05i/of7io4mzihBtQ==}
@@ -576,6 +582,8 @@ snapshots:
       vite: 8.2.1
 
   csstype@3.2.3: {}
+
+  cytoscape@3.34.1: {}
 
   detect-libc@2.1.2: {}
 

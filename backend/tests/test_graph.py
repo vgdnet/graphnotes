@@ -348,3 +348,73 @@ async def test_empty_shared_graph_and_query_baseline(
     assert len(real_nodes) == 20
     assert scaled.json()["truncated"] is True
     assert elapsed < 2.0
+
+
+async def test_personal_overlay_isolation_shared_read_and_xss_inert(
+    auth_test_context: tuple[AsyncClient, async_sessionmaker[AsyncSession]],
+    monkeypatch: MonkeyPatch,
+) -> None:
+    client, session_factory = auth_test_context
+    github = _install_graph(monkeypatch, _github())
+    github.repos["vgdnet/rhizome"].files["xss.md"] = "# <script>alert(1)</script>\n<img src=x>\n"
+    await _admin_connect(client, session_factory, "efimov")
+    await _connect_pair(client, "vgdnet/guide_psy")
+    taken = await client.post("/personal/take-from-shared", json={"paths": ["card.md"]})
+    assert taken.status_code == 200
+    github.repos["vgdnet/guide_psy"].files["mine.md"] = "# Mine\nSee [[card]].\n"
+    github.repos["vgdnet/guide_psy"].sha = "overlay-sha"
+
+    overlay = await client.get("/graph/personal-overlay")
+    assert overlay.status_code == 200
+    body = overlay.json()
+    assert body["layer"] == "overlay"
+    assert "html_url" not in overlay.text
+    card = next(node for node in body["nodes"] if node["path"] == "card.md")
+    assert card["origin"] == "both"
+    assert any(node["path"] == "personal:mine.md" for node in body["nodes"])
+    assert any(
+        edge["origin"] == "overlay" and edge["source"] == "personal:mine.md" and edge["target"] == "card.md"
+        for edge in body["edges"]
+    )
+    xss_node = next(node for node in body["nodes"] if node["path"] == "xss.md")
+    assert "<script>alert(1)</script>" in xss_node["title"]
+
+    shared_note = await client.get("/shared/notes/card.md")
+    assert shared_note.status_code == 200
+    assert shared_note.json()["path"] == "card.md"
+    assert "See [[missing]]" in shared_note.json()["body"]
+    assert "html_url" not in shared_note.text
+
+    xss_note = await client.get("/shared/notes/xss.md")
+    assert xss_note.status_code == 200
+    assert "<script>alert(1)</script>" in xss_note.json()["title"]
+    assert "<img src=x>" in xss_note.json()["body"]
+
+    me = await client.get("/users/me")
+    other_probe = await client.get(
+        "/graph/personal-overlay",
+        params={"user_id": me.json()["id"], "owner": me.json()["id"]},
+    )
+    assert other_probe.status_code == 200
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as guest:
+        denied = await guest.get("/graph/personal-overlay")
+        assert denied.status_code == 401
+        public_note = await guest.get("/shared/notes/card.md")
+        assert public_note.status_code == 200
+        public_graph = await guest.get("/graph/shared")
+        assert public_graph.status_code == 200
+        assert all(node.get("origin") != "personal" for node in public_graph.json()["nodes"])
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as second:
+        await _register(second, "other-user")
+        await _connect_pair(second, "other/vault")
+        stolen = await second.get(
+            "/graph/personal-overlay",
+            params={"user_id": me.json()["id"]},
+        )
+        assert stolen.status_code == 200
+        paths = {node["path"] for node in stolen.json()["nodes"]}
+        assert "personal:mine.md" not in paths
+        origins = {node["path"]: node["origin"] for node in stolen.json()["nodes"]}
+        assert origins.get("card.md") != "both"

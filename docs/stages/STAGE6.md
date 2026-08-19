@@ -1,6 +1,6 @@
 # Stage 6 - Shared graph + personal overlay
 
-Status: PLANNED
+Status: CURRENT
 Branch: `feature/06-personal-graph`
 Depends on: accepted Stage 5
 Product model: ADR-007, ADR-008

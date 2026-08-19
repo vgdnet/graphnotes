@@ -379,6 +379,113 @@ async def load_graph(
     return await _graph_payload(database, layer, chosen_notes, links, truncated)
 
 
+async def load_overlay(
+    database: AsyncSession,
+    *,
+    owner_id: uuid.UUID,
+    personal_revision: str,
+    shared_payload: dict[str, object],
+    overlay_limit: int,
+) -> dict[str, object]:
+    shared_nodes = list(shared_payload.get("nodes") or [])
+    shared_edges = list(shared_payload.get("edges") or [])
+    visible = {node["path"] for node in shared_nodes if not node.get("unresolved")}
+    shared_rows = (
+        await database.scalars(
+            select(NoteIndex).where(
+                NoteIndex.layer == NoteLayer.SHARED.value,
+                NoteIndex.owner_user_id.is_(None),
+            )
+        )
+    ).all()
+    lookup = notes_lookup_map({note.path for note in shared_rows})
+    personal_notes = (
+        await database.scalars(
+            select(NoteIndex).where(
+                NoteIndex.layer == NoteLayer.PERSONAL.value,
+                NoteIndex.owner_user_id == owner_id,
+                NoteIndex.revision_sha == personal_revision,
+            )
+        )
+    ).all()
+    personal_by_path = {note.path: note for note in personal_notes}
+    personal_ids = {note.id for note in personal_notes}
+    tag_map = await _tags_for(database, personal_ids)
+    links: list[NoteLink] = []
+    if personal_ids:
+        links = list(
+            (
+                await database.scalars(select(NoteLink).where(NoteLink.source_id.in_(personal_ids)))
+            ).all()
+        )
+    personal_by_id = {note.id: note for note in personal_notes}
+
+    nodes: list[dict[str, object]] = []
+    for node in shared_nodes:
+        path = str(node["path"])
+        origin = "both" if (not node.get("unresolved") and path in personal_by_path) else node.get("origin", "shared")
+        nodes.append({**node, "origin": origin})
+    edges: list[dict[str, object]] = [{**edge, "origin": edge.get("origin", "shared")} for edge in shared_edges]
+    existing_edges = {(edge["source"], edge["target"], edge["type"]) for edge in edges}
+
+    added_personal: set[str] = set()
+    overlay_truncated = False
+    overlay_count = 0
+
+    def add_personal_node(note: NoteIndex) -> str:
+        if note.path in visible:
+            return note.path
+        key = f"personal:{note.path}"
+        if key not in added_personal:
+            nodes.append(
+                {
+                    "path": key,
+                    "title": note.title,
+                    "tags": tag_map.get(note.id, []),
+                    "isolated": False,
+                    "unresolved": False,
+                    "origin": "personal",
+                }
+            )
+            added_personal.add(key)
+        return key
+
+    for link in links:
+        source = personal_by_id.get(link.source_id)
+        if source is None:
+            continue
+        target_path = resolve_link_target(link.target_raw, lookup)
+        if target_path is None or target_path not in visible:
+            continue
+        if overlay_count >= overlay_limit:
+            overlay_truncated = True
+            break
+        source_id = add_personal_node(source)
+        key = (source_id, target_path, link.link_type)
+        if key in existing_edges:
+            continue
+        edges.append(
+            {
+                "source": source_id,
+                "target": target_path,
+                "type": link.link_type,
+                "unresolved": False,
+                "origin": "overlay",
+            }
+        )
+        existing_edges.add(key)
+        overlay_count += 1
+
+    status = str(shared_payload.get("index_status") or "current")
+    return {
+        "layer": "overlay",
+        "index_status": status,
+        "truncated": bool(shared_payload.get("truncated")) or overlay_truncated,
+        "nodes": nodes,
+        "edges": edges,
+    }
+
+
 def _bounded_paths(
     paths: list[str],
     adjacency: dict[str, set[str]],
@@ -447,6 +554,7 @@ async def _graph_payload(
     linked_targets = {link.source_id for link in links if link.source_id in chosen_ids} | {
         link.target_id for link in links if link.target_id in chosen_ids
     }
+    origin = "personal" if layer == NoteLayer.PERSONAL.value else "shared"
     nodes = []
     for note in chosen_notes:
         nodes.append(
@@ -456,6 +564,7 @@ async def _graph_payload(
                 "tags": tag_map.get(note.id, []),
                 "isolated": note.id not in linked_targets,
                 "unresolved": False,
+                "origin": origin,
             }
         )
     edges = []
@@ -473,6 +582,7 @@ async def _graph_payload(
                     "target": node_id,
                     "type": link.link_type,
                     "unresolved": True,
+                    "origin": origin,
                 }
             )
             continue
@@ -485,6 +595,7 @@ async def _graph_payload(
                 "target": target.path,
                 "type": link.link_type,
                 "unresolved": False,
+                "origin": origin,
             }
         )
     for node_id, title in unresolved_nodes.items():
@@ -495,6 +606,7 @@ async def _graph_payload(
                 "tags": [],
                 "isolated": False,
                 "unresolved": True,
+                "origin": origin,
             }
         )
     return {

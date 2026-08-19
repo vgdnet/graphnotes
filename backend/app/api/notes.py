@@ -13,6 +13,7 @@ from app.services.github import GitHubAppClient
 from app.services.ingest import (
     IngestError,
     get_personal_note,
+    get_shared_note,
     import_markdown,
     list_personal_notes,
     list_shared_notes,
@@ -37,6 +38,15 @@ async def shared_notes(database: DatabaseSession) -> NoteListResponse:
     except IngestError as exc:
         _raise(exc)
     return NoteListResponse.model_validate(payload)
+
+
+@router.get("/shared/notes/{note_path:path}", response_model=NoteDetail)
+async def shared_note(note_path: str, database: DatabaseSession) -> NoteDetail:
+    try:
+        payload = await get_shared_note(database, note_path, _client())
+    except IngestError as exc:
+        _raise(exc)
+    return NoteDetail.model_validate(payload)
 
 
 @router.get("/personal/notes", response_model=NoteListResponse)

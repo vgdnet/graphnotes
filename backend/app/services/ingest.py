@@ -133,6 +133,37 @@ async def get_personal_note(
     }
 
 
+async def get_shared_note(
+    database: AsyncSession,
+    path: str,
+    client: GitHubAppClient,
+) -> dict[str, object]:
+    try:
+        normalized = normalize_git_path(path)
+    except PathError as exc:
+        raise IngestError(400, str(exc)) from exc
+    row = await database.get(SharedRepository, SHARED_SINGLETON_ID)
+    if row is None or not row.observed_sha:
+        raise IngestError(404, "note was not found")
+    try:
+        text = await client.get_file(row.owner, row.name, normalized, row.observed_sha)
+        paths = set(await client.list_markdown_files(row.owner, row.name, row.observed_sha))
+    except GitHubAppError as exc:
+        raise _github_to_ingest(exc) from exc
+    parsed = parse_markdown(normalized, text)
+    return {
+        "path": normalized,
+        "title": parsed.title,
+        "tags": list(parsed.tags),
+        "aliases": list(parsed.aliases),
+        "links": list(parsed.links),
+        "unresolved_links": list(unresolved_links(parsed.links, paths)),
+        "warnings": list(parsed.warnings),
+        "body": parsed.body,
+        "content_hash": parsed.content_hash,
+    }
+
+
 async def take_from_shared(
     database: AsyncSession,
     *,

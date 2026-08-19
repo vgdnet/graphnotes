@@ -15,6 +15,7 @@ from app.services.index import (
     ensure_shared_current,
     index_status_label,
     load_graph,
+    load_overlay,
     rebuild_personal,
     rebuild_shared,
 )
@@ -98,6 +99,55 @@ async def personal_graph(
         personal.observed_sha, personal.indexed_sha, personal.index_status
     )
     return GraphResponse.model_validate(payload)
+
+
+@router.get("/graph/personal-overlay", response_model=GraphResponse)
+async def personal_overlay(
+    user: CurrentUser,
+    database: DatabaseSession,
+    limit: Annotated[int, Query(ge=1, le=200)] = settings.graph_page_limit,
+    center: str | None = None,
+    depth: Annotated[int, Query(ge=0, le=4)] = 1,
+) -> GraphResponse:
+    client = _client()
+    await refresh_shared(database, client)
+    await refresh_personal(database, user.id, client)
+    try:
+        await ensure_shared_current(database, client)
+        await ensure_personal_current(database, user.id, client)
+    except IndexerError:
+        pass
+    shared = await database.get(SharedRepository, SHARED_SINGLETON_ID)
+    if shared is None or not shared.indexed_sha:
+        return GraphResponse(layer="overlay", index_status="empty", nodes=[], edges=[])
+    payload = await load_graph(
+        database,
+        layer=NoteLayer.SHARED.value,
+        owner_id=None,
+        revision=shared.indexed_sha,
+        limit=_limit(limit),
+        center=center,
+        depth=depth,
+    )
+    payload["index_status"] = index_status_label(
+        shared.observed_sha, shared.indexed_sha, shared.index_status
+    )
+    personal = await database.scalar(
+        select(PersonalRepository).where(PersonalRepository.user_id == user.id)
+    )
+    if personal is None or not personal.indexed_sha:
+        payload["layer"] = "overlay"
+        return GraphResponse.model_validate(payload)
+    overlay = await load_overlay(
+        database,
+        owner_id=user.id,
+        personal_revision=personal.indexed_sha,
+        shared_payload=payload,
+        overlay_limit=_limit(limit),
+    )
+    if personal.index_status == "error" or shared.index_status == "error":
+        overlay["index_status"] = "error"
+    return GraphResponse.model_validate(overlay)
 
 
 @router.post("/index/rebuild", response_model=GraphResponse)
