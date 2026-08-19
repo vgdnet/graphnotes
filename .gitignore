@@ -12,3 +12,4 @@ node_modules/
 .pnpm-store/
 frontend/dist/
 *.tsbuildinfo
+.secrets/

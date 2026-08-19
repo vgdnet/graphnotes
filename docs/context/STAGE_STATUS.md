@@ -156,9 +156,20 @@ See `docs/stages/STAGE2_COMPLETED.md`.
 Production deployment to `rhizome` remains deferred.
 
 ## Stage 3 - GitHub Integration
-Status: PLANNED / ACCESS-GATED
+Status: CURRENT / ACCESS OPEN
 Branch: `feature/03-github-integration`
 
-Do not start until the owner supplies GitHub App installation, shared repository
-identifier, personal-remote binding choice, and webhook secret. Follow ADR-007
-and ADR-008.
+Accepted test bindings (2026-08-19):
+
+- shared: `https://github.com/vgdnet/rhizome` (public, `main`)
+- personal remote model: separate GitHub repository
+- first personal fixture for GraphNotes user `efimov`:
+  `https://github.com/vgdnet/guide_psy` (public, `main`)
+
+GitHub App `rhizome-absorber` (owner `@vgdnet`, App ID `4646628`, Client ID
+`Iv23liXB3caRQOOi0vtK`, Installation ID `154874395`) was verified against the
+GitHub API. Repositories have commits: `vgdnet/rhizome` (`b675b76dca9a…`) and
+`vgdnet/guide_psy` (`2656006c2308…`). Webhook remains disabled until a public
+HTTPS URL exists. Private key is on disk outside git.
+
+Follow ADR-007 and ADR-008.

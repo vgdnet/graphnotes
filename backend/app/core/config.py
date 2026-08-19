@@ -15,6 +15,13 @@ class Settings(BaseSettings):
     session_cookie_name: str = "graphnotes_session"
     session_ttl_hours: int = 168
     cookie_secure: bool = True
+    github_app_id: str = ""
+    github_app_installation_id: str = ""
+    github_app_private_key_path: str = ".secrets/github-app.pem"
+    github_shared_owner: str = "vgdnet"
+    github_shared_name: str = "rhizome"
+    github_webhook_secret: str = ""
+    github_api_timeout_seconds: float = 10.0
 
     model_config = SettingsConfigDict(
         env_file=PROJECT_ROOT / ".env",

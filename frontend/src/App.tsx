@@ -15,6 +15,32 @@ type User = {
 
 type AdminUsersResponse = { users: User[] };
 
+type RepositoryStatus = {
+  connected: boolean;
+  owner?: string | null;
+  name?: string | null;
+  status: string;
+  has_content: boolean;
+  updated_at?: string | null;
+};
+
+type RepositoryStatusResponse = {
+  shared: RepositoryStatus;
+  personal: RepositoryStatus | null;
+};
+
+function sharedLabel(status: RepositoryStatus | null): string {
+  if (!status?.connected) return "Общая ризома ещё не подключена.";
+  if (status.has_content) return "Общая ризома доступна.";
+  return "Общая ризома подключена, заметок пока нет.";
+}
+
+function personalLabel(status: RepositoryStatus | null): string {
+  if (!status?.connected) return "Личный git ещё не связан.";
+  if (status.has_content) return `Связан git ${status.owner}/${status.name}.`;
+  return `Git ${status.owner}/${status.name} связан, коммитов пока нет.`;
+}
+
 async function readError(response: Response): Promise<string> {
   try {
     const body = (await response.json()) as { detail?: unknown };
@@ -34,6 +60,7 @@ export function App() {
   const [error, setError] = useState("");
   const [adminUsers, setAdminUsers] = useState<User[]>([]);
   const [adminLoading, setAdminLoading] = useState(false);
+  const [repository, setRepository] = useState<RepositoryStatusResponse | null>(null);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -64,6 +91,18 @@ export function App() {
       })
       .finally(() => setAuthChecking(false));
 
+    void fetch("/api/repository/status", { signal: controller.signal })
+      .then(async (response) => {
+        if (!response.ok) throw new Error(await readError(response));
+        return (await response.json()) as RepositoryStatusResponse;
+      })
+      .then(setRepository)
+      .catch((requestError: unknown) => {
+        if (!(requestError instanceof DOMException && requestError.name === "AbortError")) {
+          setError(requestError instanceof Error ? requestError.message : "Ошибка соединения");
+        }
+      });
+
     return () => controller.abort();
   }, []);
 
@@ -90,6 +129,55 @@ export function App() {
 
     return () => controller.abort();
   }, [user?.role]);
+
+  useEffect(() => {
+    if (authChecking) return;
+    const controller = new AbortController();
+    void fetch("/api/repository/status", { signal: controller.signal })
+      .then(async (response) => {
+        if (!response.ok) throw new Error(await readError(response));
+        return (await response.json()) as RepositoryStatusResponse;
+      })
+      .then(setRepository)
+      .catch(() => undefined);
+    return () => controller.abort();
+  }, [authChecking, user?.id]);
+
+  async function connectShared() {
+    setSubmitting(true);
+    setError("");
+    try {
+      const response = await fetch("/api/repository/connect", { method: "POST" });
+      if (!response.ok) throw new Error(await readError(response));
+      setRepository(await response.json() as RepositoryStatusResponse);
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "Ошибка соединения");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function connectPersonal(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const formElement = event.currentTarget;
+    setSubmitting(true);
+    setError("");
+    const repositoryRef = String(new FormData(formElement).get("repository") || "");
+    try {
+      const response = await fetch("/api/personal/connect", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ repository: repositoryRef }),
+      });
+      if (!response.ok) throw new Error(await readError(response));
+      setRepository(await response.json() as RepositoryStatusResponse);
+      formElement.reset();
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "Ошибка соединения");
+    } finally {
+      setSubmitting(false);
+    }
+  }
 
   async function submitAuth(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -186,12 +274,34 @@ export function App() {
         <>
           <section className="workspace">
             <div className="workspace__intro">
-              <p className="eyebrow">Личная ризома</p>
+              <p className="eyebrow">Две ризомы</p>
               <h1>Здравствуйте, {user.display_name}</h1>
-              <p className="summary">
-                Ваше пространство готово. Следующим шагом здесь появятся Markdown-заметки
-                и связи между ними.
-              </p>
+              <p className="summary">{sharedLabel(repository?.shared ?? null)}</p>
+              <p className="summary">{personalLabel(repository?.personal ?? null)}</p>
+              <form className="connect-form" onSubmit={(event) => void connectPersonal(event)}>
+                <label>
+                  Свой git
+                  <input
+                    name="repository"
+                    placeholder="владелец/имя"
+                    maxLength={200}
+                    required
+                  />
+                </label>
+                <button className="button button--primary" type="submit" disabled={submitting}>
+                  Связать личный git
+                </button>
+              </form>
+              {user.role === "admin" && (
+                <button
+                  className="button button--quiet"
+                  type="button"
+                  onClick={() => void connectShared()}
+                  disabled={submitting}
+                >
+                  Подключить общую ризому
+                </button>
+              )}
             </div>
             <aside className="profile-card">
               <div className="avatar" aria-hidden="true">
@@ -262,8 +372,8 @@ export function App() {
             <p className="eyebrow">Связанное знание</p>
             <h1>Собирайте мысли в живую ризому.</h1>
             <p className="summary">
-              Markdown остаётся вашим. GraphNotes помогает увидеть связи, развивать
-              личную базу и готовить знания для общей ризомы.
+              {sharedLabel(repository?.shared ?? null)} Markdown остаётся в git.
+              GraphNotes показывает общую ризому и помогает взять знания себе.
             </p>
             <div className="connection-line" aria-hidden="true"><span /><span /><span /></div>
           </div>

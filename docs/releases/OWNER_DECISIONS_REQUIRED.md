@@ -15,15 +15,38 @@
 - вклад в общую требует регистрации, connected git и очереди editor’ов;
 - ветки/механики merge остаются Git; UX — «предложить / принять / взять себе».
 
-Ещё нужно для реализации Stage 3:
+Принято владельцем 2026-08-19 для интеграции на `rhizome-test`:
 
-- GitHub App test installation и идентификатор shared repository;
-- минимальные GitHub permissions;
-- как именно подключается personal remote (fork, отдельный repo, App installation);
-- webhook secret для `rhizome-test`.
+- общая ризома: публичный репозиторий
+  `https://github.com/vgdnet/rhizome` (`vgdnet/rhizome`, default branch `main`);
+- personal remote — **отдельный** GitHub repository, не fork общей и не ветка
+  `user/<uuid>` на общей;
+- первый тестовый личный репозиторий пользователя GraphNotes `efimov`:
+  `https://github.com/vgdnet/guide_psy` (`vgdnet/guide_psy`, default branch
+  `main`);
+- владелец добавляет `*.md` в эти репозитории как тестовые фикстуры.
 
-Модель одной общей ризомы и одного repository уже принята ADR-007; Stage 3 не
-должен снова открывать вопрос workspace/multiple shared repositories.
+GitHub App для `rhizome-test` (не секреты):
+
+- slug / страница: `https://github.com/settings/apps/rhizome-absorber`
+- owner: `@vgdnet`
+- App ID: `4646628`
+- Client ID: `Iv23liXB3caRQOOi0vtK`
+- Installation ID: `154874395`
+  (`https://github.com/settings/installations/154874395`)
+- API-проверка 2026-08-19: `repository_selection=selected`, permissions
+  `contents:read` + `metadata:read`, репозитории `vgdnet/rhizome` и
+  `vgdnet/guide_psy`
+- оба репозитория публичные, `main`; на момент проверки commits API вернул
+  HTTP 409 — репозитории ещё пустые
+- webhook на App пока выключен: GitHub не достучится до LAN `rhizome-test`
+- private key лежит вне git: `.secrets/github-app.pem`
+
+ACCESS-GATE GitHub App для Stage 3 снят. Можно реализовывать интеграцию.
+
+Модель одной общей ризомы и одного shared repository уже принята ADR-007;
+Stage 3 не должен снова открывать вопрос workspace/multiple shared
+repositories.
 
 ## Before Stage 6 final UX
 

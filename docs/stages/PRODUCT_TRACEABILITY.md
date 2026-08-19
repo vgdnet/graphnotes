@@ -91,7 +91,7 @@
 | --- | --- |
 | Selected changes vs whole personal diff | before Stage 7 |
 | Local overlay/provenance/visual states | Stage 6/8 UX finalization |
-| How personal remote is connected (fork vs separate repo) | before Stage 3 implementation |
+| How personal remote is connected (fork vs separate repo) | separate GitHub repo (2026-08-19); first fixture `vgdnet/guide_psy` for user `efimov` |
 | Editing through graph | excluded unless new ADR before implementation |
 | In-app Obsidian-class editor | excluded (ADR-008) |
 | Real-time collaboration | post-MVP unless roadmap changes |

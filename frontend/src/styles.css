@@ -71,6 +71,8 @@ select { padding: .65rem .8rem; border: 1px solid #34404c; border-radius: .65rem
 .profile-card div:nth-child(2) { display: grid; gap: .3rem; }
 .profile-card span { color: #85919d; font-size: .82rem; }
 .avatar { display: grid; width: 4rem; height: 4rem; place-items: center; border-radius: 1.1rem; background: #173f30; color: #65e3ad; font-size: 1.5rem; font-weight: 800; }
+.connect-form { display: grid; gap: .8rem; max-width: 28rem; margin-top: 1.5rem; }
+.connect-form .button { margin-top: 0; }
 .loading { display: grid; min-height: calc(100vh - 6rem); place-items: center; color: #84909d; }
 
 .admin-panel { width: min(100%, 72rem); margin: -5rem auto 3rem; padding: 1.5rem; border: 1px solid #28313b; border-radius: 1.3rem; background: rgb(17 23 30 / 92%); }

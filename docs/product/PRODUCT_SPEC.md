@@ -448,8 +448,9 @@ MVP считается функционально готовым, когда:
    графа.
 2. Цвета состояний shared / personal / added / removed / unresolved / proposed.
 3. Предложение публикует выбранные файлы или весь diff относительно общей.
-4. Как именно подключается personal remote (fork, отдельный repo, App
-   installation) — технический выбор Stage 3, не меняющий ADR-008.
+4. Personal remote — отдельный GitHub repository (не fork общей). Первый
+   тестовый binding: GraphNotes user `efimov` → `vgdnet/guide_psy`; общая
+   ризома → `vgdnet/rhizome`.
 5. Редактирование непосредственно через граф — вне MVP, пока нет ADR.
 6. Совместное редактирование текста в реальном времени — вне MVP.
 7. Отдельный локальный граф текущей заметки сознательно не делается (часть

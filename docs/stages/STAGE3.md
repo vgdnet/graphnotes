@@ -1,6 +1,6 @@
 # Stage 3 - GitHub Integration
 
-Status: PLANNED / ACCESS-GATED
+Status: CURRENT
 Branch: `feature/03-github-integration`
 Depends on: accepted Stage 2
 Product model: ADR-007, ADR-008
@@ -28,11 +28,22 @@ remote на пользователя. Это не GraphNotes-hosted vault и н�
 
 ## Required inputs
 
-- visibility единого knowledge repository (публичное чтение уже принято ADR-008);
-- GitHub App test installation и repository identifier;
-- минимальные permissions;
-- как именно подключается personal remote (fork / отдельный repo / installation);
-- webhook secret для `rhizome-test`.
+Принято для `rhizome-test` (2026-08-19):
+
+- shared knowledge repository: `https://github.com/vgdnet/rhizome` (public,
+  default branch `main`);
+- personal remote = отдельный GitHub repository, не fork;
+- первый тестовый personal remote пользователя `efimov`:
+  `https://github.com/vgdnet/guide_psy` (public, default branch `main`);
+- тестовые `*.md` добавляет владелец в эти репозитории.
+
+GitHub App зарегистрировано: `rhizome-absorber`, App ID `4646628`,
+Client ID `Iv23liXB3caRQOOi0vtK`, owner `@vgdnet`, Installation ID
+`154874395`.
+
+API-проверка 2026-08-19: App видит `vgdnet/rhizome` и `vgdnet/guide_psy`
+(Contents/Metadata read). Репозитории пока пустые (GitHub 409 на commits).
+Webhook для LAN не требуется. Private key вне git.
 
 Отсутствие access/credentials даёт `BLOCK`, но не разрешает придумывать
 multi-workspace архитектуру или PostgreSQL-vault.

@@ -74,3 +74,26 @@ async def get_current_admin(user: CurrentUser) -> User:
 
 
 CurrentAdmin = Annotated[User, Depends(get_current_admin)]
+
+
+async def get_optional_user(
+    database: DatabaseSession,
+    session_token: Annotated[
+        str | None,
+        Cookie(alias=settings.session_cookie_name),
+    ] = None,
+) -> User | None:
+    if session_token is None:
+        return None
+    try:
+        return await get_current_user(database, session_token)
+    except HTTPException as exc:
+        if exc.status_code in {
+            status.HTTP_401_UNAUTHORIZED,
+            status.HTTP_403_FORBIDDEN,
+        }:
+            return None
+        raise
+
+
+OptionalUser = Annotated[User | None, Depends(get_optional_user)]
