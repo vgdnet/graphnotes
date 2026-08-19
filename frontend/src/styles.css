@@ -112,6 +112,24 @@ select { padding: .65rem .8rem; border: 1px solid #34404c; border-radius: .65rem
   outline: none;
 }
 .graph-canvas:focus { border-color: #3ecf8e; box-shadow: 0 0 0 .2rem rgb(62 207 142 / 10%); }
+.graph-canvas--diff { height: min(48vh, 24rem); }
+.graph-legend { display: flex; flex-wrap: wrap; gap: 1rem; color: #85919d; font-size: 0.78rem; }
+.swatch { display: inline-block; width: 0.7rem; height: 0.7rem; margin-right: 0.4rem; border-radius: 50%; vertical-align: -0.1rem; }
+.swatch--shared { background: #3ecf8e; }
+.swatch--both { background: #c9a227; }
+.swatch--personal { background: #6b8cff; }
+.swatch--missing { background: #ff6b6b; }
+.marker { display: inline-block; width: 0.7rem; height: 0.7rem; margin-right: 0.4rem; vertical-align: -0.1rem; background: #85919d; }
+.marker--triangle { clip-path: polygon(50% 0, 100% 100%, 0 100%); background: #3ecf8e; }
+.marker--octagon { clip-path: polygon(30% 0, 70% 0, 100% 30%, 100% 70%, 70% 100%, 30% 100%, 0 70%, 0 30%); background: #5d6b78; }
+.marker--rectangle { background: #c9a227; }
+.marker--diamond { clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%); background: #6b8cff; }
+.marker--star { clip-path: polygon(50% 0, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%); background: #ff6b6b; }
+.marker--ellipse { border-radius: 50%; }
+.graph-diff { display: grid; gap: 0.8rem; margin: 1rem 0; }
+.graph-diff-changes { margin: 0; padding-left: 1.1rem; color: #d8dee4; font-size: 0.82rem; }
+.graph-diff-changes li { margin: 0.25rem 0; }
+.graph-diff-changes strong { font-weight: 600; }
 .graph-legend { display: flex; flex-wrap: wrap; gap: 1rem; color: #85919d; font-size: 0.78rem; }
 .swatch { display: inline-block; width: 0.7rem; height: 0.7rem; margin-right: 0.4rem; border-radius: 50%; vertical-align: -0.1rem; }
 .swatch--shared { background: #3ecf8e; }

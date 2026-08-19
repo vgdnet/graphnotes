@@ -1,4 +1,5 @@
 from typing import Annotated
+from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Query
 from sqlalchemy import select
@@ -7,8 +8,9 @@ from app.api.dependencies import CurrentAdmin, CurrentUser, DatabaseSession
 from app.core.config import settings
 from app.models.github import PersonalRepository, SharedRepository
 from app.models.graph import NoteLayer
-from app.schemas.graph import GraphResponse, RebuildRequest
+from app.schemas.graph import GraphDiffResponse, GraphResponse, RebuildRequest
 from app.services.github import GitHubAppClient
+from app.services.graph_diff import proposal_graph_diff
 from app.services.index import (
     IndexerError,
     ensure_personal_current,
@@ -19,6 +21,7 @@ from app.services.index import (
     rebuild_personal,
     rebuild_shared,
 )
+from app.services.proposal import ProposalError
 from app.services.repository import SHARED_SINGLETON_ID, refresh_personal, refresh_shared
 
 router = APIRouter(tags=["graph"])
@@ -148,6 +151,26 @@ async def personal_overlay(
     if personal.index_status == "error" or shared.index_status == "error":
         overlay["index_status"] = "error"
     return GraphResponse.model_validate(overlay)
+
+
+@router.get("/graph/diff", response_model=GraphDiffResponse)
+async def graph_diff(
+    user: CurrentUser,
+    database: DatabaseSession,
+    proposal_id: UUID,
+    limit: Annotated[int, Query(ge=1, le=200)] = settings.graph_page_limit,
+) -> GraphDiffResponse:
+    try:
+        payload = await proposal_graph_diff(
+            database,
+            user,
+            proposal_id,
+            _client(),
+            limit=_limit(limit),
+        )
+    except ProposalError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+    return GraphDiffResponse.model_validate(payload)
 
 
 @router.post("/index/rebuild", response_model=GraphResponse)

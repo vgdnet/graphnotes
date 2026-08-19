@@ -212,6 +212,17 @@ async def list_proposals(
     }
 
 
+async def proposal_for_viewer(
+    database: AsyncSession, user: User, proposal_id: uuid.UUID
+) -> Proposal:
+    row = await database.get(Proposal, proposal_id)
+    if row is None:
+        raise ProposalError(404, "proposal was not found")
+    if row.author_user_id != user.id and not _is_editor(user):
+        raise ProposalError(404, "proposal was not found")
+    return row
+
+
 async def get_proposal(
     database: AsyncSession,
     user: User,
@@ -219,11 +230,7 @@ async def get_proposal(
     client: GitHubAppClient,
 ) -> dict[str, object]:
     await reconcile_proposals(database, client)
-    row = await database.get(Proposal, proposal_id)
-    if row is None:
-        raise ProposalError(404, "proposal was not found")
-    if row.author_user_id != user.id and not _is_editor(user):
-        raise ProposalError(404, "proposal was not found")
+    row = await proposal_for_viewer(database, user, proposal_id)
     author = await database.get(User, row.author_user_id)
     if author is None:
         raise ProposalError(404, "proposal was not found")

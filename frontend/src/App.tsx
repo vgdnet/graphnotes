@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import { GraphView } from "./GraphView";
 import type { GraphResponse } from "./GraphView";
+import { GraphDiffView } from "./GraphDiffView";
+import type { GraphDiffResponse } from "./GraphDiffView";
 
 type HealthState = "checking" | "online" | "offline";
 type AuthMode = "login" | "register";
@@ -150,6 +152,8 @@ export function App() {
   const [proposedPaths, setProposedPaths] = useState<string[]>([]);
   const [proposals, setProposals] = useState<Proposal[]>([]);
   const [openProposal, setOpenProposal] = useState<Proposal | null>(null);
+  const [proposalDiff, setProposalDiff] = useState<GraphDiffResponse | null>(null);
+  const [proposalDiffLoading, setProposalDiffLoading] = useState(false);
   const [decisionReason, setDecisionReason] = useState("");
   const [openNote, setOpenNote] = useState<NoteDetail | null>(null);
   const [report, setReport] = useState<IngestReport | null>(null);
@@ -448,13 +452,31 @@ export function App() {
     }
   }
 
+  async function loadProposalGraphDiff(id: string) {
+    setProposalDiffLoading(true);
+    try {
+      const response = await fetch(`/api/graph/diff?proposal_id=${encodeURIComponent(id)}`);
+      if (!response.ok) {
+        setProposalDiff(null);
+        return;
+      }
+      setProposalDiff((await response.json()) as GraphDiffResponse);
+    } catch {
+      setProposalDiff(null);
+    } finally {
+      setProposalDiffLoading(false);
+    }
+  }
+
   async function openProposalDetail(id: string) {
     setSubmitting(true);
     setError("");
+    setProposalDiff(null);
     try {
       const response = await fetch(`/api/proposals/${id}`);
       if (!response.ok) throw new Error(await readError(response));
       setOpenProposal((await response.json()) as Proposal);
+      await loadProposalGraphDiff(id);
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "Ошибка соединения");
     } finally {
@@ -476,6 +498,7 @@ export function App() {
       const updated = (await response.json()) as Proposal;
       setOpenProposal(updated);
       setDecisionReason("");
+      await loadProposalGraphDiff(id);
       const listed = await fetch("/api/proposals");
       if (listed.ok) {
         setProposals(((await listed.json()) as ProposalListResponse).proposals);
@@ -584,6 +607,7 @@ export function App() {
       setMode("login");
       setProposals([]);
       setOpenProposal(null);
+      setProposalDiff(null);
       setProposedPaths([]);
       setDifferences([]);
     } catch (requestError) {
@@ -782,6 +806,7 @@ export function App() {
                   {openProposal.author.display_name} · {proposalStatusLabel(openProposal.status)}
                   {openProposal.reason ? ` · ${openProposal.reason}` : ""}
                 </p>
+                <GraphDiffView diff={proposalDiff} loading={proposalDiffLoading} />
                 {openProposal.diff.map((item) => (
                   <pre key={item.path} className="proposal-diff">{item.diff || item.path}</pre>
                 ))}
