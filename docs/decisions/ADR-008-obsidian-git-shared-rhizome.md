@@ -3,6 +3,7 @@
 Status: Accepted
 Accepted: 2026-08-19
 Refines: ADR-007 (personal rhizome location and ingest); ADR-003 (Git remains the merge engine)
+Partially superseded by: ADR-009 (Differ and ZIP download replace take-into-git)
 
 ## Context
 
@@ -21,9 +22,8 @@ that:
 
 - a **group of editors** can assemble **one shared rhizome** from proposed
   Git changes, with history and rollback;
-- a **reader/user** can view that rhizome as a graph, take selected pieces
-  into their own Git/vault, and see how their notes connect to the shared
-  graph;
+- a **reader/user** can view that rhizome as a graph, download its published
+  Markdown as a ZIP, and see how their notes connect to the shared graph;
 - anyone may **read** the shared knowledge Git repository without an account
   when that repository is public;
 - writing into the shared rhizome requires GraphNotes registration, a
@@ -59,8 +59,9 @@ last-write-wins in PostgreSQL.
 
 1. Graph of the shared rhizome (and how the viewer's connected git relates to
    it).
-2. User action: take selected shared notes/links **into the user's git**.
-3. User action: propose Git changes into the shared rhizome.
+2. User action: download the published shared rhizome as a ZIP (ADR-009).
+3. User action: Differ, then propose selected differences into the shared
+   rhizome (ADR-009).
 4. Editor/admin action: human-friendly queue of proposals (text + structural
    impact), accept / reject / return, merge into one shared rhizome, rollback.
 
@@ -85,8 +86,8 @@ decision), audit, and the **derived** graph index. Not canonical note bodies.
 
 ### Authentication boundary
 
-Password accounts are required to connect a personal git, take notes via the
-GraphNotes UI, propose into the shared rhizome, and act as editor/admin.
+Password accounts are required to connect a personal git, propose from Differ
+into the shared rhizome, and act as editor/admin.
 
 Public clone/fetch of a public shared knowledge repository does not require a
 GraphNotes account. If that repository is public, GraphNotes may also show the
@@ -114,10 +115,11 @@ thin wrapper around GitHub PR vocabulary.
   Obsidian editor.
 - Stage 3 binds one shared knowledge repository and a **connected personal
   remote** per user, not a GraphNotes-hosted vault.
-- Stage 4 is connect-git / take-from-shared; ZIP/MD upload is fallback.
-- Stage 6 is the shared graph plus personal overlay (links to shared).
-- Stage 7 is the editor proposal queue, merge and rollback; hide GitHub PR
-  jargon from ordinary UX.
+- Stage 4 historically delivered take-from-shared; ADR-009 removes that as
+  the product path. ZIP/MD **upload** remains fallback ingest.
+- Stage 7 is Differ, ZIP download, the editor proposal queue, merge and
+  rollback; hide GitHub PR jargon from ordinary UX.
+- Stage 8 is Graph Diff: structural view of Differ/proposal.
 - Do not implement PostgreSQL note CRUD or an Obsidian-like editor unless a
   later ADR explicitly reverses this decision.
 - ADR-007 still holds: one shared rhizome, global `user < editor < admin`,

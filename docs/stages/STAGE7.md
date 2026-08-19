@@ -3,20 +3,27 @@
 Status: CURRENT
 Branch: `feature/07-publish-merge`
 Depends on: accepted Stage 6
-Product model: ADR-007, ADR-008
+Product model: ADR-007, ADR-008, ADR-009
 
-Это **ядро editor-продукта**, не тонкая обёртка GitHub PR. Обычный UX:
-предложить / принять / отклонить / вернуть / откатить. Несколько предложений
-по одному файлу остаются параллельными, пока editor не сольёт.
+Это **ядро editor-продукта**, не тонкая обёртка GitHub PR. Круговорот Markdown:
+Differ находит односторонние отличия личного git к опубликованной общей ризоме;
+пользователь отмечает их чекбоксами и предлагает; editor принимает / отклоняет /
+возвращает / откатывает. Скачать общую — ZIP внизу экрана, не запись в personal
+git.
 
 ## Recorded decisions
 
-Blocking product details (2026-08-19):
+Blocking product details (2026-08-19), then ADR-009 (2026-08-19):
 
-1. A proposal includes **selected files**, not the entire personal vault.
-2. Immutable scope is `base` = shared SHA at create, `head` = commit GraphNotes
-   creates on a hidden shared-repo branch with only those files.
+1. A proposal is a **selected subset of Differ results**, not the entire personal
+   vault and not a required summary field as the primary control.
+2. Immutable scope is `base` = published shared SHA at create, `head` = commit
+   GraphNotes creates on a hidden shared-repo branch with only those files.
 3. Personal git is unchanged after creating a proposal.
+4. Differ is one-way personal → published shared (missing paths and different
+   content). Shared-only files are obtained by ZIP download, not by Differ.
+5. `Скачать` is a ZIP of the published shared revision. Putting that ZIP into
+   the user's git from GraphNotes is out of this stage.
 
 GitHub Pull Request API is not required: contents-write plus `git/refs` and
 `POST /repos/{owner}/{name}/merges` is enough. Public JSON hides branch names,
@@ -26,13 +33,17 @@ forbidden by author user id, including admin authors.
 
 ## User outcome
 
-User предлагает изменения из своего git в единую общую ризому. Editor/admin
-видит автора, человеческий текстовый diff, принимает, отклоняет, возвращает
-или откатывает с причиной. Читатели никогда не видят частично применённое
-изменение. Откат общей ризомы — новый Git commit с деревом предыдущей revision.
+User видит Differ своего git к общей ризоме, отмечает отличия, предлагает их
+в очередь. Editor/admin видит автора и человеческий текстовый diff, принимает,
+отклоняет, возвращает или откатывает с причиной. Внизу общей ризомы — «Скачать»
+(ZIP). Читатели никогда не видят частично применённое изменение. После приёма
+Differ по этим путям пустеет.
 
 ## Scope
 
+- Differ: list of one-way personal → published shared differences;
+- create proposal from selected Differ rows (checkboxes);
+- ZIP download of the published shared revision;
 - proposal: author, immutable base/head SHAs, scope, status, reason, timestamps;
 - Git merge through backend, hidden in UX;
 - list/detail/human text diff for author and editor/admin;
@@ -46,6 +57,8 @@ User предлагает изменения из своего git в едину
 ## API baseline
 
 ```text
+GET  /api/differ
+GET  /api/shared/archive
 POST /api/proposals
 GET  /api/proposals
 GET  /api/proposals/{id}
@@ -73,14 +86,19 @@ revision changes only after full successful indexing.
 
 - custom three-way merge engine/UI;
 - automatic semantic conflict resolution;
-- graph diff visualization details (Stage 8);
+- graph visualization of Differ (Stage 8);
+- writing the downloaded ZIP into personal git;
+- GraphNotes take-from-shared commit into personal git;
 - multiple proposal destinations/shared rhizomes;
 - Obsidian-class editor;
 - PostgreSQL canonical note bodies.
 
 ## Verification
 
-- user proposal from correct personal revision;
+- Differ lists only personal→shared differences; empty after accepted paths
+  are published;
+- ZIP download matches the published shared revision the graph shows;
+- user proposal from selected Differ rows;
 - user cannot direct-edit shared;
 - editor/admin review other proposal;
 - self-approval rejected for editor and admin authors;
@@ -97,7 +115,8 @@ revision changes only after full successful indexing.
 
 ## Definition of Done
 
-- user/editor/admin workflows work through frontend in product language;
+- user sees Differ, selects differences, proposes; editor decides;
+- ZIP download of published shared is available;
 - self-approval is impossible;
 - proposal publication is atomic to readers;
 - history/audit/reconciliation evidence exists;

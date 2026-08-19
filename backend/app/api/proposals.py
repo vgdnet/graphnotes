@@ -1,17 +1,20 @@
 from typing import NoReturn
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Response
 
 from app.api.dependencies import CurrentUser, DatabaseSession
+from app.schemas.differ import DifferResponse
 from app.schemas.proposal import (
     ProposalCreateRequest,
     ProposalDecisionRequest,
     ProposalListResponse,
     ProposalResponse,
 )
+from app.services.differ import list_differences
 from app.services.github import GitHubAppClient
 from app.services.proposal import ProposalError, create_proposal, decide, get_proposal, list_proposals
+from app.services.shared_archive import shared_archive
 
 router = APIRouter(tags=["proposals"])
 
@@ -22,6 +25,31 @@ def _client() -> GitHubAppClient:
 
 def _raise(error: ProposalError) -> NoReturn:
     raise HTTPException(status_code=error.status_code, detail=error.detail) from error
+
+
+@router.get("/differ", response_model=DifferResponse)
+async def differ_endpoint(
+    user: CurrentUser,
+    database: DatabaseSession,
+) -> DifferResponse:
+    try:
+        body = await list_differences(database, user, _client())
+    except ProposalError as exc:
+        _raise(exc)
+    return DifferResponse.model_validate(body)
+
+
+@router.get("/shared/archive")
+async def shared_archive_endpoint(database: DatabaseSession) -> Response:
+    try:
+        payload = await shared_archive(database, _client())
+    except ProposalError as exc:
+        _raise(exc)
+    return Response(
+        content=payload,
+        media_type="application/zip",
+        headers={"Content-Disposition": 'attachment; filename="shared-rhizome.zip"'},
+    )
 
 
 @router.post("/proposals", response_model=ProposalResponse)

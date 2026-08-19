@@ -14,6 +14,12 @@ OWNER_NAME_PATTERN = re.compile(r"^[A-Za-z0-9](?:[A-Za-z0-9._-]{0,38})$")
 REPO_NAME_PATTERN = re.compile(r"^[A-Za-z0-9._-]{1,100}$")
 SHARED_SINGLETON_ID = 1
 
+
+def published_sha(shared: SharedRepository | None) -> str | None:
+    if shared is None:
+        return None
+    return shared.indexed_sha or shared.observed_sha
+
 STATUS_LABELS = {
     "ready": "connected",
     "empty": "waiting_for_notes",

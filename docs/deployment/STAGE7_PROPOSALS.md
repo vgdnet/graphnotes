@@ -1,33 +1,23 @@
-# Stage 7 proposal queue
+# Stage 7 proposals, Differ and download
 
-Users pick Markdown files from their connected git and propose them into the
-one shared rhizome. GraphNotes copies those files onto a hidden branch of the
-shared repository. Editors accept, reject, return or roll back in product
-language. GitHub pull-request URLs, branch names and SHAs stay out of public
-JSON.
+Differ compares the caller's connected git to the **published** shared rhizome
+and lists what can be offered: paths missing from shared, or paths whose
+content differs. The user selects those rows and creates a proposal. GraphNotes
+copies only those files onto a hidden branch of the shared repository. The
+personal git is not rewritten. After the editor accepts and the index catches
+up, those paths disappear from Differ.
 
-## Scope of a proposal
+`Скачать` is a ZIP of the same published shared Markdown the graph shows. It is
+not a GraphNotes commit into the user's git.
 
-The proposal is the selected paths, not the entire personal vault.
-
-- `base` is the shared revision observed when the proposal is created
-- `head` is the commit GraphNotes creates with only those files
-- the personal git is not rewritten
-
-Identical files are skipped. If nothing differs, the proposal is rejected.
-
-## Publication
-
-Approve merges the hidden branch into the shared default branch, then rebuilds
-the derived index. Readers keep seeing the previous complete shared graph until
-that rebuild finishes. A conflicted second proposal on the same file stays a
-separate request.
-
-Rollback writes a new shared commit whose tree matches the pre-merge revision.
+Editors accept, reject, return or roll back in product language. GitHub
+pull-request URLs, branch names and SHAs stay out of public JSON.
 
 ## API
 
 ```text
+GET  /api/differ
+GET  /api/shared/archive
 POST /api/proposals
 GET  /api/proposals
 GET  /api/proposals/{id}
@@ -40,4 +30,4 @@ POST /api/proposals/{id}/rollback
 Reject, return and rollback require a reason. Authors cannot decide on their
 own proposal, including admin authors.
 
-Alembic revision: `0005_proposals`.
+Alembic revision: `0005_proposals`. See ADR-009.

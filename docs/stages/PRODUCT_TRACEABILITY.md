@@ -1,7 +1,7 @@
 # Product requirements to Stage traceability
 
 Статус: DERIVED / MAINTAINED
-Источник: `docs/product/PRODUCT_SPEC.md` version 1.3
+Источник: `docs/product/PRODUCT_SPEC.md` version 1.6
 
 Матрица маршрутизирует канонические требования в Stage-файлы и не изменяет
 `PRODUCT_SPEC.md`.
@@ -15,7 +15,7 @@
 | No workspace/multiple shared graphs | every Stage | absence of workspace entities/routes/IDs |
 | No canonical note bodies in PostgreSQL | every Stage | Git/Markdown remains source of truth (ADR-008) |
 | Markdown/Git source of truth | 4, 5, 7, 8 | committed Markdown, rebuild equivalence, no graph merge file |
-| `user` outcome | 2, 4, 6, 7 | auth, take-from-shared, shared graph, proposal E2E |
+| `user` outcome | 2, 6, 7 | auth, shared graph, Differ, ZIP download, proposal E2E |
 | `editor` outcome | 2, 7, 8 | proposal queue, human diff, merge/rollback |
 | `admin` outcome | 2, 5, 7, 9 | user/role/block management plus inherited editor/user rights and audited operations |
 | Self-approval forbidden | 7 | editor/admin author negative tests |
@@ -26,12 +26,13 @@
 | --- | --- | --- |
 | 6.1 | UUID account, password hash, session, active state, global RBAC | 2 |
 | 6.2 | one GitHub knowledge repository; connect personal git; public read allowed | 3 |
-| 6.3 | take-from-shared; ZIP/MD fallback ingest | 4 |
+| 6.3 | ZIP of published shared; ZIP/MD fallback ingest | 4 (fallback), 7 (download) |
 | 6.4 | revisioned shared/personal/proposal derived index and rebuild | 5 |
 | 6.5 | bounded shared Graph API, personal overlay, Cytoscape UI | 5, 6 |
-| 6.6 | proposal queue, review, atomic publication, reconciliation, rollback | 7 |
-| 6.6 | textual and graph impact before publication | 7, 8 |
-| 6.7 | audit, history, idempotency and recovery | 2, 3, 5, 7, 9 |
+| 6.6 | Differ, one-way personal → published shared | 7 |
+| 6.7 | proposal queue, review, atomic publication, reconciliation, rollback | 7 |
+| 6.7 | textual and graph impact before publication | 7, 8 |
+| 6.8 | audit, history, idempotency and recovery | 2, 3, 5, 7, 9 |
 
 ## API ownership
 
@@ -39,7 +40,8 @@
 | --- | --- |
 | auth, current user, admin user/role management | 2 |
 | repository status/connect/webhook; personal git connect | 3 |
-| take-from-shared; ZIP/MD fallback; read-only personal notes | 4 |
+| take-from-shared (historical); ZIP/MD fallback; read-only personal notes | 4 |
+| shared ZIP archive; Differ; proposals | 7 |
 | personal/shared Graph API and rebuild | 5 |
 | shared graph UI and personal overlay | 6 |
 | proposals, decisions, rollback | 7 |
@@ -54,12 +56,13 @@
 | Global `user/editor/admin` hierarchy | 2 |
 | Isolated connected personal git | 3, 4 |
 | One shared rhizome readable (clone without account if public) | 3, 5, 6 |
-| Take selected shared pieces into personal git | 4 |
+| Take selected shared pieces into personal git | 4 historically; **not** current product (ADR-009) |
+| Download ZIP of published shared | 7 |
 | Safe MD/ZIP fallback committed to personal git | 4 |
+| User creates proposal from Differ selection | 7 |
 | Links/tags/properties/unresolved projection | 4, 5 |
 | Revision-linked rebuildable index; no note bodies in PostgreSQL | 5 |
 | Shared graph + personal overlay UX | 6 |
-| User creates proposal | 7 |
 | Editor queue: approve/reject/return/rollback | 7 |
 | Editor sees textual and graph impact | 7, 8 |
 | Author cannot self-approve | 7 |
@@ -89,7 +92,8 @@
 
 | Question | Latest decision point |
 | --- | --- |
-| Selected changes vs whole personal diff | before Stage 7 |
+| Selected changes vs whole personal diff | Differ subset (ADR-009); closed |
+| Take-from-shared vs ZIP download | ZIP of published shared (ADR-009); closed |
 | Local overlay/provenance/visual states | Stage 6/8 UX finalization |
 | How personal remote is connected (fork vs separate repo) | separate GitHub repo (2026-08-19); first fixture `vgdnet/guide_psy` for user `efimov` |
 | Editing through graph | excluded unless new ADR before implementation |

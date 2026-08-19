@@ -4,6 +4,9 @@ Status: DONE
 Branch: `feature/04-markdown-import`
 Depends on: accepted Stage 3
 Product model: ADR-007, ADR-008
+Superseded in product: ADR-009 (2026-08-19) — «взять в personal git» больше
+не продуктовый путь; актуальная общая ризома скачивается ZIP. Этот файл
+остаётся историческим заданием уже сданной стадии.
 
 Имя ветки историческое. Продуктовый смысл стадии — взять выбранное из общей
 ризомы в git пользователя; ZIP/один `.md` — запасной ingest, не in-app vault.

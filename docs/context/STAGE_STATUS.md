@@ -4,7 +4,9 @@ Updated: 2026-08-19
 
 Product model ADR-008 (2026-08-19): GraphNotes is not an Obsidian clone.
 Personal knowledge is the user's git. Canonical note bodies are not stored in
-PostgreSQL. Current implementation stage is Stage 7.
+PostgreSQL. Current implementation stage is Stage 7. Product model ADR-009 (2026-08-19):
+Differ and ZIP download of the published shared rhizome; take-into-git is no
+longer the product path.
 
 ## Stage 0 - Infrastructure
 Status: DONE
@@ -193,10 +195,11 @@ Cytoscape shared graph and overlay of the caller's git onto the shared rhizome.
 Public graph without login; overlay requires a session. See
 `docs/stages/STAGE6_COMPLETED.md`.
 
-## Stage 7 - Editor proposal queue / merge / rollback
+## Stage 7 - Differ, ZIP download, editor queue
 Status: CURRENT
 Branch: `feature/07-publish-merge`
 
-Selected files from the user's git become a Git-backed proposal into the one
-shared rhizome. Editors accept, reject, return or roll back. Follow
-`docs/stages/STAGE7.md`. Owner accepted Stage 6 live graph.
+ADR-009: Differ lists one-way personal → published shared differences; the user
+selects them and proposes. Download is a ZIP of the published shared revision.
+Editors accept, reject, return or roll back. Follow `docs/stages/STAGE7.md` and
+`docs/product/PRODUCT_SPEC.md` 1.6. Owner accepted Stage 6 live graph.

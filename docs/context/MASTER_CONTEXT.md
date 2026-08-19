@@ -13,8 +13,9 @@ in `docs/decisions/ADR-*.md`.
 ## 1. Product
 GraphNotes is the shared-rhizome layer over Markdown in Git, not a second
 Obsidian. People author notes in their own vault/git. GraphNotes shows the one
-shared rhizome as a graph, lets a user take selected pieces into their git, and
-lets a group of editors merge proposals into that shared rhizome. See ADR-008.
+shared rhizome as a graph, lets a user download its published Markdown as a
+ZIP, runs Differ (one-way personal → shared), and lets editors merge those
+proposals. See ADR-008 and ADR-009.
 
 Core data flow:
 
@@ -85,11 +86,12 @@ pages, branch names and SHAs are not shown in the product UI.
 GraphNotes should handle:
 - application users and permissions
 - binding one shared knowledge repository and connected personal git remotes
-- taking selected shared notes into the user's git
+- ZIP download of the published shared rhizome
+- Differ (one-way personal → published shared)
 - graph indexing
 - shared-graph UX and personal overlay (links to shared)
 - editor proposal queue in human language
-- graph diff / merge preview for editors
+- Graph Diff as the structural view of Differ/proposal
 
 Do not build a custom Git/version/3-way-merge engine for the MVP.
 Do not build an Obsidian-class in-app editor.
@@ -100,7 +102,8 @@ Initial product git concept:
 ```text
 shared knowledge repo default branch  = approved shared rhizome
 user's own git remote                 = personal rhizome (Obsidian/obsidian-git)
-proposal                              = Git-backed request into shared, queued for editors
+proposal                              = selected Differ results, queued for editors
+Differ                                = derived one-way personal → published shared
 ```
 
 The `user/<uuid>` branch-on-shared-repo sketch is not the product story.
@@ -208,11 +211,11 @@ Git is the primary delivery mechanism. SSH/rsync is a fallback or bootstrap mech
 - Stage 1 - Project Bootstrap - DONE
 - Stage 2 - Password Authentication - DONE
 - Stage 3 - GitHub Integration - DONE
-- Stage 4 - Take from shared / ZIP fallback - DONE
+- Stage 4 - Take from shared / ZIP fallback - DONE (product path superseded by ADR-009)
 - Stage 5 - Graph Engine - DONE
 - Stage 6 - Shared graph + personal overlay (links to shared)
-- Stage 7 - Editor proposal queue / merge / rollback (core product)
-- Stage 8 - Graph Diff for editors
+- Stage 7 - Differ, ZIP download, editor proposal queue / merge / rollback
+- Stage 8 - Graph Diff (structural view of Differ/proposal)
 - Stage 9 - Production Hardening / CI/CD
 
 ## 9. Stage branches

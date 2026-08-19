@@ -16,7 +16,7 @@ from app.services.audit import record_audit_event
 from app.services.git_paths import PathError, normalize_git_path
 from app.services.github import GitHubAppClient, GitHubAppError
 from app.services.index import IndexerError, rebuild_shared
-from app.services.repository import SHARED_SINGLETON_ID, apply_snapshot
+from app.services.repository import SHARED_SINGLETON_ID, apply_snapshot, published_sha
 
 
 class ProposalError(Exception):
@@ -81,6 +81,15 @@ def _public(
     }
 
 
+def _summary(raw: str, paths: list[str]) -> str:
+    cleaned = raw.strip()
+    if len(cleaned) >= 3:
+        return cleaned[:200]
+    if len(paths) == 1:
+        return paths[0][:200]
+    return f"{len(paths)} notes"
+
+
 async def create_proposal(
     database: AsyncSession,
     *,
@@ -96,12 +105,14 @@ async def create_proposal(
     personal = await database.scalar(
         select(PersonalRepository).where(PersonalRepository.user_id == user.id)
     )
-    if shared is None or not shared.observed_sha:
+    if shared is None or not published_sha(shared):
         raise ProposalError(409, "the shared rhizome is not connected")
     if personal is None or not personal.observed_sha:
         raise ProposalError(409, "connect your git first")
     if expected_sha is not None and expected_sha != personal.observed_sha:
         raise ProposalError(409, "your git changed, retry")
+    shared_ref = published_sha(shared)
+    assert shared_ref is not None
 
     normalized: list[str] = []
     seen: set[str] = set()
@@ -121,7 +132,7 @@ async def create_proposal(
     files: dict[str, str] = {}
     try:
         shared_listed = set(
-            await client.list_markdown_files(shared.owner, shared.name, shared.observed_sha)
+            await client.list_markdown_files(shared.owner, shared.name, shared_ref)
         )
         for path in normalized:
             text = await client.get_file(personal.owner, personal.name, path, personal.observed_sha)
@@ -129,7 +140,7 @@ async def create_proposal(
             if path not in shared_listed:
                 added.append(path)
                 continue
-            current = await client.get_file(shared.owner, shared.name, path, shared.observed_sha)
+            current = await client.get_file(shared.owner, shared.name, path, shared_ref)
             if current == text:
                 continue
             changed.append(path)
@@ -138,18 +149,19 @@ async def create_proposal(
     if not added and not changed:
         raise ProposalError(400, "those notes already match the shared rhizome")
     to_commit = {path: files[path] for path in added + changed}
+    label = _summary(summary, list(to_commit))
 
     proposal_id = uuid.uuid4()
     branch = f"gn-p-{proposal_id.hex[:16]}"
     try:
-        await client.create_branch(shared.owner, shared.name, branch, shared.observed_sha)
+        await client.create_branch(shared.owner, shared.name, branch, shared_ref)
         head = await client.commit_markdown(
             shared.owner,
             shared.name,
             branch,
             to_commit,
-            summary,
-            shared.observed_sha,
+            label,
+            shared_ref,
         )
     except GitHubAppError as exc:
         raise _github(exc) from exc
@@ -158,10 +170,10 @@ async def create_proposal(
         id=proposal_id,
         author_user_id=user.id,
         status=ProposalStatus.OPEN.value,
-        summary=summary.strip()[:200],
+        summary=label,
         scope_paths=json.dumps(sorted(to_commit)),
         branch_name=branch,
-        base_sha=shared.observed_sha,
+        base_sha=shared_ref,
         head_sha=head,
     )
     database.add(row)

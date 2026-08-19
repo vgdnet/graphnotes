@@ -74,7 +74,19 @@ type Proposal = {
   diff: { path: string; diff: string }[];
 };
 
-type ProposalListResponse = { proposals: Proposal[] };
+type DifferItem = {
+  path: string;
+  title: string;
+  kind: "added" | "changed" | string;
+};
+
+type DifferResponse = { differences: DifferItem[] };
+
+function differKindLabel(kind: string): string {
+  if (kind === "added") return "нет в общей";
+  if (kind === "changed") return "отличается";
+  return kind;
+}
 
 function proposalStatusLabel(status: string): string {
   switch (status) {
@@ -133,9 +145,8 @@ export function App() {
   const [sharedNotes, setSharedNotes] = useState<NoteProjection[]>([]);
   const [personalNotes, setPersonalNotes] = useState<NoteProjection[]>([]);
   const [personalRevision, setPersonalRevision] = useState<string | null>(null);
-  const [selectedPaths, setSelectedPaths] = useState<string[]>([]);
+  const [differences, setDifferences] = useState<DifferItem[]>([]);
   const [proposedPaths, setProposedPaths] = useState<string[]>([]);
-  const [proposalSummary, setProposalSummary] = useState("");
   const [proposals, setProposals] = useState<Proposal[]>([]);
   const [openProposal, setOpenProposal] = useState<Proposal | null>(null);
   const [decisionReason, setDecisionReason] = useState("");
@@ -263,6 +274,29 @@ export function App() {
   }, [user, repository?.personal?.connected, repository?.personal?.updated_at]);
 
   useEffect(() => {
+    if (!user || !repository?.shared.connected || !repository.personal?.connected) {
+      setDifferences([]);
+      return;
+    }
+    const controller = new AbortController();
+    void fetch("/api/differ", { signal: controller.signal })
+      .then(async (response) => {
+        if (!response.ok) throw new Error(await readError(response));
+        return (await response.json()) as DifferResponse;
+      })
+      .then((body) => setDifferences(body.differences))
+      .catch(() => undefined);
+    return () => controller.abort();
+  }, [
+    user,
+    repository?.shared.connected,
+    repository?.shared.updated_at,
+    repository?.shared.index_status,
+    repository?.personal?.connected,
+    repository?.personal?.updated_at,
+  ]);
+
+  useEffect(() => {
     if (!user) {
       setProposals([]);
       return;
@@ -384,7 +418,7 @@ export function App() {
   }
 
   async function proposeSelected() {
-    if (proposedPaths.length === 0 || proposalSummary.trim().length < 3) return;
+    if (proposedPaths.length === 0) return;
     setSubmitting(true);
     setError("");
     try {
@@ -393,16 +427,18 @@ export function App() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           paths: proposedPaths,
-          summary: proposalSummary.trim(),
           expected_sha: personalRevision,
         }),
       });
       if (!response.ok) throw new Error(await readError(response));
       setProposedPaths([]);
-      setProposalSummary("");
       const listed = await fetch("/api/proposals");
       if (listed.ok) {
         setProposals(((await listed.json()) as ProposalListResponse).proposals);
+      }
+      const differ = await fetch("/api/differ");
+      if (differ.ok) {
+        setDifferences(((await differ.json()) as DifferResponse).differences);
       }
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "Ошибка соединения");
@@ -447,33 +483,9 @@ export function App() {
       if (status.ok) {
         setRepository((await status.json()) as RepositoryStatusResponse);
       }
-    } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "Ошибка соединения");
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
-  async function takeSelected() {
-    if (selectedPaths.length === 0) return;
-    setSubmitting(true);
-    setError("");
-    try {
-      const response = await fetch("/api/personal/take-from-shared", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ paths: selectedPaths, expected_sha: personalRevision }),
-      });
-      if (!response.ok) throw new Error(await readError(response));
-      const body = (await response.json()) as IngestReport;
-      setReport(body);
-      setPersonalRevision(body.revision);
-      setSelectedPaths([]);
-      const notes = await fetch("/api/personal/notes");
-      if (notes.ok) {
-        const listed = (await notes.json()) as NoteListResponse;
-        setPersonalNotes(listed.notes);
-        setPersonalRevision(listed.revision);
+      const differ = await fetch("/api/differ");
+      if (differ.ok) {
+        setDifferences(((await differ.json()) as DifferResponse).differences);
       }
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "Ошибка соединения");
@@ -572,6 +584,7 @@ export function App() {
       setProposals([]);
       setOpenProposal(null);
       setProposedPaths([]);
+      setDifferences([]);
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "Ошибка соединения");
     } finally {
@@ -669,118 +682,67 @@ export function App() {
             </aside>
           </section>
           {repository?.shared.connected && repository.personal?.connected && (
-            <section className="notes-panel" aria-labelledby="notes-heading">
+            <section className="notes-panel" aria-labelledby="differ-heading">
               <div>
-                <p className="eyebrow">Знания</p>
-                <h2 id="notes-heading">Взять себе</h2>
+                <p className="eyebrow">Отличия</p>
+                <h2 id="differ-heading">Differ</h2>
                 <p className="admin-panel__hint">
-                  Выберите заметки общей ризомы. GraphNotes запишет их в ваш git, не перезаписывая уже существующие файлы.
+                  Сравнение вашего git с опубликованной общей ризомой в одну сторону:
+                  чего в общей ещё нет или что отличается. Отметьте и предложите в очередь.
+                  Личный git не меняется.
                 </p>
               </div>
               {error && <p className="form-error" role="alert">{error}</p>}
+              {differences.length === 0 ? (
+                <p className="admin-panel__hint">Отличий нет — в общую предлагать нечего.</p>
+              ) : (
+                <ul className="note-list">
+                  {differences.map((item) => (
+                    <li key={item.path}>
+                      <div className="note-pick">
+                        <input
+                          type="checkbox"
+                          checked={proposedPaths.includes(item.path)}
+                          onChange={(event) => {
+                            setProposedPaths((current) => (
+                              event.target.checked
+                                ? [...current, item.path]
+                                : current.filter((path) => path !== item.path)
+                            ));
+                          }}
+                          aria-label={`Предложить ${item.title}`}
+                        />
+                        <button className="note-link" type="button" onClick={() => void openPersonalNote(item.path)}>
+                          <strong>{item.title}</strong>
+                          <small>{item.path} · {differKindLabel(item.kind)}</small>
+                        </button>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <button
+                className="button button--primary"
+                type="button"
+                disabled={submitting || proposedPaths.length === 0}
+                onClick={() => void proposeSelected()}
+              >
+                Предложить в общую
+              </button>
+              <form className="connect-form" onSubmit={(event) => void importFallback(event)}>
+                <label>
+                  Запасной импорт (.md или ZIP)
+                  <input name="file" type="file" accept=".md,.zip,text/markdown,application/zip" required />
+                </label>
+                <button className="button button--quiet" type="submit" disabled={submitting}>
+                  Загрузить в git
+                </button>
+              </form>
               {report && (
                 <p className="ingest-report" role="status">
                   Принято: {report.accepted.length}. Пропущено: {report.skipped.length}. Конфликт: {report.conflicted.length}.
-                  {report.conflicted.length > 0 ? " Существующие файлы не тронуты." : ""}
                 </p>
               )}
-              <div className="notes-grid">
-                <div>
-                  <h3>Общая ризома</h3>
-                  <ul className="note-list">
-                    {sharedNotes.map((note) => (
-                      <li key={note.path}>
-                        <label>
-                          <input
-                            type="checkbox"
-                            checked={selectedPaths.includes(note.path)}
-                            onChange={(event) => {
-                              setSelectedPaths((current) => (
-                                event.target.checked
-                                  ? [...current, note.path]
-                                  : current.filter((path) => path !== note.path)
-                              ));
-                            }}
-                          />
-                          <span>
-                            <strong>{note.title}</strong>
-                            <small>{note.path}</small>
-                          </span>
-                        </label>
-                      </li>
-                    ))}
-                  </ul>
-                  <button
-                    className="button button--primary"
-                    type="button"
-                    disabled={submitting || selectedPaths.length === 0}
-                    onClick={() => void takeSelected()}
-                  >
-                    Взять себе
-                  </button>
-                </div>
-                <div>
-                  <h3>Ваш git</h3>
-                  <ul className="note-list">
-                    {personalNotes.map((note) => (
-                      <li key={note.path}>
-                        <div className="note-pick">
-                          <input
-                            type="checkbox"
-                            checked={proposedPaths.includes(note.path)}
-                            onChange={(event) => {
-                              setProposedPaths((current) => (
-                                event.target.checked
-                                  ? [...current, note.path]
-                                  : current.filter((path) => path !== note.path)
-                              ));
-                            }}
-                            aria-label={`Предложить ${note.title}`}
-                          />
-                          <button className="note-link" type="button" onClick={() => void openPersonalNote(note.path)}>
-                            <strong>{note.title}</strong>
-                            <small>{note.path}</small>
-                          </button>
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
-                  <form
-                    className="connect-form"
-                    onSubmit={(event) => {
-                      event.preventDefault();
-                      void proposeSelected();
-                    }}
-                  >
-                    <label>
-                      Кратко, что предлагаете
-                      <input
-                        value={proposalSummary}
-                        onChange={(event) => setProposalSummary(event.target.value)}
-                        minLength={3}
-                        maxLength={200}
-                        required
-                      />
-                    </label>
-                    <button
-                      className="button button--primary"
-                      type="submit"
-                      disabled={submitting || proposedPaths.length === 0 || proposalSummary.trim().length < 3}
-                    >
-                      Предложить в общую
-                    </button>
-                  </form>
-                  <form className="connect-form" onSubmit={(event) => void importFallback(event)}>
-                    <label>
-                      Запасной импорт (.md или ZIP)
-                      <input name="file" type="file" accept=".md,.zip,text/markdown,application/zip" required />
-                    </label>
-                    <button className="button button--quiet" type="submit" disabled={submitting}>
-                      Загрузить в git
-                    </button>
-                  </form>
-                </div>
-              </div>
               {openNote && (
                 <article className="note-read">
                   <h3>{openNote.title}</h3>
@@ -794,7 +756,7 @@ export function App() {
               <p className="eyebrow">Публикация</p>
               <h2 id="proposals-heading">{canReview ? "Очередь предложений" : "Ваши предложения"}</h2>
               <p className="admin-panel__hint">
-                Предложение копирует выбранные заметки из вашего git. Личный git не меняется.
+                Предложение берёт отмеченные отличия Differ. Личный git не меняется.
                 Читатели видят общую ризому только целиком, после принятия.
               </p>
             </div>
@@ -883,6 +845,9 @@ export function App() {
                 onOpen={(path, origin) => void openGraphNote(path, origin)}
                 onExpand={setGraphCenter}
               />
+              <p className="admin-panel__hint">
+                <a className="note-link" href="/api/shared/archive">Скачать общую ризому (ZIP)</a>
+              </p>
               {openNote && (
                 <article className="note-read">
                   <h3>{openNote.title}</h3>
@@ -949,7 +914,7 @@ export function App() {
             <h1>Собирайте мысли в живую ризому.</h1>
             <p className="summary">
               {sharedLabel(repository?.shared ?? null)} Markdown остаётся в git.
-              GraphNotes показывает общую ризому и помогает взять знания себе.
+              GraphNotes показывает общую ризому. Скачайте ZIP актуальных заметок или предложите свои отличия.
             </p>
             {sharedGraph && sharedGraph.nodes.length > 0 && (
               <p className="summary">
@@ -1017,6 +982,9 @@ export function App() {
               onOpen={(path, origin) => void openGraphNote(path, origin)}
               onExpand={setGraphCenter}
             />
+            <p className="admin-panel__hint">
+              <a className="note-link" href="/api/shared/archive">Скачать общую ризому (ZIP)</a>
+            </p>
             {openNote && (
               <article className="note-read">
                 <h3>{openNote.title}</h3>

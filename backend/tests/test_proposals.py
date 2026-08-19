@@ -267,3 +267,68 @@ async def test_self_approval_conflict_inactive_and_index_failure(
 
     await editor_author.aclose()
     await reviewer.aclose()
+
+
+async def test_differ_lists_one_way_and_archive_is_published_zip(
+    auth_test_context: tuple[AsyncClient, async_sessionmaker[AsyncSession]],
+    monkeypatch: MonkeyPatch,
+) -> None:
+    import io
+    import zipfile
+
+    admin, session_factory = auth_test_context
+    github = _install(monkeypatch, _github())
+    github.repos["vgdnet/guide_psy"].files["card.md"] = "# Personal card\n"
+    github.repos["vgdnet/guide_psy"].files["source.md"] = "# Source\n"
+    await _admin(admin, session_factory, "queue-admin")
+
+    guest = AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver")
+    async with guest:
+        assert (await guest.get("/differ")).status_code == 401
+        archive = await guest.get("/shared/archive")
+        assert archive.status_code == 200
+        assert archive.headers["content-type"].startswith("application/zip")
+        assert "shared-rhizome.zip" in archive.headers.get("content-disposition", "")
+        names = zipfile.ZipFile(io.BytesIO(archive.content)).namelist()
+        assert set(names) == {"card.md", "source.md"}
+        assert "html_url" not in archive.text
+        assert "gn-p-" not in archive.text
+
+    author = await _second("efimov")
+    await _connect_pair(author, "vgdnet/guide_psy")
+    differ = await author.get("/differ")
+    assert differ.status_code == 200
+    body = {item["path"]: item["kind"] for item in differ.json()["differences"]}
+    assert body["already.md"] == "added"
+    assert body["card.md"] == "changed"
+    assert "source.md" not in body
+    _assert_hidden(differ.text)
+
+    created = await author.post("/proposals", json={"paths": ["already.md"]})
+    assert created.status_code == 200
+    assert created.json()["summary"] == "already.md"
+    assert created.json()["added"] == ["already.md"]
+
+    editor = await _second("reviewer")
+    users = await admin.get("/admin/users")
+    editor_id = next(item["id"] for item in users.json()["users"] if item["username"] == "reviewer")
+    assert (await admin.patch(f"/admin/users/{editor_id}", json={"role": "editor"})).status_code == 200
+    published = await editor.post(
+        f"/proposals/{created.json()['id']}/approve", json={"reason": ""}
+    )
+    assert published.status_code == 200
+    assert published.json()["status"] == "published"
+
+    after = await author.get("/differ")
+    leftover = {item["path"] for item in after.json()["differences"]}
+    assert "already.md" not in leftover
+    assert "card.md" in leftover
+
+    zipped = await author.get("/shared/archive")
+    packed = set(zipfile.ZipFile(io.BytesIO(zipped.content)).namelist())
+    assert "already.md" in packed
+    assert "card.md" in packed
+
+    await author.aclose()
+    await editor.aclose()
+
