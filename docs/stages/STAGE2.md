@@ -1,26 +1,36 @@
 # Stage 2 - Password Authentication
 
-Status: PLANNED
+Status: COMPLETED
 Branch: `feature/02-password-auth`
 Primary coding environment: `nord`
 Integration host: `rhizome-test` (`172.16.13.14`)
+Completed: 2026-08-19
+Tested revision: `c883b2fcae62cc5ceb5e85467399dacc45857e26`
+Product model: ADR-008 — account is required to connect git, take via UI,
+propose, and act as editor. Public clone of a public knowledge repository does
+not require a GraphNotes account.
 
 ## User outcome
 
 A new user can register with a username and password, sign in, reload the
 application without losing the authenticated state, view their identity, and
 sign out. An inactive account cannot authenticate or continue using an existing
-session.
+session. An admin can safely inspect users, assign `user`/`editor`/`admin`, and
+block or reactivate an account without accessing password/session secrets.
 
 ## Scope
 
 - user model with UUID primary key
 - unique normalized username
 - nullable email and display name
-- roles: `user`, `editor`, `admin`
+- global hierarchical roles: `user`, `editor`, `admin`
 - `is_active`, `created_at`, and `updated_at`
 - Argon2 password hashing
 - registration, login, logout, refresh/session continuation, and current user
+- protected admin user list and role/active-state management
+- explicit initial-admin bootstrap procedure without public self-escalation
+- security audit events for registration, login failure/success, logout,
+  blocking and role changes without password/token values
 - frontend registration/login/authenticated-state UX
 - Alembic migration and backend/frontend tests
 - deployment and migration verification on `rhizome-test`
@@ -33,6 +43,8 @@ POST /api/auth/login
 POST /api/auth/refresh
 POST /api/auth/logout
 GET  /api/users/me
+GET  /api/admin/users
+PATCH /api/admin/users/{id}
 ```
 
 Exact request/response schemas and error codes may be refined within this stage
@@ -49,17 +61,22 @@ without an ADR as long as the product and security model remains unchanged.
   environment
 - revoke the active refresh/session credential on logout
 - reject inactive users on login, refresh, and authenticated requests
+- registration always creates the non-privileged default role
+- only an authenticated active admin can change roles or active state
+- prevent accidental removal/blocking of the last active admin, or document and
+  test an equivalently safe recovery procedure
 - do not expose password hashes or credential secrets in API responses
+- auth audit logs do not contain passwords, cookies or reusable session tokens
 - keep backend and PostgreSQL exposure unchanged
 
 ## Out of scope
 
 - Telegram or OAuth identity providers
 - password recovery/email delivery
-- workspace membership and permissions
+- workspace, organization, team or multiple-shared-rhizome permissions
 - GitHub product integration
 - Markdown import, notes, graph, proposals, and moderation
-- stable deployment to `rhizome` unless separately requested
+- production deployment to `rhizome` unless separately requested
 
 ## Verification
 
@@ -69,6 +86,12 @@ without an ADR as long as the product and security model remains unchanged.
 - refresh/session continuation survives a page reload
 - logout revokes continuation credentials
 - inactive users are rejected
+- user/editor cannot list users, assign roles or block accounts
+- role/active-state changes take effect on existing sessions as defined
+  by the session model
+- public registration cannot request `editor` or `admin`
+- last-admin safety/recovery path is tested
+- audit events identify actor/target/action without authentication secrets
 - `/api/users/me` requires authentication and returns no secrets
 - migration upgrade and downgrade are valid on disposable/test data
 - frontend production build passes
@@ -78,6 +101,9 @@ without an ADR as long as the product and security model remains unchanged.
 ## Definition of Done
 
 - the complete user outcome works through the frontend, not only through curl
+- minimal admin user/role/blocking outcome works through a protected interface;
+  a documented admin-only operational interface is acceptable if admin UI is
+  explicitly deferred without weakening the product role
 - backend authentication tests cover success and failure paths
 - secrets and password hashes do not leak into logs or responses
 - the exact revision passes integration and migration checks on

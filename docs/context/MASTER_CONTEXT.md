@@ -1,6 +1,6 @@
 # GraphNotes - MASTER CONTEXT
 
-Updated: 2026-08-17
+Updated: 2026-08-19
 Status: canonical architecture baseline
 
 This file is the canonical handoff context for GraphNotes across ChatGPT/Codex sessions.
@@ -11,15 +11,20 @@ implements those requirements. Cross-cutting decisions and rationale are stored
 in `docs/decisions/ADR-*.md`.
 
 ## 1. Product
-GraphNotes is a multi-user system for Markdown knowledge bases and relationship graphs (rhizomes).
+GraphNotes is the shared-rhizome layer over Markdown in Git, not a second
+Obsidian. People author notes in their own vault/git. GraphNotes shows the one
+shared rhizome as a graph, lets a user take selected pieces into their git, and
+lets a group of editors merge proposals into that shared rhizome. See ADR-008.
 
 Core data flow:
 
 ```text
-Markdown -> Parser -> PostgreSQL index -> Graph API -> Web UI
+user git / shared git Markdown
+  -> Parser
+      -> PostgreSQL derived index
+          -> Graph API
+              -> Web UI
 ```
-
-Users eventually have personal changes/graphs and can propose selected changes into a shared knowledge base. Editors review and merge those changes.
 
 ## 2. Critical data rule
 Markdown is the primary/canonical knowledge data.
@@ -29,7 +34,7 @@ The graph is derived data.
 Do not merge graph files. Merge Markdown/Git changes, then re-index affected notes and links.
 
 ```text
-GitHub Markdown
+shared git Markdown and user git Markdown
       -> parser
       -> note index / links / tags in PostgreSQL
       -> graph representation
@@ -71,29 +76,36 @@ GitHub should handle:
 - commits
 - history
 - textual diff
-- Pull Requests
 - mergeability/conflicts
 - merge
 
+GraphNotes uses GitHub git refs and the merges API for proposals. Pull Request
+pages, branch names and SHAs are not shown in the product UI.
+
 GraphNotes should handle:
 - application users and permissions
-- Markdown import
-- mapping users/workspaces to Git resources
+- binding one shared knowledge repository and connected personal git remotes
+- taking selected shared notes into the user's git
 - graph indexing
-- personal/shared rhizome UX
-- review workflow in human language
-- graph diff / merge preview
+- shared-graph UX and personal overlay (links to shared)
+- editor proposal queue in human language
+- graph diff / merge preview for editors
 
 Do not build a custom Git/version/3-way-merge engine for the MVP.
+Do not build an Obsidian-class in-app editor.
+Do not store canonical note bodies in PostgreSQL.
 
-Initial product branch concept:
+Initial product git concept:
 
 ```text
-main           = approved shared knowledge base
-user/<uuid>    = a user's proposed/personal changes
+shared knowledge repo default branch  = approved shared rhizome
+user's own git remote                 = personal rhizome (Obsidian/obsidian-git)
+proposal                              = Git-backed request into shared, queued for editors
 ```
 
-This is an MVP model, not a permanent security boundary. If direct Git access or stricter isolation is introduced later, private repositories per user/workspace may replace this model.
+The `user/<uuid>` branch-on-shared-repo sketch is not the product story.
+The current product does not contain workspaces or multiple shared knowledge
+repositories.
 
 ## 5. Authentication - accepted decision
 MVP authentication is owned by GraphNotes and uses username/password.
@@ -105,12 +117,41 @@ MVP requirements planned for Stage 2:
 - access/refresh token or an equivalently secure session model
 - `/me`
 - logout
-- roles: user / editor / admin
+- global roles: `user`, `editor`, `admin`
 - email can be nullable/reserved initially for future recovery/notifications
 
 Telegram is NOT removed from the roadmap.
 Telegram remains a future optional identity provider linked to the existing internal user UUID.
 Telegram is not part of the MVP implementation unless this decision is explicitly changed.
+
+## 5.1 Permission and rhizome model - accepted decision
+
+Authorization uses global `user`, `editor`, and `admin` RBAC. There is exactly
+one shared rhizome and exactly one personal rhizome per user. `editor` includes
+direct shared editing and proposal review. `admin` includes all editor/user
+rights plus system administration.
+
+All shared writes remain audited Markdown/Git changes followed by revisioned
+re-indexing. Editors/admins cannot approve their own proposals. There are no
+workspace, organization, team or multi-shared-rhizome entities. See ADR-007
+and ADR-008.
+
+Personal knowledge is the user's git, not a GraphNotes-hosted vault. Public
+read of the shared knowledge repository does not require a GraphNotes account.
+Proposing and editorial merge do.
+
+Derived data explicitly separates `shared`, per-owner `personal`, and immutable
+`proposal` revisions. Accepted publication switches the visible shared revision
+only after the merged revision is fully indexed, so readers never see partial
+proposal application.
+
+## 5.2 Single shared rhizome growth
+
+One shared rhizome is a fixed product boundary, not a reason to load all data in
+one request. Scale through bounded/paginated Graph APIs, PostgreSQL indexes,
+incremental affected-set re-indexing, immutable revision references and
+proposal/audit retention policies. Record performance/capacity baselines before
+adding infrastructure excluded from the MVP.
 
 ## 6. Scope discipline
 Not needed for the initial MVP unless actual load/features justify them:
@@ -127,9 +168,11 @@ Start simple. Add infrastructure only for measured/observed needs.
 ## 7. Development model
 The canonical environment topology is:
 - `nord`: Ubuntu development workstation at `172.16.13.205/24` with Codex and VS Code; primary source authoring
-- `rhizome-test`: Debian 13 KVM at `172.16.13.14/24`; integration, deployment, migration and destructive testing
-- `rhizome`: Debian 13 at `172.16.13.13/24`; stable target for approved builds
-  and early user testing
+- `rhizome-test`: Debian 13 KVM at `172.16.13.14/24`;
+  development-runtime, integration, deployment, migration and destructive
+  testing
+- `rhizome`: Debian 13 at `172.16.13.13/24`; production target for approved
+  revisions only
 
 `nord` and `rhizome-test` are currently reachable on the same
 `172.16.13.0/24` network. The canonical integration deployment combines
@@ -158,22 +201,24 @@ nord
 
 The canonical public repository is `https://github.com/vgdnet/graphnotes`.
 
-Git is the primary delivery mechanism. SSH/rsync is a fallback or bootstrap mechanism only. `nord` owns source development and GitHub write operations. `rhizome-test` normally consumes candidate revisions read-only and is never canonical source. `rhizome` Git access must be read-only, with no credentials capable of push, and it receives only commits or tags approved on `rhizome-test`. Every new feature revision must pass the applicable integration, deployment and migration checks on `rhizome-test` before the same approved revision is deployed to `rhizome`. Do not use `rhizome` for destructive experiments, first-run migrations or ad-hoc source edits. See `docs/decisions/ADR-006-production-git-readonly.md`.
+Git is the primary delivery mechanism. SSH/rsync is a fallback or bootstrap mechanism only. `nord` owns source authoring and GitHub write operations. `rhizome-test` is the development-runtime and test environment; it normally consumes candidate revisions read-only and is never canonical source. `rhizome` is production. Its Git access must be read-only, with no credentials capable of push, and it receives only commits or tags approved on `rhizome-test`. Every new feature revision must pass the applicable integration, deployment and migration checks on `rhizome-test` before the same approved revision is deployed to `rhizome`. Do not use `rhizome` for destructive experiments, first-run migrations or ad-hoc source edits. See `docs/decisions/ADR-006-production-git-readonly.md`.
 
 ## 8. Stage roadmap
 - Stage 0 - Infrastructure - DONE
-- Stage 1 - Project Bootstrap - CURRENT
-- Stage 2 - Password Authentication
-- Stage 3 - GitHub Integration
-- Stage 4 - Markdown Import
-- Stage 5 - Graph Engine
-- Stage 6 - Personal Graph
-- Stage 7 - Publish / Pull Request / Merge
-- Stage 8 - Graph Diff
+- Stage 1 - Project Bootstrap - DONE
+- Stage 2 - Password Authentication - DONE
+- Stage 3 - GitHub Integration - DONE
+- Stage 4 - Take from shared / ZIP fallback - DONE
+- Stage 5 - Graph Engine - DONE
+- Stage 6 - Shared graph + personal overlay (links to shared)
+- Stage 7 - Editor proposal queue / merge / rollback (core product)
+- Stage 8 - Graph Diff for editors
 - Stage 9 - Production Hardening / CI/CD
 
 ## 9. Stage branches
-Recommended source-code branches:
+Recommended source-code branch **names** stay historical so later stages do not
+rename remotes. Product meaning of Stages 4, 6 and 7 is ADR-008, not the old
+branch titles.
 
 ```text
 main

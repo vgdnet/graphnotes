@@ -1,6 +1,10 @@
 # GraphNotes - Stage Status
 
-Updated: 2026-08-17
+Updated: 2026-08-19
+
+Product model ADR-008 (2026-08-19): GraphNotes is not an Obsidian clone.
+Personal knowledge is the user's git. Canonical note bodies are not stored in
+PostgreSQL. Current implementation stage is Stage 7.
 
 ## Stage 0 - Infrastructure
 Status: DONE
@@ -15,7 +19,7 @@ Status: DONE
 Branch: `feature/01-project-bootstrap`
 Primary authoring environment: `nord`
 Target integration environment: `rhizome-test` (`172.16.13.14`)
-Stable deployment target: `rhizome`
+Production deployment target: `rhizome`
 Canonical repository: `https://github.com/vgdnet/graphnotes` (public)
 Delivery path: `nord -> GitHub -> rhizome-test -> approved revision -> rhizome`
 
@@ -77,7 +81,7 @@ Stage 1 integration results on `rhizome-test`:
 - PASS: after reboot backend remained unavailable through
   `172.16.13.14:8000`; PostgreSQL still had no published host port
 
-Deferred until stable deployment is explicitly requested:
+Deferred until production deployment is explicitly requested:
 - reconcile the old uncommitted `/opt/graphnotes` worktree without overwriting
   unmanaged files
 - configure read-only Git access with no push-capable credentials
@@ -93,10 +97,10 @@ Resolved integration issue:
 
 Completion decision:
 - the owner accepted revision `0152937` after integration validation
-- stable deployment to `rhizome` (`172.16.13.13`) is explicitly deferred; the
+- production deployment to `rhizome` (`172.16.13.13`) is explicitly deferred; the
   host was inventoried read-only and remains untouched
 - Stage 1 is complete as a reproducible bootstrap validated on
-  `rhizome-test`; eventual stable deployment retains the normal promotion gate
+  `rhizome-test`; eventual production deployment retains the normal promotion gate
 
 Expected components:
 - FastAPI skeleton
@@ -120,15 +124,79 @@ Explicitly out of scope:
 - PR/merge workflow
 
 ## Stage 2 - Password Authentication
-Status: NEXT / PLANNED
+Status: DONE
 Branch: `feature/02-password-auth`
+Completed: 2026-08-19
+Tested integration revision: `c883b2fcae62cc5ceb5e85467399dacc45857e26`
+Primary authoring environment: `nord`
+Target integration environment: `rhizome-test` (`172.16.13.14`)
 
-MVP auth:
-- username/password
-- secure password hashing
-- access/refresh auth or secure session equivalent
-- `/me`
-- logout
-- user/editor/admin roles
+MVP auth delivered:
+- username/password with Argon2
+- opaque PostgreSQL-backed sessions
+- HttpOnly SameSite cookies; Secure disabled only for HTTP `rhizome-test`
+- `/me`, logout, registration always `user`
+- global hierarchical roles `user < editor < admin`
+- admin user list, role/blocking UI, bootstrap CLI, last-admin protection
+- audit events without authentication secrets
 
 Telegram remains future scope.
+
+Observed on `rhizome-test` at the tested revision:
+- PASS: backend tests (`8 passed`)
+- PASS: frontend production build
+- PASS: Compose config; frontend LAN `8080`; backend loopback-only; no PostgreSQL host port
+- PASS: health, db health, frontend from `nord`
+- PASS: Alembic `0002_password_auth` upgrade/downgrade/re-upgrade
+- PASS: live register/login/logout/RBAC API flow from `nord`
+- leftover `0003_pre_git_notes` was downgraded and removed; notes table is gone
+
+See `docs/stages/STAGE2_COMPLETED.md`.
+
+Production deployment to `rhizome` remains deferred.
+
+## Stage 3 - GitHub Integration
+Status: DONE
+Branch: `feature/03-github-integration`
+Completed: 2026-08-19
+Tested integration revision: `d8322d425cd97b157d6f7214f2e859e227f8fd87`
+
+Owner-verified on `rhizome-test`: shared `vgdnet/rhizome` connected with
+content; a user bound `vgdnet/guide_psy`. See `docs/stages/STAGE3_COMPLETED.md`.
+
+## Stage 4 - Take from shared / ZIP fallback
+Status: DONE
+Branch: `feature/04-markdown-import`
+Completed: 2026-08-19
+Tested integration revision: `003638259909c42eedb4fb4973dd9a45d1f0a3e1`
+
+Owner-verified take-from-shared on `rhizome-test`: accepted 1, personal commit
+`fbabd7529700` on `vgdnet/guide_psy`. See `docs/stages/STAGE4_COMPLETED.md`.
+
+## Stage 5 - Revisioned Graph Engine
+Status: DONE
+Branch: `feature/05-graph-engine`
+Completed: 2026-08-19
+Tested integration revision: `eb09f5a4436a578edccd1a03d1c77668782fb4d8`
+
+Owner-verified derived graph on `rhizome-test` (shared nodes/edges visible;
+refresh after git/Obsidian push). See `docs/stages/STAGE5_COMPLETED.md` and
+`docs/deployment/STAGE5_INDEX.md`.
+
+## Stage 6 - Shared graph + personal overlay
+Status: DONE
+Branch: `feature/06-personal-graph`
+Completed: 2026-08-19
+Tested integration revision: `1dd29caa65607b0edbe5396a7dc7cdcdd5d6a641`
+
+Cytoscape shared graph and overlay of the caller's git onto the shared rhizome.
+Public graph without login; overlay requires a session. See
+`docs/stages/STAGE6_COMPLETED.md`.
+
+## Stage 7 - Editor proposal queue / merge / rollback
+Status: CURRENT
+Branch: `feature/07-publish-merge`
+
+Selected files from the user's git become a Git-backed proposal into the one
+shared rhizome. Editors accept, reject, return or roll back. Follow
+`docs/stages/STAGE7.md`. Owner accepted Stage 6 live graph.
