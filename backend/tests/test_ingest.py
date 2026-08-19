@@ -39,6 +39,7 @@ class MemoryGitHub:
     def __init__(self, repos: dict[str, MemoryRepo]) -> None:
         self.repos = repos
         self.commits = 0
+        self.file_reads = 0
 
     def _repo(self, owner: str, name: str) -> MemoryRepo:
         key = f"{owner}/{name}".casefold()
@@ -59,6 +60,7 @@ class MemoryGitHub:
         repo = self._repo(owner, name)
         if path not in repo.files:
             raise GitHubAppError("not_found", "repository is not visible to GraphNotes")
+        self.file_reads += 1
         return repo.files[path]
 
     async def commit_markdown(

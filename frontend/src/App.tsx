@@ -621,6 +621,7 @@ export function App() {
                 <h2 id="graph-heading">Связи ризомы</h2>
                 <p className="admin-panel__hint">
                   Индекс собирается из git. После пуша из Obsidian обновите страницу — GraphNotes подхватит новый коммит.
+                  {sharedGraph ? ` Состояние: ${sharedGraph.index_status}.` : ""}
                   {sharedGraph?.truncated ? " Показана часть узлов." : ""}
                 </p>
               </div>

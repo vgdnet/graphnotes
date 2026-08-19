@@ -4,7 +4,7 @@ Updated: 2026-08-19
 
 Product model ADR-008 (2026-08-19): GraphNotes is not an Obsidian clone.
 Personal knowledge is the user's git. Canonical note bodies are not stored in
-PostgreSQL. Current implementation stage is Stage 5.
+PostgreSQL. Current implementation stage is Stage 6.
 
 ## Stage 0 - Infrastructure
 Status: DONE
@@ -174,9 +174,17 @@ Owner-verified take-from-shared on `rhizome-test`: accepted 1, personal commit
 `fbabd7529700` on `vgdnet/guide_psy`. See `docs/stages/STAGE4_COMPLETED.md`.
 
 ## Stage 5 - Revisioned Graph Engine
-Status: CURRENT
+Status: DONE
 Branch: `feature/05-graph-engine`
+Completed: 2026-08-19
 
-Index shared and personal Git Markdown. Do not store note bodies in PostgreSQL.
-Obsidian + obsidian-git is the personal authoring client. Follow ADR-008 and
-`docs/stages/STAGE5.md`.
+Owner-verified derived graph on `rhizome-test` (shared nodes/edges visible;
+refresh after git/Obsidian push). See `docs/stages/STAGE5_COMPLETED.md` and
+`docs/deployment/STAGE5_INDEX.md`.
+
+## Stage 6 - Shared graph + personal overlay
+Status: PLANNED
+Branch: `feature/06-personal-graph`
+
+Cytoscape shared graph and overlay of the caller's git onto the shared rhizome.
+Depends on accepted Stage 5. Follow `docs/stages/STAGE6.md`.

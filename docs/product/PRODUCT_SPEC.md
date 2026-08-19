@@ -1,7 +1,7 @@
 # GraphNotes - каноническое техническое задание продукта
 
 Статус: CANONICAL / LIVING DOCUMENT
-Версия: 1.3
+Версия: 1.4
 Обновлено: 2026-08-19
 
 ## 1. Назначение документа
@@ -239,7 +239,8 @@ Proposed nodes, links, tags и properties не становятся shared до 
 Первая волна — граф **общей** ризомы. Личный граф нужен как overlay: как git
 пользователя связан с общей ризомой.
 
-MVP должен предоставлять:
+Stage 5 поставляет производный индекс и ограниченный Graph API. Stage 6
+добавляет Cytoscape и overlay. MVP должен предоставлять:
 
 - общественный граф (без обязательного логина, если knowledge repo публичный);
 - overlay связей подключённого личного git с общей ризомой;
@@ -321,8 +322,10 @@ POST /api/personal/import-md          # fallback
 GET  /api/personal/notes              # read-only index of connected git
 GET  /api/personal/notes/{id}
 
-GET  /api/graph/shared
-GET  /api/graph/personal-overlay
+GET  /api/graph/shared                # Stage 5; login not required
+GET  /api/graph/personal              # Stage 5; caller's layer only
+GET  /api/graph/personal-overlay      # Stage 6
+POST /api/index/rebuild               # admin, Stage 5
 GET  /api/graph/diff?proposal_id=...
 
 POST /api/proposals
@@ -517,3 +520,4 @@ ADR обязателен, если решение меняет хотя бы о�
 | 1.1 Markdown | 2026-08-18 | Промежуточная модель additive groups; заменена более новым решением ADR-007 |
 | 1.2 Markdown | 2026-08-18 | Зафиксированы одна общая и одна личная ризома на пользователя, глобальные `user/editor/admin`, atomic publication boundary и запрет self-approval |
 | 1.3 Markdown | 2026-08-19 | ADR-008: GraphNotes не клон Obsidian; два git; публичное чтение общей; «взять себе»; очередь editor’ов как ядро; ZIP — fallback |
+| 1.4 Markdown | 2026-08-19 | Stage 5: производный индекс из Git, bounded Graph API (`/graph/shared`, `/graph/personal`, `/index/rebuild`), SHA-refresh без LAN webhook; Cytoscape/overlay остаются Stage 6 |

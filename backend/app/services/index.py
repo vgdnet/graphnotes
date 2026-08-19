@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 import uuid
 
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
@@ -11,7 +11,13 @@ from app.models.github import PersonalRepository, SharedRepository
 from app.models.graph import NoteIndex, NoteLayer, NoteLink, NoteTag, SyncJob, SyncJobStatus, Tag
 from app.services.audit import record_audit_event
 from app.services.github import GitHubAppClient, GitHubAppError
-from app.services.markdown import ParsedNote, notes_lookup_map, parse_markdown, resolve_link_target
+from app.services.markdown import (
+    ParsedLink,
+    ParsedNote,
+    notes_lookup_map,
+    parse_markdown,
+    resolve_link_target,
+)
 from app.services.repository import SHARED_SINGLETON_ID
 
 
@@ -158,11 +164,27 @@ async def _rebuild(
         listed = await client.list_markdown_files(owner, name, revision)
         if len(listed) > settings.index_max_notes:
             raise IndexerError(400, "too many notes to index")
-        await _delete_layer(database, layer, owner_id)
+        listed_set = set(listed)
+        existing = (
+            await database.scalars(
+                select(NoteIndex).where(
+                    NoteIndex.layer == layer,
+                    NoteIndex.owner_user_id == owner_id,
+                )
+            )
+        ).all()
+        if paths is None:
+            fetch_paths = listed_set
+        else:
+            existing_paths = {note.path for note in existing}
+            fetch_paths = (listed_set & paths) | (listed_set - existing_paths)
         parsed: dict[str, ParsedNote] = {}
-        for path in listed:
+        for path in sorted(fetch_paths):
             text = await client.get_file(owner, name, path, revision)
             parsed[path] = parse_markdown(path, text)
+        unchanged = [note for note in existing if note.path in listed_set and note.path not in fetch_paths]
+        parsed.update(await _parsed_from_existing(database, unchanged))
+        await _delete_layer(database, layer, owner_id)
         lookup = notes_lookup_map(set(parsed))
         records: dict[str, NoteIndex] = {}
         for path, note in parsed.items():
@@ -214,7 +236,11 @@ async def _rebuild(
             database,
             action="index.rebuild",
             actor_user_id=actor_user_id,
-            details={"layer": layer, "notes": len(parsed)},
+            details={
+                "layer": layer,
+                "notes": len(parsed),
+                "mode": "full" if paths is None else "incremental",
+            },
         )
         await _prune_sync_jobs(database)
         await database.commit()
@@ -292,105 +318,65 @@ async def load_graph(
     center: str | None,
     depth: int,
 ) -> dict[str, object]:
-    notes = (
-        await database.scalars(
-            select(NoteIndex)
-            .where(
-                NoteIndex.layer == layer,
-                NoteIndex.owner_user_id == owner_id,
-                NoteIndex.revision_sha == revision,
-            )
-            .order_by(NoteIndex.path)
-        )
-    ).all()
-    if not notes:
-        return {
-            "layer": layer,
-            "index_status": "empty",
-            "truncated": False,
-            "nodes": [],
-            "edges": [],
-        }
-
-    note_ids = [note.id for note in notes]
-    links = (
-        await database.scalars(select(NoteLink).where(NoteLink.source_id.in_(note_ids)))
-    ).all()
-    by_id = {note.id: note for note in notes}
-    adjacency: dict[str, set[str]] = {note.path: set() for note in notes}
-    for link in links:
-        source = by_id.get(link.source_id)
-        if source is None:
-            continue
-        if link.target_id and link.target_id in by_id:
-            adjacency[source.path].add(by_id[link.target_id].path)
-            adjacency[by_id[link.target_id].path].add(source.path)
-
-    chosen = _bounded_paths([note.path for note in notes], adjacency, center, depth, limit)
-    truncated = len(notes) > len(chosen)
-    chosen_notes = [note for note in notes if note.path in chosen]
-    chosen_ids = {note.id for note in chosen_notes}
-    tag_map = await _tags_for(database, chosen_ids)
-    linked_targets = {link.source_id for link in links} | {
-        link.target_id for link in links if link.target_id is not None
-    }
-    nodes = []
-    for note in chosen_notes:
-        nodes.append(
-            {
-                "path": note.path,
-                "title": note.title,
-                "tags": tag_map.get(note.id, []),
-                "isolated": note.id not in linked_targets,
-                "unresolved": False,
-            }
-        )
-    edges = []
-    unresolved_nodes: dict[str, str] = {}
-    for link in links:
-        source = by_id.get(link.source_id)
-        if source is None or source.path not in chosen:
-            continue
-        if link.unresolved or link.target_id is None:
-            node_id = f"unresolved:{link.target_raw}"
-            unresolved_nodes[node_id] = link.target_raw
-            edges.append(
-                {
-                    "source": source.path,
-                    "target": node_id,
-                    "type": link.link_type,
-                    "unresolved": True,
-                }
-            )
-            continue
-        target = by_id.get(link.target_id)
-        if target is None or target.path not in chosen:
-            continue
-        edges.append(
-            {
-                "source": source.path,
-                "target": target.path,
-                "type": link.link_type,
-                "unresolved": False,
-            }
-        )
-    for node_id, title in unresolved_nodes.items():
-        nodes.append(
-            {
-                "path": node_id,
-                "title": title,
-                "tags": [],
-                "isolated": False,
-                "unresolved": True,
-            }
-        )
-    return {
+    empty = {
         "layer": layer,
-        "index_status": "current",
-        "truncated": truncated,
-        "nodes": nodes,
-        "edges": edges,
+        "index_status": "empty",
+        "truncated": False,
+        "nodes": [],
+        "edges": [],
     }
+    layer_filter = (
+        NoteIndex.layer == layer,
+        NoteIndex.owner_user_id == owner_id,
+        NoteIndex.revision_sha == revision,
+    )
+    if center:
+        rows = (
+            await database.execute(
+                select(NoteIndex.id, NoteIndex.path).where(*layer_filter).order_by(NoteIndex.path)
+            )
+        ).all()
+        if not rows:
+            return empty
+        by_id_path = {note_id: path for note_id, path in rows}
+        path_ids = {path: note_id for note_id, path in rows}
+        links = (
+            await database.scalars(select(NoteLink).where(NoteLink.source_id.in_(by_id_path)))
+        ).all()
+        adjacency: dict[str, set[str]] = {path: set() for path in path_ids}
+        for link in links:
+            source_path = by_id_path.get(link.source_id)
+            target_path = by_id_path.get(link.target_id) if link.target_id else None
+            if source_path and target_path:
+                adjacency[source_path].add(target_path)
+                adjacency[target_path].add(source_path)
+        chosen = _bounded_paths(list(path_ids), adjacency, center, depth, limit)
+        truncated = len(rows) > len(chosen)
+        chosen_notes = (
+            await database.scalars(
+                select(NoteIndex).where(*layer_filter, NoteIndex.path.in_(chosen)).order_by(NoteIndex.path)
+            )
+        ).all()
+        chosen_ids = {note.id for note in chosen_notes}
+        chosen_links = [link for link in links if link.source_id in chosen_ids]
+        return await _graph_payload(database, layer, chosen_notes, chosen_links, truncated)
+
+    window = (
+        await database.scalars(select(NoteIndex).where(*layer_filter).order_by(NoteIndex.path).limit(limit + 1))
+    ).all()
+    truncated = len(window) > limit
+    chosen_notes = window[:limit]
+    if not chosen_notes:
+        return empty
+    chosen_ids = {note.id for note in chosen_notes}
+    links = (
+        await database.scalars(
+            select(NoteLink).where(
+                or_(NoteLink.source_id.in_(chosen_ids), NoteLink.target_id.in_(chosen_ids))
+            )
+        )
+    ).all()
+    return await _graph_payload(database, layer, chosen_notes, links, truncated)
 
 
 def _bounded_paths(
@@ -417,6 +403,107 @@ def _bounded_paths(
         chosen = sorted(seen)[:limit]
         return set(chosen)
     return set(paths[:limit])
+
+
+async def _parsed_from_existing(
+    database: AsyncSession, notes: list[NoteIndex]
+) -> dict[str, ParsedNote]:
+    if not notes:
+        return {}
+    note_ids = {note.id for note in notes}
+    tag_map = await _tags_for(database, note_ids)
+    links = (await database.scalars(select(NoteLink).where(NoteLink.source_id.in_(note_ids)))).all()
+    typed_links: dict[uuid.UUID, list[ParsedLink]] = {note.id: [] for note in notes}
+    for link in links:
+        typed_links.setdefault(link.source_id, []).append(
+            ParsedLink(target=link.target_raw, kind=link.link_type)
+        )
+    parsed: dict[str, ParsedNote] = {}
+    for note in notes:
+        outgoing = tuple(typed_links.get(note.id, []))
+        parsed[note.path] = ParsedNote(
+            title=note.title,
+            tags=tuple(tag_map.get(note.id, [])),
+            aliases=(),
+            links=tuple(item.target for item in outgoing),
+            typed_links=outgoing,
+            body="",
+            content_hash=note.content_hash,
+        )
+    return parsed
+
+
+async def _graph_payload(
+    database: AsyncSession,
+    layer: str,
+    chosen_notes: list[NoteIndex],
+    links: list[NoteLink],
+    truncated: bool,
+) -> dict[str, object]:
+    chosen_ids = {note.id for note in chosen_notes}
+    chosen_paths = {note.path for note in chosen_notes}
+    tag_map = await _tags_for(database, chosen_ids)
+    by_id = {note.id: note for note in chosen_notes}
+    linked_targets = {link.source_id for link in links if link.source_id in chosen_ids} | {
+        link.target_id for link in links if link.target_id in chosen_ids
+    }
+    nodes = []
+    for note in chosen_notes:
+        nodes.append(
+            {
+                "path": note.path,
+                "title": note.title,
+                "tags": tag_map.get(note.id, []),
+                "isolated": note.id not in linked_targets,
+                "unresolved": False,
+            }
+        )
+    edges = []
+    unresolved_nodes: dict[str, str] = {}
+    for link in links:
+        source = by_id.get(link.source_id)
+        if source is None or source.path not in chosen_paths:
+            continue
+        if link.unresolved or link.target_id is None:
+            node_id = f"unresolved:{link.target_raw}"
+            unresolved_nodes[node_id] = link.target_raw
+            edges.append(
+                {
+                    "source": source.path,
+                    "target": node_id,
+                    "type": link.link_type,
+                    "unresolved": True,
+                }
+            )
+            continue
+        target = by_id.get(link.target_id)
+        if target is None or target.path not in chosen_paths:
+            continue
+        edges.append(
+            {
+                "source": source.path,
+                "target": target.path,
+                "type": link.link_type,
+                "unresolved": False,
+            }
+        )
+    for node_id, title in unresolved_nodes.items():
+        nodes.append(
+            {
+                "path": node_id,
+                "title": title,
+                "tags": [],
+                "isolated": False,
+                "unresolved": True,
+            }
+        )
+    return {
+        "layer": layer,
+        "index_status": "current",
+        "truncated": truncated,
+        "nodes": nodes,
+        "edges": edges,
+    }
 
 
 async def _tags_for(database: AsyncSession, note_ids: set[uuid.UUID]) -> dict[uuid.UUID, list[str]]:

@@ -1,7 +1,9 @@
 # Stage 5 - Revisioned Graph Engine
 
-Status: CURRENT
+Status: DONE
 Branch: `feature/05-graph-engine`
+Completed: 2026-08-19
+See `docs/stages/STAGE5_COMPLETED.md`.
 Depends on: accepted Stage 4
 Product model: ADR-007, ADR-008. Index Markdown from the shared knowledge
 repository and connected personal git remotes. Do not persist canonical note

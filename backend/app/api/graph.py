@@ -1,9 +1,11 @@
 from typing import Annotated
 
 from fastapi import APIRouter, HTTPException, Query
+from sqlalchemy import select
 
 from app.api.dependencies import CurrentAdmin, CurrentUser, DatabaseSession
 from app.core.config import settings
+from app.models.github import PersonalRepository, SharedRepository
 from app.models.graph import NoteLayer
 from app.schemas.graph import GraphResponse, RebuildRequest
 from app.services.github import GitHubAppClient
@@ -11,11 +13,12 @@ from app.services.index import (
     IndexerError,
     ensure_personal_current,
     ensure_shared_current,
+    index_status_label,
     load_graph,
     rebuild_personal,
     rebuild_shared,
 )
-from app.services.repository import refresh_personal, refresh_shared
+from app.services.repository import SHARED_SINGLETON_ID, refresh_personal, refresh_shared
 
 router = APIRouter(tags=["graph"])
 
@@ -40,11 +43,12 @@ async def shared_graph(
     depth: Annotated[int, Query(ge=0, le=4)] = 1,
 ) -> GraphResponse:
     client = _client()
-    shared = await refresh_shared(database, client)
+    await refresh_shared(database, client)
     try:
         await ensure_shared_current(database, client)
-    except IndexerError as exc:
-        _raise(exc)
+    except IndexerError:
+        pass
+    shared = await database.get(SharedRepository, SHARED_SINGLETON_ID)
     if shared is None or not shared.indexed_sha:
         return GraphResponse(layer="shared", index_status="empty", nodes=[], edges=[])
     payload = await load_graph(
@@ -56,7 +60,9 @@ async def shared_graph(
         center=center,
         depth=depth,
     )
-    payload["index_status"] = "current" if shared.indexed_sha == shared.observed_sha else "updating"
+    payload["index_status"] = index_status_label(
+        shared.observed_sha, shared.indexed_sha, shared.index_status
+    )
     return GraphResponse.model_validate(payload)
 
 
@@ -69,11 +75,14 @@ async def personal_graph(
     depth: Annotated[int, Query(ge=0, le=4)] = 1,
 ) -> GraphResponse:
     client = _client()
-    personal = await refresh_personal(database, user.id, client)
+    await refresh_personal(database, user.id, client)
     try:
         await ensure_personal_current(database, user.id, client)
-    except IndexerError as exc:
-        _raise(exc)
+    except IndexerError:
+        pass
+    personal = await database.scalar(
+        select(PersonalRepository).where(PersonalRepository.user_id == user.id)
+    )
     if personal is None or not personal.indexed_sha:
         return GraphResponse(layer="personal", index_status="empty", nodes=[], edges=[])
     payload = await load_graph(
@@ -85,8 +94,8 @@ async def personal_graph(
         center=center,
         depth=depth,
     )
-    payload["index_status"] = (
-        "current" if personal.indexed_sha == personal.observed_sha else "updating"
+    payload["index_status"] = index_status_label(
+        personal.observed_sha, personal.indexed_sha, personal.index_status
     )
     return GraphResponse.model_validate(payload)
 

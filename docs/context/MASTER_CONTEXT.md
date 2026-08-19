@@ -207,7 +207,7 @@ Git is the primary delivery mechanism. SSH/rsync is a fallback or bootstrap mech
 - Stage 2 - Password Authentication - DONE
 - Stage 3 - GitHub Integration - DONE
 - Stage 4 - Take from shared / ZIP fallback - DONE
-- Stage 5 - Graph Engine - CURRENT
+- Stage 5 - Graph Engine - DONE
 - Stage 6 - Shared graph + personal overlay (links to shared)
 - Stage 7 - Editor proposal queue / merge / rollback (core product)
 - Stage 8 - Graph Diff for editors

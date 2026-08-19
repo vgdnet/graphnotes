@@ -240,7 +240,13 @@ async def take_from_shared(
         try:
             from app.services.index import IndexerError, rebuild_personal
 
-            await rebuild_personal(database, user.id, client, actor_user_id=user.id)
+            await rebuild_personal(
+                database,
+                user.id,
+                client,
+                actor_user_id=user.id,
+                paths=set(accepted),
+            )
         except IndexerError:
             pass
 
@@ -335,7 +341,13 @@ async def import_markdown(
         try:
             from app.services.index import IndexerError, rebuild_personal
 
-            await rebuild_personal(database, user.id, client, actor_user_id=user.id)
+            await rebuild_personal(
+                database,
+                user.id,
+                client,
+                actor_user_id=user.id,
+                paths=set(accepted),
+            )
         except IndexerError:
             pass
 
