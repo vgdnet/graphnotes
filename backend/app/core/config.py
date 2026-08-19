@@ -22,6 +22,13 @@ class Settings(BaseSettings):
     github_shared_name: str = "rhizome"
     github_webhook_secret: str = ""
     github_api_timeout_seconds: float = 10.0
+    ingest_max_file_bytes: int = 262_144
+    ingest_max_zip_bytes: int = 2_097_152
+    ingest_max_unpacked_bytes: int = 8_388_608
+    ingest_max_files: int = 100
+    ingest_max_path_depth: int = 8
+    ingest_max_path_length: int = 180
+    take_max_paths: int = 50
 
     model_config = SettingsConfigDict(
         env_file=PROJECT_ROOT / ".env",

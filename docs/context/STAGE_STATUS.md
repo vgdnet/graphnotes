@@ -4,7 +4,7 @@ Updated: 2026-08-19
 
 Product model ADR-008 (2026-08-19): GraphNotes is not an Obsidian clone.
 Personal knowledge is the user's git. Canonical note bodies are not stored in
-PostgreSQL. Current implementation stage remains Stage 2.
+PostgreSQL. Current implementation stage is Stage 4.
 
 ## Stage 0 - Infrastructure
 Status: DONE
@@ -156,20 +156,17 @@ See `docs/stages/STAGE2_COMPLETED.md`.
 Production deployment to `rhizome` remains deferred.
 
 ## Stage 3 - GitHub Integration
-Status: CURRENT / ACCESS OPEN
+Status: DONE
 Branch: `feature/03-github-integration`
+Completed: 2026-08-19
+Tested integration revision: `d8322d425cd97b157d6f7214f2e859e227f8fd87`
 
-Accepted test bindings (2026-08-19):
+Owner-verified on `rhizome-test`: shared `vgdnet/rhizome` connected with
+content; a user bound `vgdnet/guide_psy`. See `docs/stages/STAGE3_COMPLETED.md`.
 
-- shared: `https://github.com/vgdnet/rhizome` (public, `main`)
-- personal remote model: separate GitHub repository
-- first personal fixture for GraphNotes user `efimov`:
-  `https://github.com/vgdnet/guide_psy` (public, `main`)
+## Stage 4 - Take from shared / ZIP fallback
+Status: CURRENT
+Branch: `feature/04-markdown-import`
 
-GitHub App `rhizome-absorber` (owner `@vgdnet`, App ID `4646628`, Client ID
-`Iv23liXB3caRQOOi0vtK`, Installation ID `154874395`) was verified against the
-GitHub API. Repositories have commits: `vgdnet/rhizome` (`b675b76dca9a…`) and
-`vgdnet/guide_psy` (`2656006c2308…`). Webhook remains disabled until a public
-HTTPS URL exists. Private key is on disk outside git.
-
-Follow ADR-007 and ADR-008.
+Depends on Contents write for the GitHub App on the personal remote. Follow
+ADR-007, ADR-008 and `docs/stages/STAGE4.md`.

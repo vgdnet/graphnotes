@@ -29,6 +29,32 @@ type RepositoryStatusResponse = {
   personal: RepositoryStatus | null;
 };
 
+type NoteProjection = {
+  path: string;
+  title: string;
+  tags: string[];
+  aliases: string[];
+  links: string[];
+  unresolved_links: string[];
+  warnings: string[];
+};
+
+type NoteDetail = NoteProjection & { body: string; content_hash: string };
+
+type NoteListResponse = {
+  notes: NoteProjection[];
+  revision: string | null;
+};
+
+type IngestReport = {
+  accepted: string[];
+  rejected: { path: string; reason: string }[];
+  skipped: string[];
+  conflicted: string[];
+  warnings: string[];
+  revision: string | null;
+};
+
 function sharedLabel(status: RepositoryStatus | null): string {
   if (!status?.connected) return "Общая ризома ещё не подключена.";
   if (status.has_content) return "Общая ризома доступна.";
@@ -61,6 +87,12 @@ export function App() {
   const [adminUsers, setAdminUsers] = useState<User[]>([]);
   const [adminLoading, setAdminLoading] = useState(false);
   const [repository, setRepository] = useState<RepositoryStatusResponse | null>(null);
+  const [sharedNotes, setSharedNotes] = useState<NoteProjection[]>([]);
+  const [personalNotes, setPersonalNotes] = useState<NoteProjection[]>([]);
+  const [personalRevision, setPersonalRevision] = useState<string | null>(null);
+  const [selectedPaths, setSelectedPaths] = useState<string[]>([]);
+  const [openNote, setOpenNote] = useState<NoteDetail | null>(null);
+  const [report, setReport] = useState<IngestReport | null>(null);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -143,6 +175,42 @@ export function App() {
     return () => controller.abort();
   }, [authChecking, user?.id]);
 
+  useEffect(() => {
+    if (!repository?.shared.connected) {
+      setSharedNotes([]);
+      return;
+    }
+    const controller = new AbortController();
+    void fetch("/api/shared/notes", { signal: controller.signal })
+      .then(async (response) => {
+        if (!response.ok) throw new Error(await readError(response));
+        return (await response.json()) as NoteListResponse;
+      })
+      .then((body) => setSharedNotes(body.notes))
+      .catch(() => undefined);
+    return () => controller.abort();
+  }, [repository?.shared.connected, repository?.shared.updated_at]);
+
+  useEffect(() => {
+    if (!user || !repository?.personal?.connected) {
+      setPersonalNotes([]);
+      setPersonalRevision(null);
+      return;
+    }
+    const controller = new AbortController();
+    void fetch("/api/personal/notes", { signal: controller.signal })
+      .then(async (response) => {
+        if (!response.ok) throw new Error(await readError(response));
+        return (await response.json()) as NoteListResponse;
+      })
+      .then((body) => {
+        setPersonalNotes(body.notes);
+        setPersonalRevision(body.revision);
+      })
+      .catch(() => undefined);
+    return () => controller.abort();
+  }, [user, repository?.personal?.connected, repository?.personal?.updated_at]);
+
   async function connectShared() {
     setSubmitting(true);
     setError("");
@@ -172,6 +240,77 @@ export function App() {
       if (!response.ok) throw new Error(await readError(response));
       setRepository(await response.json() as RepositoryStatusResponse);
       formElement.reset();
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "Ошибка соединения");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function takeSelected() {
+    if (selectedPaths.length === 0) return;
+    setSubmitting(true);
+    setError("");
+    try {
+      const response = await fetch("/api/personal/take-from-shared", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ paths: selectedPaths, expected_sha: personalRevision }),
+      });
+      if (!response.ok) throw new Error(await readError(response));
+      const body = (await response.json()) as IngestReport;
+      setReport(body);
+      setPersonalRevision(body.revision);
+      setSelectedPaths([]);
+      const notes = await fetch("/api/personal/notes");
+      if (notes.ok) {
+        const listed = (await notes.json()) as NoteListResponse;
+        setPersonalNotes(listed.notes);
+        setPersonalRevision(listed.revision);
+      }
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "Ошибка соединения");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function importFallback(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const formElement = event.currentTarget;
+    const file = (new FormData(formElement).get("file") as File | null);
+    if (!file) return;
+    setSubmitting(true);
+    setError("");
+    const payload = new FormData();
+    payload.set("file", file);
+    if (personalRevision) payload.set("expected_sha", personalRevision);
+    try {
+      const response = await fetch("/api/personal/import-md", { method: "POST", body: payload });
+      if (!response.ok) throw new Error(await readError(response));
+      const body = (await response.json()) as IngestReport;
+      setReport(body);
+      formElement.reset();
+      const notes = await fetch("/api/personal/notes");
+      if (notes.ok) {
+        const listed = (await notes.json()) as NoteListResponse;
+        setPersonalNotes(listed.notes);
+        setPersonalRevision(listed.revision);
+      }
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "Ошибка соединения");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function openPersonalNote(path: string) {
+    setSubmitting(true);
+    setError("");
+    try {
+      const response = await fetch(`/api/personal/notes/${encodeURI(path)}`);
+      if (!response.ok) throw new Error(await readError(response));
+      setOpenNote((await response.json()) as NoteDetail);
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "Ошибка соединения");
     } finally {
@@ -278,6 +417,7 @@ export function App() {
               <h1>Здравствуйте, {user.display_name}</h1>
               <p className="summary">{sharedLabel(repository?.shared ?? null)}</p>
               <p className="summary">{personalLabel(repository?.personal ?? null)}</p>
+              {error && <p className="form-error" role="alert">{error}</p>}
               <form className="connect-form" onSubmit={(event) => void connectPersonal(event)}>
                 <label>
                   Свой git
@@ -316,6 +456,88 @@ export function App() {
               </button>
             </aside>
           </section>
+          {repository?.shared.connected && repository.personal?.connected && (
+            <section className="notes-panel" aria-labelledby="notes-heading">
+              <div>
+                <p className="eyebrow">Знания</p>
+                <h2 id="notes-heading">Взять себе</h2>
+                <p className="admin-panel__hint">
+                  Выберите заметки общей ризомы. GraphNotes запишет их в ваш git, не перезаписывая уже существующие файлы.
+                </p>
+              </div>
+              {error && <p className="form-error" role="alert">{error}</p>}
+              {report && (
+                <p className="ingest-report" role="status">
+                  Принято: {report.accepted.length}. Пропущено: {report.skipped.length}. Конфликт: {report.conflicted.length}.
+                  {report.conflicted.length > 0 ? " Существующие файлы не тронуты." : ""}
+                </p>
+              )}
+              <div className="notes-grid">
+                <div>
+                  <h3>Общая ризома</h3>
+                  <ul className="note-list">
+                    {sharedNotes.map((note) => (
+                      <li key={note.path}>
+                        <label>
+                          <input
+                            type="checkbox"
+                            checked={selectedPaths.includes(note.path)}
+                            onChange={(event) => {
+                              setSelectedPaths((current) => (
+                                event.target.checked
+                                  ? [...current, note.path]
+                                  : current.filter((path) => path !== note.path)
+                              ));
+                            }}
+                          />
+                          <span>
+                            <strong>{note.title}</strong>
+                            <small>{note.path}</small>
+                          </span>
+                        </label>
+                      </li>
+                    ))}
+                  </ul>
+                  <button
+                    className="button button--primary"
+                    type="button"
+                    disabled={submitting || selectedPaths.length === 0}
+                    onClick={() => void takeSelected()}
+                  >
+                    Взять себе
+                  </button>
+                </div>
+                <div>
+                  <h3>Ваш git</h3>
+                  <ul className="note-list">
+                    {personalNotes.map((note) => (
+                      <li key={note.path}>
+                        <button className="note-link" type="button" onClick={() => void openPersonalNote(note.path)}>
+                          <strong>{note.title}</strong>
+                          <small>{note.path}</small>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                  <form className="connect-form" onSubmit={(event) => void importFallback(event)}>
+                    <label>
+                      Запасной импорт (.md или ZIP)
+                      <input name="file" type="file" accept=".md,.zip,text/markdown,application/zip" required />
+                    </label>
+                    <button className="button button--quiet" type="submit" disabled={submitting}>
+                      Загрузить в git
+                    </button>
+                  </form>
+                </div>
+              </div>
+              {openNote && (
+                <article className="note-read">
+                  <h3>{openNote.title}</h3>
+                  <pre>{openNote.body}</pre>
+                </article>
+              )}
+            </section>
+          )}
           {user.role === "admin" && (
             <section className="admin-panel" aria-labelledby="admin-heading">
               <div>

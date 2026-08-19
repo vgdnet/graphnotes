@@ -76,6 +76,15 @@ select { padding: .65rem .8rem; border: 1px solid #34404c; border-radius: .65rem
 .loading { display: grid; min-height: calc(100vh - 6rem); place-items: center; color: #84909d; }
 
 .admin-panel { width: min(100%, 72rem); margin: -5rem auto 3rem; padding: 1.5rem; border: 1px solid #28313b; border-radius: 1.3rem; background: rgb(17 23 30 / 92%); }
+.notes-panel { width: min(100%, 72rem); margin: 0 auto 3rem; padding: 1.5rem; border: 1px solid #28313b; border-radius: 1.3rem; background: rgb(17 23 30 / 92%); }
+.notes-panel h2, .notes-panel h3 { margin: 0 0 .75rem; }
+.notes-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
+.note-list { list-style: none; margin: 0 0 1rem; padding: 0; display: grid; gap: .55rem; max-height: 22rem; overflow: auto; }
+.note-list label, .note-link { display: flex; gap: .7rem; align-items: flex-start; width: 100%; padding: .7rem .8rem; border: 1px solid #28313b; border-radius: .7rem; background: #0c1117; color: inherit; text-align: left; cursor: pointer; }
+.note-list small { display: block; color: #85919d; font-size: .75rem; }
+.ingest-report { margin: 0 0 1rem; color: #9ca8b4; }
+.note-read { margin-top: 1.5rem; }
+.note-read pre { overflow: auto; padding: 1rem; border: 1px solid #28313b; border-radius: .7rem; background: #0c1117; white-space: pre-wrap; color: #d8dee4; font-size: .85rem; }
 .admin-panel h2 { margin: 0; font-size: 1.7rem; }
 .admin-panel__hint { margin: .5rem 0 1.25rem; color: #85919d; font-size: .84rem; }
 .user-list { display: grid; gap: .7rem; }
@@ -89,5 +98,6 @@ select { padding: .65rem .8rem; border: 1px solid #34404c; border-radius: .65rem
   .profile-card { margin-bottom: 2rem; }
   .status { font-size: 0; }
   .admin-panel { margin-top: 1rem; }
+  .notes-grid { grid-template-columns: 1fr; }
   .user-row { grid-template-columns: 1fr; align-items: stretch; }
 }

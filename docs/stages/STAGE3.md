@@ -1,6 +1,6 @@
 # Stage 3 - GitHub Integration
 
-Status: CURRENT
+Status: DONE
 Branch: `feature/03-github-integration`
 Depends on: accepted Stage 2
 Product model: ADR-007, ADR-008

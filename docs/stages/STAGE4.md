@@ -1,6 +1,6 @@
 # Stage 4 - Take from shared / ZIP fallback
 
-Status: PLANNED
+Status: CURRENT
 Branch: `feature/04-markdown-import`
 Depends on: accepted Stage 3
 Product model: ADR-007, ADR-008
@@ -34,10 +34,11 @@ GraphNotes не предоставляет Obsidian-class CRUD-редактор.
 ## API baseline
 
 ```text
+GET  /api/shared/notes                # public listing of shared Markdown
 POST /api/personal/take-from-shared
 POST /api/personal/import-md          # fallback
 GET  /api/personal/notes              # read-only projection
-GET  /api/personal/notes/{id}
+GET  /api/personal/notes/{path}
 ```
 
 ## Security and consistency
