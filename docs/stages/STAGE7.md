@@ -1,6 +1,7 @@
 # Stage 7 - Editor proposal queue / merge / rollback
 
-Status: CURRENT
+Status: DONE
+See `docs/stages/STAGE7_COMPLETED.md`.
 Branch: `feature/07-publish-merge`
 Depends on: accepted Stage 6
 Product model: ADR-007, ADR-008, ADR-009

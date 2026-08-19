@@ -1,6 +1,6 @@
 # Stage 8 - Proposal Graph Diff
 
-Status: PLANNED
+Status: CURRENT
 Branch: `feature/08-graph-diff`
 Depends on: accepted Stage 7
 Product model: ADR-008, ADR-009. Graph Diff is the **structural** view of

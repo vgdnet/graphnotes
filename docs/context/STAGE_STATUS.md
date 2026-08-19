@@ -4,7 +4,7 @@ Updated: 2026-08-19
 
 Product model ADR-008 (2026-08-19): GraphNotes is not an Obsidian clone.
 Personal knowledge is the user's git. Canonical note bodies are not stored in
-PostgreSQL. Current implementation stage is Stage 7. Product model ADR-009 (2026-08-19):
+PostgreSQL. Current implementation stage is Stage 8. Product model ADR-009 (2026-08-19):
 Differ and ZIP download of the published shared rhizome; take-into-git is no
 longer the product path.
 
@@ -196,10 +196,18 @@ Public graph without login; overlay requires a session. See
 `docs/stages/STAGE6_COMPLETED.md`.
 
 ## Stage 7 - Differ, ZIP download, editor queue
-Status: CURRENT
+Status: DONE
 Branch: `feature/07-publish-merge`
+Completed: 2026-08-19
+Tested integration revision: `b362aa8382777465bc5da8f90663f93e0b7c4b72`
 
 ADR-009: Differ lists one-way personal → published shared differences; the user
 selects them and proposes. Download is a ZIP of the published shared revision.
-Editors accept, reject, return or roll back. Follow `docs/stages/STAGE7.md` and
-`docs/product/PRODUCT_SPEC.md` 1.6. Owner accepted Stage 6 live graph.
+Editors accept, reject, return or roll back. See `docs/stages/STAGE7_COMPLETED.md`.
+
+## Stage 8 - Proposal Graph Diff
+Status: CURRENT
+Branch: `feature/08-graph-diff`
+
+Graph Diff is the structural view of Differ / a proposal. Follow
+`docs/stages/STAGE8.md`. Do not introduce a second comparison model.

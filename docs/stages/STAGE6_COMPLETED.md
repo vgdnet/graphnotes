@@ -22,5 +22,5 @@ See `docs/deployment/STAGE6_GRAPH.md`.
 
 ## Stage 7 handoff
 
-Editor proposal queue, selected-file publish into the one shared rhizome, merge
-and rollback. Do not start graph-diff visualization (Stage 8).
+Stage 7 delivered Differ, ZIP download of the published shared rhizome, and the
+editor proposal queue. Graph Diff visualization is Stage 8.
