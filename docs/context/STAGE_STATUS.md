@@ -4,7 +4,7 @@ Updated: 2026-08-19
 
 Product model ADR-008 (2026-08-19): GraphNotes is not an Obsidian clone.
 Personal knowledge is the user's git. Canonical note bodies are not stored in
-PostgreSQL. Current implementation stage is Stage 6.
+PostgreSQL. Current implementation stage is Stage 7.
 
 ## Stage 0 - Infrastructure
 Status: DONE
@@ -184,8 +184,19 @@ refresh after git/Obsidian push). See `docs/stages/STAGE5_COMPLETED.md` and
 `docs/deployment/STAGE5_INDEX.md`.
 
 ## Stage 6 - Shared graph + personal overlay
-Status: CURRENT
+Status: DONE
 Branch: `feature/06-personal-graph`
+Completed: 2026-08-19
+Tested integration revision: `1dd29caa65607b0edbe5396a7dc7cdcdd5d6a641`
 
 Cytoscape shared graph and overlay of the caller's git onto the shared rhizome.
-Follow `docs/stages/STAGE6.md`. Owner accepted Stage 5 live rebuild.
+Public graph without login; overlay requires a session. See
+`docs/stages/STAGE6_COMPLETED.md`.
+
+## Stage 7 - Editor proposal queue / merge / rollback
+Status: CURRENT
+Branch: `feature/07-publish-merge`
+
+Selected files from the user's git become a Git-backed proposal into the one
+shared rhizome. Editors accept, reject, return or roll back. Follow
+`docs/stages/STAGE7.md`. Owner accepted Stage 6 live graph.

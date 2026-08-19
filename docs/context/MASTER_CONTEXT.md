@@ -76,9 +76,11 @@ GitHub should handle:
 - commits
 - history
 - textual diff
-- Pull Requests
 - mergeability/conflicts
 - merge
+
+GraphNotes uses GitHub git refs and the merges API for proposals. Pull Request
+pages, branch names and SHAs are not shown in the product UI.
 
 GraphNotes should handle:
 - application users and permissions

@@ -10,6 +10,7 @@ from app.core.config import settings
 from app.models.github import GitHubWebhookDelivery, PersonalRepository, SharedRepository
 from app.services.github import GitHubAppClient, GitHubAppError
 from app.services.index import rebuild_personal, rebuild_shared
+from app.services.proposal import reconcile_proposals
 from app.services.repository import apply_error, apply_snapshot
 
 router = APIRouter(tags=["webhooks"])
@@ -103,6 +104,7 @@ async def _refresh_from_push(database: DatabaseSession, payload: dict[str, objec
         apply_snapshot(target, snapshot)
         if shared is not None:
             await rebuild_shared(database, client)
+            await reconcile_proposals(database, client)
         elif personal is not None:
             await rebuild_personal(database, personal.user_id, client)
     except GitHubAppError as exc:

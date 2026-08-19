@@ -58,6 +58,46 @@ type IngestReport = {
   revision: string | null;
 };
 
+type ProposalAuthor = { id: string; username: string; display_name: string };
+
+type Proposal = {
+  id: string;
+  status: string;
+  summary: string;
+  paths: string[];
+  added: string[];
+  changed: string[];
+  author: ProposalAuthor;
+  reason: string | null;
+  created_at: string;
+  updated_at: string;
+  diff: { path: string; diff: string }[];
+};
+
+type ProposalListResponse = { proposals: Proposal[] };
+
+function proposalStatusLabel(status: string): string {
+  switch (status) {
+    case "open":
+      return "открыто";
+    case "accepted_pending_merge":
+    case "merged_indexing":
+      return "принимается";
+    case "published":
+      return "в общей ризоме";
+    case "rejected":
+      return "отклонено";
+    case "changes_requested":
+      return "нужны правки";
+    case "conflicted":
+      return "конфликт";
+    case "failed":
+      return "ошибка";
+    default:
+      return status;
+  }
+}
+
 function sharedLabel(status: RepositoryStatus | null): string {
   if (!status?.connected) return "Общая ризома ещё не подключена.";
   if (status.has_content) return "Общая ризома доступна.";
@@ -94,6 +134,11 @@ export function App() {
   const [personalNotes, setPersonalNotes] = useState<NoteProjection[]>([]);
   const [personalRevision, setPersonalRevision] = useState<string | null>(null);
   const [selectedPaths, setSelectedPaths] = useState<string[]>([]);
+  const [proposedPaths, setProposedPaths] = useState<string[]>([]);
+  const [proposalSummary, setProposalSummary] = useState("");
+  const [proposals, setProposals] = useState<Proposal[]>([]);
+  const [openProposal, setOpenProposal] = useState<Proposal | null>(null);
+  const [decisionReason, setDecisionReason] = useState("");
   const [openNote, setOpenNote] = useState<NoteDetail | null>(null);
   const [report, setReport] = useState<IngestReport | null>(null);
   const [sharedGraph, setSharedGraph] = useState<GraphResponse | null>(null);
@@ -218,6 +263,22 @@ export function App() {
   }, [user, repository?.personal?.connected, repository?.personal?.updated_at]);
 
   useEffect(() => {
+    if (!user) {
+      setProposals([]);
+      return;
+    }
+    const controller = new AbortController();
+    void fetch("/api/proposals", { signal: controller.signal })
+      .then(async (response) => {
+        if (!response.ok) throw new Error(await readError(response));
+        return (await response.json()) as ProposalListResponse;
+      })
+      .then((body) => setProposals(body.proposals))
+      .catch(() => undefined);
+    return () => controller.abort();
+  }, [user, repository?.shared.updated_at]);
+
+  useEffect(() => {
     if (!repository?.shared.connected) {
       setSharedGraph(null);
       return;
@@ -315,6 +376,77 @@ export function App() {
       if (!response.ok) throw new Error(await readError(response));
       setRepository(await response.json() as RepositoryStatusResponse);
       formElement.reset();
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "Ошибка соединения");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function proposeSelected() {
+    if (proposedPaths.length === 0 || proposalSummary.trim().length < 3) return;
+    setSubmitting(true);
+    setError("");
+    try {
+      const response = await fetch("/api/proposals", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          paths: proposedPaths,
+          summary: proposalSummary.trim(),
+          expected_sha: personalRevision,
+        }),
+      });
+      if (!response.ok) throw new Error(await readError(response));
+      setProposedPaths([]);
+      setProposalSummary("");
+      const listed = await fetch("/api/proposals");
+      if (listed.ok) {
+        setProposals(((await listed.json()) as ProposalListResponse).proposals);
+      }
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "Ошибка соединения");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function openProposalDetail(id: string) {
+    setSubmitting(true);
+    setError("");
+    try {
+      const response = await fetch(`/api/proposals/${id}`);
+      if (!response.ok) throw new Error(await readError(response));
+      setOpenProposal((await response.json()) as Proposal);
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "Ошибка соединения");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function decideProposal(id: string, action: "approve" | "reject" | "request-changes" | "rollback") {
+    if (action !== "approve" && decisionReason.trim().length === 0) return;
+    setSubmitting(true);
+    setError("");
+    try {
+      const response = await fetch(`/api/proposals/${id}/${action}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reason: decisionReason.trim() }),
+      });
+      if (!response.ok) throw new Error(await readError(response));
+      const updated = (await response.json()) as Proposal;
+      setOpenProposal(updated);
+      setDecisionReason("");
+      const listed = await fetch("/api/proposals");
+      if (listed.ok) {
+        setProposals(((await listed.json()) as ProposalListResponse).proposals);
+      }
+      const status = await fetch("/api/repository/status");
+      if (status.ok) {
+        setRepository((await status.json()) as RepositoryStatusResponse);
+      }
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "Ошибка соединения");
     } finally {
@@ -437,6 +569,9 @@ export function App() {
       if (!response.ok) throw new Error(await readError(response));
       setUser(null);
       setMode("login");
+      setProposals([]);
+      setOpenProposal(null);
+      setProposedPaths([]);
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "Ошибка соединения");
     } finally {
@@ -468,6 +603,8 @@ export function App() {
       setSubmitting(false);
     }
   }
+
+  const canReview = user?.role === "editor" || user?.role === "admin";
 
   return (
     <main className="shell">
@@ -587,13 +724,52 @@ export function App() {
                   <ul className="note-list">
                     {personalNotes.map((note) => (
                       <li key={note.path}>
-                        <button className="note-link" type="button" onClick={() => void openPersonalNote(note.path)}>
-                          <strong>{note.title}</strong>
-                          <small>{note.path}</small>
-                        </button>
+                        <div className="note-pick">
+                          <input
+                            type="checkbox"
+                            checked={proposedPaths.includes(note.path)}
+                            onChange={(event) => {
+                              setProposedPaths((current) => (
+                                event.target.checked
+                                  ? [...current, note.path]
+                                  : current.filter((path) => path !== note.path)
+                              ));
+                            }}
+                            aria-label={`Предложить ${note.title}`}
+                          />
+                          <button className="note-link" type="button" onClick={() => void openPersonalNote(note.path)}>
+                            <strong>{note.title}</strong>
+                            <small>{note.path}</small>
+                          </button>
+                        </div>
                       </li>
                     ))}
                   </ul>
+                  <form
+                    className="connect-form"
+                    onSubmit={(event) => {
+                      event.preventDefault();
+                      void proposeSelected();
+                    }}
+                  >
+                    <label>
+                      Кратко, что предлагаете
+                      <input
+                        value={proposalSummary}
+                        onChange={(event) => setProposalSummary(event.target.value)}
+                        minLength={3}
+                        maxLength={200}
+                        required
+                      />
+                    </label>
+                    <button
+                      className="button button--primary"
+                      type="submit"
+                      disabled={submitting || proposedPaths.length === 0 || proposalSummary.trim().length < 3}
+                    >
+                      Предложить в общую
+                    </button>
+                  </form>
                   <form className="connect-form" onSubmit={(event) => void importFallback(event)}>
                     <label>
                       Запасной импорт (.md или ZIP)
@@ -613,6 +789,72 @@ export function App() {
               )}
             </section>
           )}
+          <section className="notes-panel" aria-labelledby="proposals-heading">
+            <div>
+              <p className="eyebrow">Публикация</p>
+              <h2 id="proposals-heading">{canReview ? "Очередь предложений" : "Ваши предложения"}</h2>
+              <p className="admin-panel__hint">
+                Предложение копирует выбранные заметки из вашего git. Личный git не меняется.
+                Читатели видят общую ризому только целиком, после принятия.
+              </p>
+            </div>
+            {proposals.length === 0 ? (
+              <p className="admin-panel__hint">Пока нет предложений.</p>
+            ) : (
+              <ul className="proposal-list">
+                {proposals.map((item) => (
+                  <li key={item.id}>
+                    <button className="proposal-row" type="button" onClick={() => void openProposalDetail(item.id)}>
+                      <strong>{item.summary}</strong>
+                      <span>{item.author.display_name} · {proposalStatusLabel(item.status)}</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+            {openProposal && (
+              <article className="proposal-detail">
+                <h3>{openProposal.summary}</h3>
+                <p className="admin-panel__hint">
+                  {openProposal.author.display_name} · {proposalStatusLabel(openProposal.status)}
+                  {openProposal.reason ? ` · ${openProposal.reason}` : ""}
+                </p>
+                {openProposal.diff.map((item) => (
+                  <pre key={item.path} className="proposal-diff">{item.diff || item.path}</pre>
+                ))}
+                {canReview && openProposal.author.id !== user.id && (
+                  <div className="proposal-actions">
+                    <label>
+                      Причина
+                      <input
+                        value={decisionReason}
+                        onChange={(event) => setDecisionReason(event.target.value)}
+                        maxLength={255}
+                      />
+                    </label>
+                    {(openProposal.status === "open" || openProposal.status === "conflicted" || openProposal.status === "failed" || openProposal.status === "changes_requested") && (
+                      <>
+                        <button className="button button--primary" type="button" disabled={submitting} onClick={() => void decideProposal(openProposal.id, "approve")}>
+                          Принять
+                        </button>
+                        <button className="button button--danger" type="button" disabled={submitting || decisionReason.trim().length === 0} onClick={() => void decideProposal(openProposal.id, "reject")}>
+                          Отклонить
+                        </button>
+                        <button className="button button--quiet" type="button" disabled={submitting || decisionReason.trim().length === 0} onClick={() => void decideProposal(openProposal.id, "request-changes")}>
+                          Вернуть
+                        </button>
+                      </>
+                    )}
+                    {openProposal.status === "published" && (
+                      <button className="button button--danger" type="button" disabled={submitting || decisionReason.trim().length === 0} onClick={() => void decideProposal(openProposal.id, "rollback")}>
+                        Откатить
+                      </button>
+                    )}
+                  </div>
+                )}
+              </article>
+            )}
+          </section>
           {repository?.shared.connected && (
             <section className="notes-panel" aria-labelledby="graph-heading">
               <div>

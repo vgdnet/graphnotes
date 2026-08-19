@@ -232,6 +232,86 @@ class GitHubAppClient:
                 )
             return commit_sha
 
+    async def create_branch(self, owner: str, name: str, branch: str, sha: str) -> None:
+        token = await self._installation_token()
+        async with httpx.AsyncClient(timeout=self._timeout) as client:
+            await self._request(
+                client,
+                "POST",
+                f"/repos/{owner}/{name}/git/refs",
+                token,
+                json_body={"ref": f"refs/heads/{branch}", "sha": sha},
+            )
+
+    async def merge_branch(
+        self,
+        owner: str,
+        name: str,
+        *,
+        base: str,
+        head: str,
+        message: str,
+    ) -> str:
+        token = await self._installation_token()
+        async with httpx.AsyncClient(timeout=self._timeout) as client:
+            payload = await self._request(
+                client,
+                "POST",
+                f"/repos/{owner}/{name}/merges",
+                token,
+                json_body={"base": base, "head": head, "commit_message": message},
+                conflict_on_409=True,
+            )
+        sha = payload.get("sha")
+        if not isinstance(sha, str):
+            raise GitHubAppError("error", "GitHub request failed")
+        return sha
+
+    async def restore_revision(
+        self,
+        owner: str,
+        name: str,
+        branch: str,
+        revision: str,
+        message: str,
+    ) -> str:
+        token = await self._installation_token()
+        async with httpx.AsyncClient(timeout=self._timeout) as client:
+            current_sha, ref_error = await self._head_sha(client, owner, name, branch, token)
+            if ref_error is not None:
+                raise ref_error
+            if not current_sha:
+                raise GitHubAppError("empty", "repository has no commits yet")
+            if current_sha == revision:
+                raise GitHubAppError("stale", "the shared rhizome is already at this revision")
+            old = await self._get(client, f"/repos/{owner}/{name}/git/commits/{revision}", token)
+            tree = old.get("tree") if isinstance(old.get("tree"), dict) else None
+            tree_sha = tree.get("sha") if isinstance(tree, dict) else None
+            if not isinstance(tree_sha, str):
+                raise GitHubAppError("error", "GitHub request failed")
+            new_commit = await self._request(
+                client,
+                "POST",
+                f"/repos/{owner}/{name}/git/commits",
+                token,
+                json_body={
+                    "message": message,
+                    "tree": tree_sha,
+                    "parents": [current_sha],
+                },
+            )
+            commit_sha = new_commit.get("sha")
+            if not isinstance(commit_sha, str):
+                raise GitHubAppError("error", "GitHub request failed")
+            await self._request(
+                client,
+                "PATCH",
+                f"/repos/{owner}/{name}/git/refs/heads/{quote(branch, safe='')}",
+                token,
+                json_body={"sha": commit_sha, "force": False},
+            )
+            return commit_sha
+
     async def _head_sha(
         self,
         client: httpx.AsyncClient,
@@ -298,6 +378,7 @@ class GitHubAppClient:
         *,
         params: dict[str, str] | None = None,
         json_body: dict[str, object] | None = None,
+        conflict_on_409: bool = False,
     ) -> dict[str, Any]:
         headers = {
             "Accept": "application/vnd.github+json",
@@ -319,6 +400,8 @@ class GitHubAppClient:
             raise GitHubAppError("unavailable", "GitHub is unreachable") from exc
 
         if response.status_code == 409:
+            if conflict_on_409:
+                raise GitHubAppError("conflict", "cannot apply this proposal onto the shared rhizome")
             raise GitHubAppError("empty", "repository has no commits yet")
         if response.status_code == 422:
             raise GitHubAppError("stale", "personal git changed, retry the take")

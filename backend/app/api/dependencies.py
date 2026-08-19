@@ -76,6 +76,18 @@ async def get_current_admin(user: CurrentUser) -> User:
 CurrentAdmin = Annotated[User, Depends(get_current_admin)]
 
 
+async def get_current_editor(user: CurrentUser) -> User:
+    if user.role not in {UserRole.EDITOR.value, UserRole.ADMIN.value}:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="editor access required",
+        )
+    return user
+
+
+CurrentEditor = Annotated[User, Depends(get_current_editor)]
+
+
 async def get_optional_user(
     database: DatabaseSession,
     session_token: Annotated[

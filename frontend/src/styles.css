@@ -82,6 +82,15 @@ select { padding: .65rem .8rem; border: 1px solid #34404c; border-radius: .65rem
 .note-list { list-style: none; margin: 0 0 1rem; padding: 0; display: grid; gap: .55rem; max-height: 22rem; overflow: auto; }
 .note-list label, .note-link { display: flex; gap: .7rem; align-items: flex-start; width: 100%; padding: .7rem .8rem; border: 1px solid #28313b; border-radius: .7rem; background: #0c1117; color: inherit; text-align: left; cursor: pointer; }
 .note-list small { display: block; color: #85919d; font-size: .75rem; }
+.note-pick { display: flex; gap: .7rem; align-items: flex-start; }
+.note-pick .note-link { flex: 1; }
+.proposal-list { list-style: none; margin: 0 0 1rem; padding: 0; display: grid; gap: .55rem; }
+.proposal-row { display: grid; gap: .25rem; width: 100%; padding: .8rem .9rem; border: 1px solid #28313b; border-radius: .7rem; background: #0c1117; color: inherit; text-align: left; cursor: pointer; }
+.proposal-row span { color: #85919d; font-size: .8rem; }
+.proposal-detail { margin-top: 1rem; }
+.proposal-diff { overflow: auto; padding: 1rem; border: 1px solid #28313b; border-radius: .7rem; background: #0c1117; white-space: pre-wrap; color: #d8dee4; font-size: .8rem; }
+.proposal-actions { display: flex; flex-wrap: wrap; gap: .6rem; align-items: end; margin-top: 1rem; }
+.proposal-actions label { flex: 1 1 16rem; }
 .ingest-report { margin: 0 0 1rem; color: #9ca8b4; }
 .note-read { margin-top: 1.5rem; }
 .note-read pre { overflow: auto; padding: 1rem; border: 1px solid #28313b; border-radius: .7rem; background: #0c1117; white-space: pre-wrap; color: #d8dee4; font-size: .85rem; }

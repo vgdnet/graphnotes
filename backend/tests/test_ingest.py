@@ -4,8 +4,11 @@ from httpx import ASGITransport, AsyncClient
 from pytest import MonkeyPatch
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from app.api import graph as graph_api
 from app.api import notes as notes_api
+from app.api import proposals as proposals_api
 from app.api import repository as repository_api
+from app.api import webhooks as webhooks_api
 from app.core.config import settings
 from app.main import app
 from app.models.audit_event import AuditEvent
@@ -22,6 +25,13 @@ class MemoryRepo:
     sha: str | None = "sha-1"
     node_id: str = ""
     default_branch: str = "main"
+    branches: dict[str, str] = field(default_factory=dict)
+    snapshots: dict[str, dict[str, str]] = field(default_factory=dict)
+    branch_bases: dict[str, str] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        if self.sha:
+            self.branches.setdefault(self.default_branch, self.sha)
 
     def snapshot(self) -> GitHubRepoSnapshot:
         return GitHubRepoSnapshot(
@@ -33,6 +43,19 @@ class MemoryRepo:
             sha=self.sha,
             private=False,
         )
+
+    def files_at(self, ref: str) -> dict[str, str]:
+        if ref in self.snapshots:
+            return self.snapshots[ref]
+        if ref in self.branches:
+            sha = self.branches[ref]
+            if sha in self.snapshots:
+                return self.snapshots[sha]
+            if sha == self.sha:
+                return self.files
+        if ref in {self.default_branch, self.sha}:
+            return self.files
+        raise GitHubAppError("not_found", "repository is not visible to GraphNotes")
 
 
 class MemoryGitHub:
@@ -47,6 +70,10 @@ class MemoryGitHub:
             raise GitHubAppError("not_found", "repository is not visible to GraphNotes")
         return self.repos[key]
 
+    def _new_sha(self) -> str:
+        self.commits += 1
+        return f"sha-commit-{self.commits}"
+
     async def get_repository(self, owner: str, name: str) -> GitHubRepoSnapshot:
         return self._repo(owner, name).snapshot()
 
@@ -54,14 +81,16 @@ class MemoryGitHub:
         repo = self._repo(owner, name)
         if repo.sha is None:
             raise GitHubAppError("empty", "repository has no commits yet")
-        return sorted(path for path in repo.files if path.lower().endswith(".md"))
+        files = repo.files_at(ref)
+        return sorted(path for path in files if path.lower().endswith(".md"))
 
     async def get_file(self, owner: str, name: str, path: str, ref: str) -> str:
         repo = self._repo(owner, name)
-        if path not in repo.files:
+        files = repo.files_at(ref)
+        if path not in files:
             raise GitHubAppError("not_found", "repository is not visible to GraphNotes")
         self.file_reads += 1
-        return repo.files[path]
+        return files[path]
 
     async def commit_markdown(
         self,
@@ -73,14 +102,116 @@ class MemoryGitHub:
         expected_sha: str | None,
     ) -> str:
         repo = self._repo(owner, name)
-        current = repo.sha or ""
+        if branch == repo.default_branch:
+            current = repo.sha or ""
+        else:
+            if branch not in repo.branches:
+                raise GitHubAppError("not_found", "repository is not visible to GraphNotes")
+            current = repo.branches[branch]
         if expected_sha is not None and expected_sha != current:
             raise GitHubAppError("stale", "personal git changed, retry the take")
         if self.commits >= 100:
             raise GitHubAppError("forbidden", "GraphNotes cannot write to this git yet")
-        repo.files.update(files)
-        self.commits += 1
-        repo.sha = f"sha-commit-{self.commits}"
+        if branch == repo.default_branch:
+            repo.files.update(files)
+            repo.sha = self._new_sha()
+            repo.branches[repo.default_branch] = repo.sha
+            repo.snapshots[repo.sha] = dict(repo.files)
+            return repo.sha
+        parent = repo.files_at(current)
+        if current not in repo.snapshots:
+            repo.snapshots[current] = dict(parent)
+        updated = dict(parent)
+        updated.update(files)
+        sha = self._new_sha()
+        repo.snapshots[sha] = updated
+        repo.branches[branch] = sha
+        return sha
+
+    async def create_branch(self, owner: str, name: str, branch: str, sha: str) -> None:
+        repo = self._repo(owner, name)
+        if branch in repo.branches:
+            raise GitHubAppError("stale", "personal git changed, retry the take")
+        if sha == repo.sha:
+            repo.snapshots.setdefault(sha, dict(repo.files))
+        elif sha not in repo.snapshots:
+            raise GitHubAppError("not_found", "repository is not visible to GraphNotes")
+        repo.branches[branch] = sha
+        repo.branch_bases[branch] = sha
+
+    async def merge_branch(
+        self,
+        owner: str,
+        name: str,
+        *,
+        base: str,
+        head: str,
+        message: str,
+    ) -> str:
+        repo = self._repo(owner, name)
+        if base != repo.default_branch:
+            raise GitHubAppError("not_found", "repository is not visible to GraphNotes")
+        head_sha = repo.branches.get(head, head)
+        ancestor = repo.branch_bases.get(head)
+        if ancestor is None and head_sha in repo.snapshots:
+            ancestor = next(
+                (base_sha for branch, base_sha in repo.branch_bases.items() if repo.branches.get(branch) == head_sha),
+                None,
+            )
+        if ancestor is None:
+            raise GitHubAppError("not_found", "repository is not visible to GraphNotes")
+        ancestor_files = repo.snapshots.get(ancestor, dict(repo.files) if ancestor == repo.sha else {})
+        if repo.sha and repo.sha not in repo.snapshots:
+            repo.snapshots[repo.sha] = dict(repo.files)
+        base_files = dict(repo.files)
+        head_files = repo.files_at(head_sha)
+        base_changed = {
+            path for path in set(ancestor_files) | set(base_files) if ancestor_files.get(path) != base_files.get(path)
+        }
+        head_changed = {
+            path for path in set(ancestor_files) | set(head_files) if ancestor_files.get(path) != head_files.get(path)
+        }
+        if base_changed & head_changed:
+            raise GitHubAppError("conflict", "cannot apply this proposal onto the shared rhizome")
+        merged = dict(base_files)
+        for path in head_changed:
+            if path in head_files:
+                merged[path] = head_files[path]
+            else:
+                merged.pop(path, None)
+        repo.files.clear()
+        repo.files.update(merged)
+        repo.sha = self._new_sha()
+        repo.branches[repo.default_branch] = repo.sha
+        repo.snapshots[repo.sha] = dict(repo.files)
+        return repo.sha
+
+    async def restore_revision(
+        self,
+        owner: str,
+        name: str,
+        branch: str,
+        revision: str,
+        message: str,
+    ) -> str:
+        repo = self._repo(owner, name)
+        if branch != repo.default_branch:
+            raise GitHubAppError("not_found", "repository is not visible to GraphNotes")
+        if repo.sha == revision:
+            raise GitHubAppError("stale", "the shared rhizome is already at this revision")
+        if revision in repo.snapshots:
+            restored = dict(repo.snapshots[revision])
+        elif revision == repo.sha:
+            restored = dict(repo.files)
+        else:
+            raise GitHubAppError("not_found", "repository is not visible to GraphNotes")
+        if repo.sha:
+            repo.snapshots.setdefault(repo.sha, dict(repo.files))
+        repo.files.clear()
+        repo.files.update(restored)
+        repo.sha = self._new_sha()
+        repo.branches[repo.default_branch] = repo.sha
+        repo.snapshots[repo.sha] = dict(repo.files)
         return repo.sha
 
 
@@ -90,6 +221,9 @@ def _install(
 ) -> MemoryGitHub:
     monkeypatch.setattr(notes_api, "_client", lambda: github)
     monkeypatch.setattr(repository_api, "_client", lambda: github)
+    monkeypatch.setattr(proposals_api, "_client", lambda: github)
+    monkeypatch.setattr(graph_api, "_client", lambda: github)
+    monkeypatch.setattr(webhooks_api, "GitHubAppClient", lambda *args, **kwargs: github)
     monkeypatch.setattr(settings, "github_shared_owner", "vgdnet")
     monkeypatch.setattr(settings, "github_shared_name", "rhizome")
     return github

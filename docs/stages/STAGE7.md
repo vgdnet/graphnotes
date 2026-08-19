@@ -1,6 +1,6 @@
 # Stage 7 - Editor proposal queue / merge / rollback
 
-Status: PLANNED / DECISION-GATED
+Status: CURRENT
 Branch: `feature/07-publish-merge`
 Depends on: accepted Stage 6
 Product model: ADR-007, ADR-008
@@ -9,37 +9,37 @@ Product model: ADR-007, ADR-008
 предложить / принять / отклонить / вернуть / откатить. Несколько предложений
 по одному файлу остаются параллельными, пока editor не сольёт.
 
+## Recorded decisions
+
+Blocking product details (2026-08-19):
+
+1. A proposal includes **selected files**, not the entire personal vault.
+2. Immutable scope is `base` = shared SHA at create, `head` = commit GraphNotes
+   creates on a hidden shared-repo branch with only those files.
+3. Personal git is unchanged after creating a proposal.
+
+GitHub Pull Request API is not required: contents-write plus `git/refs` and
+`POST /repos/{owner}/{name}/merges` is enough. Public JSON hides branch names,
+SHAs and GitHub URLs. Direct in-app shared commits by editors are out of this
+stage. Deletions are out of MVP (adds and updates only). Self-approval is
+forbidden by author user id, including admin authors.
+
 ## User outcome
 
 User предлагает изменения из своего git в единую общую ризому. Editor/admin
-видит автора, человеческий текстовый diff и structural preview, принимает,
-отклоняет, возвращает или откатывает с причиной. Читатели никогда не видят
-частично применённое изменение. Откат общей ризомы — Git history.
-
-## Blocking product detail
-
-До реализации определить:
-
-- proposal включает выбранные изменения или весь current personal diff;
-- как immutable scope фиксируется base/head SHA;
-- что происходит с personal changes после создания proposal.
-
-Решение не может вводить workspace, второй shared graph, PostgreSQL note store
-или last-write-wins.
+видит автора, человеческий текстовый diff, принимает, отклоняет, возвращает
+или откатывает с причиной. Читатели никогда не видят частично применённое
+изменение. Откат общей ризомы — новый Git commit с деревом предыдущей revision.
 
 ## Scope
 
 - proposal: author, immutable base/head SHAs, scope, status, reason, timestamps;
-- proposal может менять Markdown и производные nodes, edges, direction/type,
-  tags and properties;
-- GitHub Pull Request (or equivalent Git merge) through backend, hidden in UX;
+- Git merge through backend, hidden in UX;
 - list/detail/human text diff for author and editor/admin;
 - editor/admin approve, reject, request changes, rollback;
 - strict self-approval prohibition by author user ID regardless of role;
-- optional audited shared Git commit for editor/admin without Obsidian-class UI;
-- audit for proposal, decision, shared commit, role and revision;
-- verified webhook and periodic/manual reconciliation;
-- idempotent state transitions and concurrency/mergeability checks;
+- audit for proposal, decision and rollback;
+- verified webhook and list/status reconciliation;
 - shared revision publication pointer/state;
 - frontend user/editor/admin flows without GitHub credentials.
 
@@ -52,13 +52,11 @@ GET  /api/proposals/{id}
 POST /api/proposals/{id}/approve
 POST /api/proposals/{id}/reject
 POST /api/proposals/{id}/request-changes
+POST /api/proposals/{id}/rollback
 POST /api/webhooks/github
 ```
 
 ## Atomic publication boundary
-
-GitHub and PostgreSQL do not share an ACID transaction. Product atomicity is
-provided by a durable state machine, for example:
 
 ```text
 open
@@ -67,24 +65,9 @@ open
   -> published
 ```
 
-Failure states remain recoverable and reconcilable. After Git merge, the new
-shared revision is indexed separately. The visible shared revision changes only
-after full successful indexing. Requests see old-complete or new-complete, never
-a mixture. Duplicate/out-of-order webhooks cannot publish twice or regress
-state.
-
-## Authorization, history and recovery
-
-- user writes only via own personal git and creates own proposal;
-- editor/admin decides others' proposals and may commit to shared;
-- proposal author cannot approve own proposal, including admin author;
-- role and active status checked on every privileged action;
-- Git records technical content history;
-- audit records actor, role, action, target, reason and exact revisions;
-- rejected/requested-changes proposal never changes shared revision;
-- missed webhook repaired by reconciliation;
-- failed indexing leaves previous shared revision visible;
-- admin recovery is explicit and audited, never an untracked graph edit.
+Failure states: `rejected`, `changes_requested`, `conflicted`, `failed`. After
+Git merge, the new shared revision is indexed separately. The visible shared
+revision changes only after full successful indexing.
 
 ## Out of scope
 

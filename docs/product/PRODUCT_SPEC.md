@@ -1,7 +1,7 @@
 # GraphNotes - каноническое техническое задание продукта
 
 Статус: CANONICAL / LIVING DOCUMENT
-Версия: 1.4
+Версия: 1.5
 Обновлено: 2026-08-19
 
 ## 1. Назначение документа
@@ -333,6 +333,8 @@ GET  /api/proposals
 GET  /api/proposals/{id}
 POST /api/proposals/{id}/approve
 POST /api/proposals/{id}/reject
+POST /api/proposals/{id}/request-changes
+POST /api/proposals/{id}/rollback
 
 POST /api/webhooks/github
 ```
@@ -450,7 +452,10 @@ MVP считается функционально готовым, когда:
 1. Минимальный provenance на узле/ребре (автор, слой, revision) в первой волне
    графа.
 2. Цвета состояний shared / personal / added / removed / unresolved / proposed.
-3. Предложение публикует выбранные файлы или весь diff относительно общей.
+3. Предложение публикует **выбранные файлы** (не весь личный vault). Scope
+   фиксируется как shared SHA на момент создания и commit только этих файлов
+   на скрытой ветке общей ризомы. Личный git после создания предложения не
+   переписывается. (Закрыто в Stage 7.)
 4. Personal remote — отдельный GitHub repository (не fork общей). Первый
    тестовый binding: GraphNotes user `efimov` → `vgdnet/guide_psy`; общая
    ризома → `vgdnet/rhizome`.
@@ -521,3 +526,4 @@ ADR обязателен, если решение меняет хотя бы о�
 | 1.2 Markdown | 2026-08-18 | Зафиксированы одна общая и одна личная ризома на пользователя, глобальные `user/editor/admin`, atomic publication boundary и запрет self-approval |
 | 1.3 Markdown | 2026-08-19 | ADR-008: GraphNotes не клон Obsidian; два git; публичное чтение общей; «взять себе»; очередь editor’ов как ядро; ZIP — fallback |
 | 1.4 Markdown | 2026-08-19 | Stage 5: производный индекс из Git, bounded Graph API (`/graph/shared`, `/graph/personal`, `/index/rebuild`), SHA-refresh без LAN webhook; Cytoscape/overlay остаются Stage 6 |
+| 1.5 Markdown | 2026-08-19 | Stage 7: предложение — выбранные файлы; личный git не меняется; merge через Git refs без UX GitHub PR; self-approval по author id |
