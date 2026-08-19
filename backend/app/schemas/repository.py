@@ -9,6 +9,7 @@ class RepositoryStatus(BaseModel):
     name: str | None = None
     status: str
     has_content: bool = False
+    index_status: str = "empty"
     updated_at: datetime | None = None
 
 

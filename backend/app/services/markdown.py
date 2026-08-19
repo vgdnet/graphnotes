@@ -18,11 +18,18 @@ _MAX_FRONTMATTER = 8192
 
 
 @dataclass(frozen=True)
+class ParsedLink:
+    target: str
+    kind: str
+
+
+@dataclass(frozen=True)
 class ParsedNote:
     title: str
     tags: tuple[str, ...]
     aliases: tuple[str, ...]
     links: tuple[str, ...]
+    typed_links: tuple[ParsedLink, ...]
     body: str
     content_hash: str
     warnings: tuple[str, ...] = field(default_factory=tuple)
@@ -49,13 +56,15 @@ def parse_markdown(path: str, text: str) -> ParsedNote:
     title = _first_string(meta.get("title")) or _heading_title(body) or _stem(path)
     tags = _string_list(meta.get("tags"))
     aliases = _string_list(meta.get("aliases") or meta.get("alias"))
-    links = tuple(dict.fromkeys(_collect_links(body)))
+    typed_links = tuple(dict.fromkeys(_collect_typed_links(body)))
+    links = tuple(dict.fromkeys(item.target for item in typed_links))
     digest = hashlib.sha256(text.encode("utf-8")).hexdigest()
     return ParsedNote(
         title=title[:200],
         tags=tags,
         aliases=aliases,
         links=links,
+        typed_links=tuple(typed_links),
         body=body,
         content_hash=digest,
         warnings=tuple(warnings),
@@ -121,17 +130,29 @@ def _string_list(value: object) -> tuple[str, ...]:
     return ()
 
 
-def _collect_links(body: str) -> list[str]:
-    links: list[str] = []
+def resolve_link_target(target: str, notes_by_key: dict[str, str]) -> str | None:
+    return notes_by_key.get(_link_key(target))
+
+
+def notes_lookup_map(paths: set[str]) -> dict[str, str]:
+    mapping: dict[str, str] = {}
+    for path in sorted(paths):
+        for key in _lookup_keys(path):
+            mapping.setdefault(key, path)
+    return mapping
+
+
+def _collect_typed_links(body: str) -> list[ParsedLink]:
+    links: list[ParsedLink] = []
     for match in _WIKILINK.finditer(body):
         target = match.group(1).split("|", 1)[0].split("#", 1)[0].strip()
         if target:
-            links.append(target)
+            links.append(ParsedLink(target=target, kind="wikilink"))
     for match in _MD_LINK.finditer(body):
         target = match.group(2).split("#", 1)[0].strip()
         if not target or "://" in target or target.startswith("mailto:"):
             continue
-        links.append(target)
+        links.append(ParsedLink(target=target, kind="markdown"))
     return links
 
 

@@ -1,0 +1,435 @@
+from __future__ import annotations
+
+from datetime import UTC, datetime
+import uuid
+
+from sqlalchemy import delete, func, select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.core.config import settings
+from app.models.github import PersonalRepository, SharedRepository
+from app.models.graph import NoteIndex, NoteLayer, NoteLink, NoteTag, SyncJob, SyncJobStatus, Tag
+from app.services.audit import record_audit_event
+from app.services.github import GitHubAppClient, GitHubAppError
+from app.services.markdown import ParsedNote, notes_lookup_map, parse_markdown, resolve_link_target
+from app.services.repository import SHARED_SINGLETON_ID
+
+
+class IndexerError(Exception):
+    def __init__(self, status_code: int, detail: str) -> None:
+        super().__init__(detail)
+        self.status_code = status_code
+        self.detail = detail
+
+
+def index_status_label(observed_sha: str | None, indexed_sha: str | None, index_status: str) -> str:
+    if not observed_sha:
+        return "empty"
+    if index_status == "error":
+        return "error"
+    if indexed_sha == observed_sha:
+        return "current"
+    return "updating"
+
+
+def _index_key(layer: str, owner_id: uuid.UUID | None, proposal_id: uuid.UUID | None, revision: str, path: str) -> str:
+    owner = str(owner_id) if owner_id else "shared"
+    proposal = str(proposal_id) if proposal_id else "-"
+    return f"{layer}:{owner}:{proposal}:{revision}:{path}"
+
+
+def _slug(path: str) -> str:
+    name = path.rsplit("/", 1)[-1]
+    if name.lower().endswith(".md"):
+        name = name[:-3]
+    return name[:180] or "note"
+
+
+async def rebuild_shared(
+    database: AsyncSession,
+    client: GitHubAppClient,
+    *,
+    actor_user_id: uuid.UUID | None = None,
+    paths: set[str] | None = None,
+) -> SyncJob:
+    row = await database.get(SharedRepository, SHARED_SINGLETON_ID)
+    if row is None or not row.observed_sha:
+        raise IndexerError(409, "the shared rhizome is not connected")
+    return await _rebuild(
+        database,
+        client,
+        layer=NoteLayer.SHARED.value,
+        owner_id=None,
+        owner=row.owner,
+        name=row.name,
+        revision=row.observed_sha,
+        binding=row,
+        actor_user_id=actor_user_id,
+        paths=paths,
+    )
+
+
+async def rebuild_personal(
+    database: AsyncSession,
+    user_id: uuid.UUID,
+    client: GitHubAppClient,
+    *,
+    actor_user_id: uuid.UUID | None = None,
+    paths: set[str] | None = None,
+) -> SyncJob:
+    row = await database.scalar(
+        select(PersonalRepository).where(PersonalRepository.user_id == user_id)
+    )
+    if row is None or not row.observed_sha:
+        raise IndexerError(409, "connect your git first")
+    return await _rebuild(
+        database,
+        client,
+        layer=NoteLayer.PERSONAL.value,
+        owner_id=user_id,
+        owner=row.owner,
+        name=row.name,
+        revision=row.observed_sha,
+        binding=row,
+        actor_user_id=actor_user_id or user_id,
+        paths=paths,
+    )
+
+
+async def ensure_shared_current(database: AsyncSession, client: GitHubAppClient) -> None:
+    row = await database.get(SharedRepository, SHARED_SINGLETON_ID)
+    if row is None or not row.observed_sha:
+        return
+    if row.indexed_sha == row.observed_sha and row.index_status != "error":
+        return
+    await rebuild_shared(database, client)
+
+
+async def ensure_personal_current(
+    database: AsyncSession,
+    user_id: uuid.UUID,
+    client: GitHubAppClient,
+) -> None:
+    row = await database.scalar(
+        select(PersonalRepository).where(PersonalRepository.user_id == user_id)
+    )
+    if row is None or not row.observed_sha:
+        return
+    if row.indexed_sha == row.observed_sha and row.index_status != "error":
+        return
+    await rebuild_personal(database, user_id, client)
+
+
+async def _rebuild(
+    database: AsyncSession,
+    client: GitHubAppClient,
+    *,
+    layer: str,
+    owner_id: uuid.UUID | None,
+    owner: str,
+    name: str,
+    revision: str,
+    binding: SharedRepository | PersonalRepository,
+    actor_user_id: uuid.UUID | None,
+    paths: set[str] | None,
+) -> SyncJob:
+    running = await database.scalar(
+        select(SyncJob).where(
+            SyncJob.layer == layer,
+            SyncJob.owner_user_id == owner_id,
+            SyncJob.status == SyncJobStatus.RUNNING.value,
+        )
+    )
+    if running is not None:
+        raise IndexerError(409, "index rebuild is already running")
+
+    job = SyncJob(
+        layer=layer,
+        owner_user_id=owner_id,
+        revision_sha=revision,
+        status=SyncJobStatus.RUNNING.value,
+        started_at=datetime.now(UTC),
+    )
+    database.add(job)
+    binding.index_status = "updating"
+    await database.flush()
+
+    try:
+        listed = await client.list_markdown_files(owner, name, revision)
+        if len(listed) > settings.index_max_notes:
+            raise IndexerError(400, "too many notes to index")
+        await _delete_layer(database, layer, owner_id)
+        parsed: dict[str, ParsedNote] = {}
+        for path in listed:
+            text = await client.get_file(owner, name, path, revision)
+            parsed[path] = parse_markdown(path, text)
+        lookup = notes_lookup_map(set(parsed))
+        records: dict[str, NoteIndex] = {}
+        for path, note in parsed.items():
+            record = NoteIndex(
+                index_key=_index_key(layer, owner_id, None, revision, path),
+                layer=layer,
+                revision_sha=revision,
+                path=path,
+                slug=_slug(path),
+                title=note.title,
+                content_hash=note.content_hash,
+                owner_user_id=owner_id,
+            )
+            database.add(record)
+            records[path] = record
+        await database.flush()
+        for path, note in parsed.items():
+            record = records[path]
+            for tag_name in dict.fromkeys(note.tags):
+                normalized = tag_name.casefold()[:80]
+                tag = await database.scalar(select(Tag).where(Tag.name == normalized))
+                if tag is None:
+                    tag = Tag(name=normalized)
+                    database.add(tag)
+                    await database.flush()
+                database.add(NoteTag(note_id=record.id, tag_id=tag.id))
+            seen_links: set[tuple[str, str]] = set()
+            for link in note.typed_links:
+                key = (link.kind, link.target)
+                if key in seen_links:
+                    continue
+                seen_links.add(key)
+                target_path = resolve_link_target(link.target, lookup)
+                target_note = records.get(target_path) if target_path else None
+                database.add(
+                    NoteLink(
+                        source_id=record.id,
+                        target_id=None if target_note is None else target_note.id,
+                        target_raw=link.target[:200],
+                        link_type=link.kind,
+                        unresolved=target_note is None,
+                    )
+                )
+        binding.indexed_sha = revision
+        binding.index_status = "current"
+        job.status = SyncJobStatus.READY.value
+        job.finished_at = datetime.now(UTC)
+        record_audit_event(
+            database,
+            action="index.rebuild",
+            actor_user_id=actor_user_id,
+            details={"layer": layer, "notes": len(parsed)},
+        )
+        await _prune_sync_jobs(database)
+        await database.commit()
+        await database.refresh(job)
+        return job
+    except (GitHubAppError, IndexerError, ValueError) as exc:
+        await database.rollback()
+        binding = await _reload_binding(database, layer, owner_id, binding)
+        binding.index_status = "error"
+        failed = SyncJob(
+            layer=layer,
+            owner_user_id=owner_id,
+            revision_sha=revision,
+            status=SyncJobStatus.ERROR.value,
+            error=str(exc)[:255],
+            started_at=datetime.now(UTC),
+            finished_at=datetime.now(UTC),
+        )
+        database.add(failed)
+        await database.commit()
+        if isinstance(exc, IndexerError):
+            raise
+        if isinstance(exc, GitHubAppError):
+            raise IndexerError(502, exc.message) from exc
+        raise IndexerError(500, "index rebuild failed") from exc
+
+
+async def _reload_binding(
+    database: AsyncSession,
+    layer: str,
+    owner_id: uuid.UUID | None,
+    binding: SharedRepository | PersonalRepository,
+) -> SharedRepository | PersonalRepository:
+    if layer == NoteLayer.SHARED.value:
+        row = await database.get(SharedRepository, SHARED_SINGLETON_ID)
+        return row or binding
+    row = await database.scalar(
+        select(PersonalRepository).where(PersonalRepository.user_id == owner_id)
+    )
+    return row or binding
+
+
+async def _delete_layer(database: AsyncSession, layer: str, owner_id: uuid.UUID | None) -> None:
+    ids = select(NoteIndex.id).where(
+        NoteIndex.layer == layer,
+        NoteIndex.owner_user_id == owner_id,
+    )
+    await database.execute(delete(NoteLink).where(NoteLink.source_id.in_(ids)))
+    await database.execute(delete(NoteTag).where(NoteTag.note_id.in_(ids)))
+    await database.execute(
+        delete(NoteIndex).where(NoteIndex.layer == layer, NoteIndex.owner_user_id == owner_id)
+    )
+
+
+async def _prune_sync_jobs(database: AsyncSession) -> None:
+    total = await database.scalar(select(func.count()).select_from(SyncJob))
+    if total is None or total <= 20:
+        return
+    oldest = (
+        await database.scalars(
+            select(SyncJob.id).order_by(SyncJob.created_at.asc()).limit(total - 20)
+        )
+    ).all()
+    if oldest:
+        await database.execute(delete(SyncJob).where(SyncJob.id.in_(oldest)))
+
+
+async def load_graph(
+    database: AsyncSession,
+    *,
+    layer: str,
+    owner_id: uuid.UUID | None,
+    revision: str,
+    limit: int,
+    center: str | None,
+    depth: int,
+) -> dict[str, object]:
+    notes = (
+        await database.scalars(
+            select(NoteIndex)
+            .where(
+                NoteIndex.layer == layer,
+                NoteIndex.owner_user_id == owner_id,
+                NoteIndex.revision_sha == revision,
+            )
+            .order_by(NoteIndex.path)
+        )
+    ).all()
+    if not notes:
+        return {
+            "layer": layer,
+            "index_status": "empty",
+            "truncated": False,
+            "nodes": [],
+            "edges": [],
+        }
+
+    note_ids = [note.id for note in notes]
+    links = (
+        await database.scalars(select(NoteLink).where(NoteLink.source_id.in_(note_ids)))
+    ).all()
+    by_id = {note.id: note for note in notes}
+    adjacency: dict[str, set[str]] = {note.path: set() for note in notes}
+    for link in links:
+        source = by_id.get(link.source_id)
+        if source is None:
+            continue
+        if link.target_id and link.target_id in by_id:
+            adjacency[source.path].add(by_id[link.target_id].path)
+            adjacency[by_id[link.target_id].path].add(source.path)
+
+    chosen = _bounded_paths([note.path for note in notes], adjacency, center, depth, limit)
+    truncated = len(notes) > len(chosen)
+    chosen_notes = [note for note in notes if note.path in chosen]
+    chosen_ids = {note.id for note in chosen_notes}
+    tag_map = await _tags_for(database, chosen_ids)
+    linked_targets = {link.source_id for link in links} | {
+        link.target_id for link in links if link.target_id is not None
+    }
+    nodes = []
+    for note in chosen_notes:
+        nodes.append(
+            {
+                "path": note.path,
+                "title": note.title,
+                "tags": tag_map.get(note.id, []),
+                "isolated": note.id not in linked_targets,
+                "unresolved": False,
+            }
+        )
+    edges = []
+    unresolved_nodes: dict[str, str] = {}
+    for link in links:
+        source = by_id.get(link.source_id)
+        if source is None or source.path not in chosen:
+            continue
+        if link.unresolved or link.target_id is None:
+            node_id = f"unresolved:{link.target_raw}"
+            unresolved_nodes[node_id] = link.target_raw
+            edges.append(
+                {
+                    "source": source.path,
+                    "target": node_id,
+                    "type": link.link_type,
+                    "unresolved": True,
+                }
+            )
+            continue
+        target = by_id.get(link.target_id)
+        if target is None or target.path not in chosen:
+            continue
+        edges.append(
+            {
+                "source": source.path,
+                "target": target.path,
+                "type": link.link_type,
+                "unresolved": False,
+            }
+        )
+    for node_id, title in unresolved_nodes.items():
+        nodes.append(
+            {
+                "path": node_id,
+                "title": title,
+                "tags": [],
+                "isolated": False,
+                "unresolved": True,
+            }
+        )
+    return {
+        "layer": layer,
+        "index_status": "current",
+        "truncated": truncated,
+        "nodes": nodes,
+        "edges": edges,
+    }
+
+
+def _bounded_paths(
+    paths: list[str],
+    adjacency: dict[str, set[str]],
+    center: str | None,
+    depth: int,
+    limit: int,
+) -> set[str]:
+    if center and center in adjacency:
+        seen = {center}
+        frontier = {center}
+        for _ in range(max(depth, 0)):
+            nxt: set[str] = set()
+            for node in frontier:
+                nxt.update(adjacency.get(node, set()))
+            nxt -= seen
+            if not nxt:
+                break
+            seen.update(nxt)
+            frontier = nxt
+            if len(seen) >= limit:
+                break
+        chosen = sorted(seen)[:limit]
+        return set(chosen)
+    return set(paths[:limit])
+
+
+async def _tags_for(database: AsyncSession, note_ids: set[uuid.UUID]) -> dict[uuid.UUID, list[str]]:
+    if not note_ids:
+        return {}
+    rows = (
+        await database.execute(
+            select(NoteTag.note_id, Tag.name)
+            .join(Tag, Tag.id == NoteTag.tag_id)
+            .where(NoteTag.note_id.in_(note_ids))
+        )
+    ).all()
+    result: dict[uuid.UUID, list[str]] = {}
+    for note_id, name in rows:
+        result.setdefault(note_id, []).append(name)
+    return result

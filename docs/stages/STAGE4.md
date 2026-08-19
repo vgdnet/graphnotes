@@ -1,6 +1,6 @@
 # Stage 4 - Take from shared / ZIP fallback
 
-Status: CURRENT
+Status: DONE
 Branch: `feature/04-markdown-import`
 Depends on: accepted Stage 3
 Product model: ADR-007, ADR-008

@@ -21,6 +21,7 @@ type RepositoryStatus = {
   name?: string | null;
   status: string;
   has_content: boolean;
+  index_status?: string;
   updated_at?: string | null;
 };
 
@@ -53,6 +54,29 @@ type IngestReport = {
   conflicted: string[];
   warnings: string[];
   revision: string | null;
+};
+
+type GraphNode = {
+  path: string;
+  title: string;
+  tags: string[];
+  isolated: boolean;
+  unresolved: boolean;
+};
+
+type GraphEdge = {
+  source: string;
+  target: string;
+  type: string;
+  unresolved: boolean;
+};
+
+type GraphResponse = {
+  layer: string;
+  index_status: string;
+  truncated: boolean;
+  nodes: GraphNode[];
+  edges: GraphEdge[];
 };
 
 function sharedLabel(status: RepositoryStatus | null): string {
@@ -93,6 +117,8 @@ export function App() {
   const [selectedPaths, setSelectedPaths] = useState<string[]>([]);
   const [openNote, setOpenNote] = useState<NoteDetail | null>(null);
   const [report, setReport] = useState<IngestReport | null>(null);
+  const [sharedGraph, setSharedGraph] = useState<GraphResponse | null>(null);
+  const [personalGraph, setPersonalGraph] = useState<GraphResponse | null>(null);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -210,6 +236,56 @@ export function App() {
       .catch(() => undefined);
     return () => controller.abort();
   }, [user, repository?.personal?.connected, repository?.personal?.updated_at]);
+
+  useEffect(() => {
+    if (!repository?.shared.connected) {
+      setSharedGraph(null);
+      return;
+    }
+    const controller = new AbortController();
+    void fetch("/api/graph/shared", { signal: controller.signal })
+      .then(async (response) => {
+        if (!response.ok) throw new Error(await readError(response));
+        return (await response.json()) as GraphResponse;
+      })
+      .then(setSharedGraph)
+      .catch(() => undefined);
+    return () => controller.abort();
+  }, [repository?.shared.connected, repository?.shared.updated_at, repository?.shared.index_status]);
+
+  useEffect(() => {
+    if (!user || !repository?.personal?.connected) {
+      setPersonalGraph(null);
+      return;
+    }
+    const controller = new AbortController();
+    void fetch("/api/graph/personal", { signal: controller.signal })
+      .then(async (response) => {
+        if (!response.ok) throw new Error(await readError(response));
+        return (await response.json()) as GraphResponse;
+      })
+      .then(setPersonalGraph)
+      .catch(() => undefined);
+    return () => controller.abort();
+  }, [user, repository?.personal?.connected, repository?.personal?.updated_at, report?.revision]);
+
+  async function rebuildSharedIndex() {
+    setSubmitting(true);
+    setError("");
+    try {
+      const response = await fetch("/api/index/rebuild", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ target: "shared" }),
+      });
+      if (!response.ok) throw new Error(await readError(response));
+      setSharedGraph((await response.json()) as GraphResponse);
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "Ошибка соединения");
+    } finally {
+      setSubmitting(false);
+    }
+  }
 
   async function connectShared() {
     setSubmitting(true);
@@ -538,6 +614,57 @@ export function App() {
               )}
             </section>
           )}
+          {repository?.shared.connected && (
+            <section className="notes-panel" aria-labelledby="graph-heading">
+              <div>
+                <p className="eyebrow">Граф</p>
+                <h2 id="graph-heading">Связи ризомы</h2>
+                <p className="admin-panel__hint">
+                  Индекс собирается из git. После пуша из Obsidian обновите страницу — GraphNotes подхватит новый коммит.
+                  {sharedGraph?.truncated ? " Показана часть узлов." : ""}
+                </p>
+              </div>
+              {user.role === "admin" && (
+                <button className="button button--quiet" type="button" disabled={submitting} onClick={() => void rebuildSharedIndex()}>
+                  Пересобрать индекс
+                </button>
+              )}
+              <div className="notes-grid">
+                <div>
+                  <h3>Общая ризома</h3>
+                  <ul className="note-list">
+                    {(sharedGraph?.nodes ?? []).map((node) => (
+                      <li key={node.path}>
+                        <span className="note-link">
+                          <strong>{node.title}</strong>
+                          <small>{node.unresolved ? "нет заметки" : node.path}{node.isolated ? " · отдельно" : ""}</small>
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                  <p className="ingest-report">
+                    {(sharedGraph?.edges ?? []).filter((edge) => !edge.unresolved).length} связей
+                    · {(sharedGraph?.edges ?? []).filter((edge) => edge.unresolved).length} неразрешённых
+                  </p>
+                </div>
+                {personalGraph && (
+                  <div>
+                    <h3>Ваш git</h3>
+                    <ul className="note-list">
+                      {personalGraph.nodes.map((node) => (
+                        <li key={node.path}>
+                          <span className="note-link">
+                            <strong>{node.title}</strong>
+                            <small>{node.unresolved ? "нет заметки" : node.path}</small>
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            </section>
+          )}
           {user.role === "admin" && (
             <section className="admin-panel" aria-labelledby="admin-heading">
               <div>
@@ -597,6 +724,12 @@ export function App() {
               {sharedLabel(repository?.shared ?? null)} Markdown остаётся в git.
               GraphNotes показывает общую ризому и помогает взять знания себе.
             </p>
+            {sharedGraph && sharedGraph.nodes.length > 0 && (
+              <p className="summary">
+                В общей ризоме {sharedGraph.nodes.filter((node) => !node.unresolved).length} заметок
+                и {sharedGraph.edges.filter((edge) => !edge.unresolved).length} связей.
+              </p>
+            )}
             <div className="connection-line" aria-hidden="true"><span /><span /><span /></div>
           </div>
 

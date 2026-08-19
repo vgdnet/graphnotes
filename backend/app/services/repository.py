@@ -76,6 +76,16 @@ def apply_error(target: SharedRepository | PersonalRepository, error: GitHubAppE
     target.observed_at = datetime.now(UTC)
 
 
+def _index_status_label(observed_sha: str | None, indexed_sha: str | None, index_status: str) -> str:
+    if not observed_sha:
+        return "empty"
+    if index_status == "error":
+        return "error"
+    if indexed_sha == observed_sha:
+        return "current"
+    return "updating"
+
+
 def public_status(row: SharedRepository | PersonalRepository | None) -> dict[str, object] | None:
     if row is None:
         return None
@@ -85,6 +95,11 @@ def public_status(row: SharedRepository | PersonalRepository | None) -> dict[str
         "name": row.name,
         "status": STATUS_LABELS.get(row.sync_status, row.sync_status),
         "has_content": bool(row.observed_sha),
+        "index_status": _index_status_label(
+            row.observed_sha,
+            getattr(row, "indexed_sha", None),
+            getattr(row, "index_status", "pending"),
+        ),
         "updated_at": row.observed_at,
     }
 

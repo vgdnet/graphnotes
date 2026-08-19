@@ -37,6 +37,12 @@ class FakeGitHubClient:
             raise GitHubAppError("not_found", "repository is not visible to GraphNotes")
         return self.repos[key]
 
+    async def list_markdown_files(self, owner: str, name: str, ref: str) -> list[str]:
+        return []
+
+    async def get_file(self, owner: str, name: str, path: str, ref: str) -> str:
+        raise GitHubAppError("not_found", "repository is not visible to GraphNotes")
+
 
 def _install_fake(monkeypatch: MonkeyPatch, repos: dict[str, GitHubRepoSnapshot]) -> FakeGitHubClient:
     client = FakeGitHubClient(repos)

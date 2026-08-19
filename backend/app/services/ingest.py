@@ -237,6 +237,12 @@ async def take_from_shared(
         )
         await database.commit()
         await database.refresh(personal)
+        try:
+            from app.services.index import IndexerError, rebuild_personal
+
+            await rebuild_personal(database, user.id, client, actor_user_id=user.id)
+        except IndexerError:
+            pass
 
     return {
         "accepted": accepted,
@@ -326,6 +332,12 @@ async def import_markdown(
         )
         await database.commit()
         await database.refresh(personal)
+        try:
+            from app.services.index import IndexerError, rebuild_personal
+
+            await rebuild_personal(database, user.id, client, actor_user_id=user.id)
+        except IndexerError:
+            pass
 
     return {
         "accepted": accepted,

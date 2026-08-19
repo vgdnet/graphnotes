@@ -1,6 +1,6 @@
 # Stage 5 - Revisioned Graph Engine
 
-Status: PLANNED
+Status: CURRENT
 Branch: `feature/05-graph-engine`
 Depends on: accepted Stage 4
 Product model: ADR-007, ADR-008. Index Markdown from the shared knowledge

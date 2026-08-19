@@ -17,6 +17,8 @@ class SharedRepository(Base):
     default_branch: Mapped[str] = mapped_column(String(255))
     html_url: Mapped[str] = mapped_column(String(500))
     observed_sha: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    indexed_sha: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    index_status: Mapped[str] = mapped_column(String(32), default="pending")
     observed_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
@@ -56,6 +58,8 @@ class PersonalRepository(Base):
     default_branch: Mapped[str] = mapped_column(String(255))
     html_url: Mapped[str] = mapped_column(String(500))
     observed_sha: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    indexed_sha: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    index_status: Mapped[str] = mapped_column(String(32), default="pending")
     observed_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,

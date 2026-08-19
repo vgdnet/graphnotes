@@ -29,6 +29,9 @@ class Settings(BaseSettings):
     ingest_max_path_depth: int = 8
     ingest_max_path_length: int = 180
     take_max_paths: int = 50
+    index_max_notes: int = 5000
+    graph_page_limit: int = 50
+    graph_page_max: int = 200
 
     model_config = SettingsConfigDict(
         env_file=PROJECT_ROOT / ".env",

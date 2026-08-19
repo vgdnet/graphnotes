@@ -8,6 +8,11 @@ from app.schemas.repository import (
     RepositoryStatusResponse,
 )
 from app.services.github import GitHubAppClient
+from app.services.index import (
+    IndexerError,
+    ensure_personal_current,
+    ensure_shared_current,
+)
 from app.services.repository import (
     SHARED_SINGLETON_ID,
     RepositoryBindError,
@@ -51,6 +56,16 @@ async def repository_status(
         personal = await refresh_personal(database, user.id, client)
     elif shared is None:
         shared = await database.get(SharedRepository, SHARED_SINGLETON_ID)
+    try:
+        await ensure_shared_current(database, client)
+        if user is not None:
+            await ensure_personal_current(database, user.id, client)
+        if shared is not None:
+            shared = await database.get(SharedRepository, SHARED_SINGLETON_ID)
+        if user is not None and personal is not None:
+            personal = await refresh_personal(database, user.id, client)
+    except IndexerError:
+        pass
     return RepositoryStatusResponse(
         shared=_shared_payload(shared),
         personal=_personal_payload(personal) if user is not None else None,
