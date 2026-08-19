@@ -124,30 +124,41 @@ Explicitly out of scope:
 - PR/merge workflow
 
 ## Stage 2 - Password Authentication
-Status: CURRENT / IN PROGRESS
+Status: DONE
 Branch: `feature/02-password-auth`
+Completed: 2026-08-19
+Tested integration revision: `c883b2fcae62cc5ceb5e85467399dacc45857e26`
+Primary authoring environment: `nord`
+Target integration environment: `rhizome-test` (`172.16.13.14`)
 
-MVP auth:
-- username/password
-- secure password hashing
-- access/refresh auth or secure session equivalent
-- `/me`
-- logout
+MVP auth delivered:
+- username/password with Argon2
+- opaque PostgreSQL-backed sessions
+- HttpOnly SameSite cookies; Secure disabled only for HTTP `rhizome-test`
+- `/me`, logout, registration always `user`
 - global hierarchical roles `user < editor < admin`
+- admin user list, role/blocking UI, bootstrap CLI, last-admin protection
+- audit events without authentication secrets
 
 Telegram remains future scope.
 
-Current implementation direction:
-- PostgreSQL-backed opaque sessions with only token hashes stored server-side
-- HttpOnly, SameSite cookies; Secure defaults on and is disabled explicitly
-  only for the HTTP-only `rhizome-test` environment
-- Argon2 password hashing and normalized unique usernames
+Observed on `rhizome-test` at the tested revision:
+- PASS: backend tests (`8 passed`)
+- PASS: frontend production build
+- PASS: Compose config; frontend LAN `8080`; backend loopback-only; no PostgreSQL host port
+- PASS: health, db health, frontend from `nord`
+- PASS: Alembic `0002_password_auth` upgrade/downgrade/re-upgrade
+- PASS: live register/login/logout/RBAC API flow from `nord`
+- leftover `0003_pre_git_notes` was downgraded and removed; notes table is gone
 
-Remaining before Stage 2 completion under PRODUCT_SPEC 1.3 / ADR-007:
-- exact-SHA migration/frontend/integration verification on `rhizome-test`
-- completion artifact `STAGE2_COMPLETED.md` after those checks
+See `docs/stages/STAGE2_COMPLETED.md`.
 
-Stage 2 application code on this branch already includes admin user management,
-bootstrap CLI, audit and RBAC tests; do not start Stage 3 implementation until
-the owner asks. Do not implement graphs, GitHub App, or note APIs while
-documenting ADR-008.
+Production deployment to `rhizome` remains deferred.
+
+## Stage 3 - GitHub Integration
+Status: PLANNED / ACCESS-GATED
+Branch: `feature/03-github-integration`
+
+Do not start until the owner supplies GitHub App installation, shared repository
+identifier, personal-remote binding choice, and webhook secret. Follow ADR-007
+and ADR-008.

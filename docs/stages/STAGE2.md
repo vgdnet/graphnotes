@@ -1,9 +1,11 @@
 # Stage 2 - Password Authentication
 
-Status: CURRENT
+Status: COMPLETED
 Branch: `feature/02-password-auth`
 Primary coding environment: `nord`
 Integration host: `rhizome-test` (`172.16.13.14`)
+Completed: 2026-08-19
+Tested revision: `c883b2fcae62cc5ceb5e85467399dacc45857e26`
 Product model: ADR-008 — account is required to connect git, take via UI,
 propose, and act as editor. Public clone of a public knowledge repository does
 not require a GraphNotes account.
