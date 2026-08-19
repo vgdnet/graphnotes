@@ -3,6 +3,7 @@
 Status: DONE
 Completed: 2026-08-19
 Branch: `feature/05-graph-engine`
+Tested integration revision: `eb09f5a4436a578edccd1a03d1c77668782fb4d8`
 Integration host: `rhizome-test` (`172.16.13.14`)
 
 Production deployment to `rhizome` (`172.16.13.13`) remains deferred.
@@ -38,6 +39,8 @@ layer only. Overlay of personal-to-shared links is Stage 6.
 - first live index at `65baa4f24d4ed11b459ff3f858d0d9baa729c773`: shared graph
   5 nodes, 22 edges, `index_status=current`
 - owner confirmed visible graph changes after Obsidian/git updates
+- close-out revision `eb09f5a4436a578edccd1a03d1c77668782fb4d8` adds incremental
+  rebuild, error/stale status, bounded queries and PRODUCT_SPEC 1.4
 - frontend LAN `172.16.13.14:8080`; backend loopback-only; no Postgres host port
 - webhook still unused on the LAN; refresh follows observed Git SHA
 

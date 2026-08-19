@@ -177,6 +177,7 @@ Owner-verified take-from-shared on `rhizome-test`: accepted 1, personal commit
 Status: DONE
 Branch: `feature/05-graph-engine`
 Completed: 2026-08-19
+Tested integration revision: `eb09f5a4436a578edccd1a03d1c77668782fb4d8`
 
 Owner-verified derived graph on `rhizome-test` (shared nodes/edges visible;
 refresh after git/Obsidian push). See `docs/stages/STAGE5_COMPLETED.md` and
