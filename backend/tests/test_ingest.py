@@ -1,4 +1,5 @@
 from dataclasses import dataclass, field
+import hashlib
 
 from httpx import ASGITransport, AsyncClient
 from pytest import MonkeyPatch
@@ -77,12 +78,19 @@ class MemoryGitHub:
     async def get_repository(self, owner: str, name: str) -> GitHubRepoSnapshot:
         return self._repo(owner, name).snapshot()
 
-    async def list_markdown_files(self, owner: str, name: str, ref: str) -> list[str]:
+    async def list_markdown_blobs(self, owner: str, name: str, ref: str) -> dict[str, str]:
         repo = self._repo(owner, name)
         if repo.sha is None:
             raise GitHubAppError("empty", "repository has no commits yet")
         files = repo.files_at(ref)
-        return sorted(path for path in files if path.lower().endswith(".md"))
+        return {
+            path: hashlib.sha1(text.encode("utf-8")).hexdigest()
+            for path, text in files.items()
+            if path.lower().endswith(".md")
+        }
+
+    async def list_markdown_files(self, owner: str, name: str, ref: str) -> list[str]:
+        return sorted(await self.list_markdown_blobs(owner, name, ref))
 
     async def get_file(self, owner: str, name: str, path: str, ref: str) -> str:
         repo = self._repo(owner, name)

@@ -86,7 +86,7 @@ class GitHubAppClient:
                 private=bool(repo_response.get("private")),
             )
 
-    async def list_markdown_files(self, owner: str, name: str, ref: str) -> list[str]:
+    async def list_markdown_blobs(self, owner: str, name: str, ref: str) -> dict[str, str]:
         token = await self._installation_token()
         async with httpx.AsyncClient(timeout=self._timeout) as client:
             commit = await self._get(
@@ -109,17 +109,19 @@ class GitHubAppClient:
             raise GitHubAppError("error", "repository tree is too large to list")
         entries = payload.get("tree")
         if not isinstance(entries, list):
-            return []
-        paths: list[str] = []
+            return {}
+        blobs: dict[str, str] = {}
         for entry in entries:
-            if not isinstance(entry, dict):
-                continue
-            if entry.get("type") != "blob":
+            if not isinstance(entry, dict) or entry.get("type") != "blob":
                 continue
             path = str(entry.get("path") or "")
-            if path.lower().endswith(".md") and not path.startswith("."):
-                paths.append(path)
-        return paths
+            sha = str(entry.get("sha") or "")
+            if path.lower().endswith(".md") and not path.startswith(".") and sha:
+                blobs[path] = sha
+        return blobs
+
+    async def list_markdown_files(self, owner: str, name: str, ref: str) -> list[str]:
+        return sorted(await self.list_markdown_blobs(owner, name, ref))
 
     async def get_file(self, owner: str, name: str, path: str, ref: str) -> str:
         token = await self._installation_token()

@@ -149,6 +149,7 @@ export function App() {
   const [personalNotes, setPersonalNotes] = useState<NoteProjection[]>([]);
   const [personalRevision, setPersonalRevision] = useState<string | null>(null);
   const [differences, setDifferences] = useState<DifferItem[]>([]);
+  const [differLoading, setDifferLoading] = useState(false);
   const [proposedPaths, setProposedPaths] = useState<string[]>([]);
   const [proposals, setProposals] = useState<Proposal[]>([]);
   const [openProposal, setOpenProposal] = useState<Proposal | null>(null);
@@ -281,16 +282,25 @@ export function App() {
   useEffect(() => {
     if (!user || !repository?.shared.connected || !repository.personal?.connected) {
       setDifferences([]);
+      setDifferLoading(false);
       return;
     }
     const controller = new AbortController();
+    setDifferLoading(true);
     void fetch("/api/differ", { signal: controller.signal })
       .then(async (response) => {
         if (!response.ok) throw new Error(await readError(response));
         return (await response.json()) as DifferResponse;
       })
       .then((body) => setDifferences(body.differences))
-      .catch(() => undefined);
+      .catch((requestError: unknown) => {
+        if (requestError instanceof DOMException && requestError.name === "AbortError") return;
+        setDifferences([]);
+        setError(requestError instanceof Error ? requestError.message : "Не удалось сравнить git");
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setDifferLoading(false);
+      });
     return () => controller.abort();
   }, [
     user,
@@ -718,7 +728,9 @@ export function App() {
                 </p>
               </div>
               {error && <p className="form-error" role="alert">{error}</p>}
-              {differences.length === 0 ? (
+              {differLoading ? (
+                <p className="admin-panel__hint" role="status">Сравниваем ваш git с общей ризомой…</p>
+              ) : differences.length === 0 ? (
                 <p className="admin-panel__hint">Отличий нет — в общую предлагать нечего.</p>
               ) : (
                 <ul className="note-list">
@@ -749,7 +761,7 @@ export function App() {
               <button
                 className="button button--primary"
                 type="button"
-                disabled={submitting || proposedPaths.length === 0}
+                disabled={submitting || differLoading || proposedPaths.length === 0}
                 onClick={() => void proposeSelected()}
               >
                 Предложить в общую

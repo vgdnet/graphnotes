@@ -296,8 +296,10 @@ async def test_differ_lists_one_way_and_archive_is_published_zip(
 
     author = await _second("efimov")
     await _connect_pair(author, "vgdnet/guide_psy")
+    reads_before = github.file_reads
     differ = await author.get("/differ")
     assert differ.status_code == 200
+    assert github.file_reads == reads_before
     body = {item["path"]: item["kind"] for item in differ.json()["differences"]}
     assert body["already.md"] == "added"
     assert body["card.md"] == "changed"
