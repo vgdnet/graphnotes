@@ -81,6 +81,7 @@ type DifferItem = {
 };
 
 type DifferResponse = { differences: DifferItem[] };
+type ProposalListResponse = { proposals: Proposal[] };
 
 function differKindLabel(kind: string): string {
   if (kind === "added") return "нет в общей";
