@@ -5,10 +5,14 @@ import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
+from app.core.config import settings
 from app.db.base import Base
 from app.db.session import get_db_session
 from app.main import app
 from app import models  # noqa: F401
+
+# Tests use http://testserver. Secure cookies would be dropped on HTTP.
+settings.cookie_secure = False
 
 
 @pytest_asyncio.fixture
