@@ -1,5 +1,15 @@
 .env
 .venv/
+
+# Agent briefing kept on nord, not published to GitHub
+AGENTS.md
+README_FIRST.md
+START_CODEX.md
+START_TECHNICAL_OBSERVER.md
+START_OVERNIGHT_RELEASE_WORKER.md
+docs/context/PRODUCT_OBSERVER_CONTEXT.md
+docs/context/TECHNICAL_OBSERVER_CONTEXT.md
+
 __pycache__/
 *.py[cod]
 .pytest_cache/
