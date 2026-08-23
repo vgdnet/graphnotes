@@ -1,8 +1,11 @@
 # Stage 4 take / ingest operations
 
-Take-from-shared writes Markdown into the connected personal Git remote through
-the GitHub App. ZIP / one `.md` is the same write path, as fallback only.
+Shared Markdown is obtained by ZIP download of the published revision
+(`GET /api/shared/archive`) or by public clone. ZIP / one `.md` **upload**
+remains fallback ingest into the connected personal git, not the download
+path.
 
+The take-from-shared API below is the historical write into the user's git.
 Canonical note bodies are not stored in PostgreSQL. The APIs list and show
 notes by reading Git.
 

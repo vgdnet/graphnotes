@@ -1,12 +1,37 @@
 # GraphNotes
 
-GraphNotes is a shared-rhizome layer over Markdown in Git (see
-`docs/product/PRODUCT_SPEC.md` and ADR-008). Stage 1 in this tree is the
-application skeleton; later product features follow the staged roadmap.
+GraphNotes indexes Markdown from Git and shows one shared knowledge graph.
+People write notes in their own git (often Obsidian). Editors merge selected
+notes into the shared repository. PostgreSQL holds a derived index, not the
+canonical note bodies.
 
-## Backend development
+This repository is licensed under GNU Affero General Public License v3.0.
+See `LICENSE`.
 
-Requires Python 3.12.
+## Requirements
+
+- Docker and Docker Compose (full stack)
+- Python 3.12 (backend development without Compose)
+- a GitHub App if you connect knowledge repositories (see `docs/deployment/STAGE3_GITHUB.md`)
+
+## Run the stack
+
+Copy `.env.example` to `.env` and replace placeholder secrets. Do not commit
+`.env` or `.secrets/`.
+
+```bash
+cp .env.example .env
+docker compose config
+docker compose up --build
+```
+
+Open `http://127.0.0.1:8080`. Compose binds the frontend and backend to
+loopback only. PostgreSQL has no host port. Put Nginx (or another proxy) in
+front of `http://127.0.0.1:8080` if you need a public URL.
+
+Operator notes, in order, are in [`docs/deployment/`](docs/deployment/README.md).
+
+## Backend only
 
 ```bash
 cd backend
@@ -15,28 +40,7 @@ python -m venv .venv
 .venv/bin/uvicorn app.main:app --reload
 ```
 
-The application exposes:
+- `GET /health` — process health
+- `GET /health/db` — PostgreSQL connectivity
 
-- `GET /health` for process health;
-- `GET /health/db` for a real PostgreSQL connectivity check.
-
-Configuration uses `GRAPHNOTES_`-prefixed environment variables. Copy
-`.env.example` to `.env` for local development and replace placeholder values.
-
-## Full stack
-
-Docker Compose runs PostgreSQL, the backend, and the frontend. PostgreSQL has no
-published host port; application ports bind to loopback only.
-
-```bash
-cp .env.example .env
-# replace the placeholder password in both matching variables
-docker compose config
-docker compose up --build
-```
-
-Open `http://127.0.0.1:8080`. The page requests `/api/health` through the
-frontend proxy and displays the backend's real state.
-
-Deployment by Git or SSH copy is documented in
-`docs/deployment/STAGE1_DEPLOYMENT.md`.
+Configuration uses `GRAPHNOTES_`-prefixed variables from `.env`.

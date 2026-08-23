@@ -2,10 +2,15 @@
 
 Differ compares the caller's connected git to the **published** shared rhizome
 and lists what can be offered: paths missing from shared, or paths whose
-content differs. The user selects those rows and creates a proposal. GraphNotes
-copies only those files onto a hidden branch of the shared repository. The
-personal git is not rewritten. After the editor accepts and the index catches
-up, those paths disappear from Differ.
+content differs. Comparison is derived from Git trees: Markdown paths are
+compared by blob SHA. Differ does not download every note body and does not
+read canonical note bodies from PostgreSQL. Files that exist only in shared
+are not Differ results.
+
+The user selects those rows and creates a proposal. GraphNotes copies only
+those files onto a hidden branch of the shared repository. The personal git
+is not rewritten. After the editor accepts and the index catches up, those
+paths disappear from Differ.
 
 `Скачать` is a ZIP of the same published shared Markdown the graph shows. It is
 not a GraphNotes commit into the user's git.
@@ -30,4 +35,4 @@ POST /api/proposals/{id}/rollback
 Reject, return and rollback require a reason. Authors cannot decide on their
 own proposal, including admin authors.
 
-Alembic revision: `0005_proposals`. See ADR-009.
+Alembic revision: `0005_proposals`.

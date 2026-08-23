@@ -1,7 +1,7 @@
 # Stage 5 graph index
 
-The derived index lives in PostgreSQL. Canonical Markdown stays in Git
-(ADR-008). After a push from Obsidian + obsidian-git, open or refresh
+The derived index lives in PostgreSQL. Canonical Markdown stays in Git.
+After a push from Obsidian + obsidian-git, open or refresh
 GraphNotes; `/api/repository/status` and `/api/graph/*` compare the observed
 Git SHA with the indexed SHA and rebuild when they differ.
 
@@ -13,9 +13,10 @@ Stage 6.
 ## Rebuild
 
 - Full rebuild reads every Markdown file at the observed revision.
-- Incremental rebuild, used after take/import, fetches only new and requested
-  paths, reconstructs unchanged notes from the current index, then re-resolves
-  links. Incremental result must equal a clean full rebuild.
+- Incremental rebuild, used after historical take-from-shared or ZIP/MD upload
+  fallback, fetches only new and requested paths, reconstructs unchanged notes
+  from the current index, then re-resolves links. Incremental result must
+  equal a clean full rebuild.
 - Each layer keeps only the current revision. Previous projections are deleted.
 - At most 20 `sync_jobs` rows are retained.
 
