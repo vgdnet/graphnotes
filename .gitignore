@@ -1,19 +1,13 @@
 .env
 .venv/
 
-# Local working notes: TZ, ADRs, stage journals, agent briefing
+# Local working notes stay on nord (TZ, ADRs, stage journals, agent briefing)
 AGENTS.md
 README_FIRST.md
-START_CODEX.md
-START_TECHNICAL_OBSERVER.md
-START_OVERNIGHT_RELEASE_WORKER.md
+START_*.md
 .cursor/
-docs/product/
-docs/context/
-docs/stages/
-docs/decisions/
-docs/reviews/
-docs/releases/
+docs/*
+!docs/deployment/
 
 __pycache__/
 *.py[cod]
