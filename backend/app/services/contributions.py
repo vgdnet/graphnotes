@@ -18,6 +18,7 @@ from app.services.markdown import (
     resolve_link_target,
 )
 from app.services.proposal import reconcile_proposals
+from app.services.closed_corpus import closed_paths_for_user
 from app.services.repository import SHARED_SINGLETON_ID, refresh_personal, refresh_shared
 
 
@@ -445,6 +446,51 @@ async def get_contributions_me(
         "proposals": proposals_payload,
         "stats": _stats(notes, edges),
         "review": review,
+    }
+
+
+async def get_user_card(
+    database: AsyncSession,
+    *,
+    target: User,
+    viewer: User | None,
+    client: GitHubAppClient | None = None,
+) -> dict[str, object]:
+    body = await get_contributions_me(
+        database,
+        user=target,
+        client=client,
+        refresh=viewer is not None and viewer.id == target.id,
+    )
+    accepted = [note for note in body["notes"] if note["state"] == "accepted"]
+    is_self = viewer is not None and viewer.id == target.id
+    stats = body["stats"] if is_self else {
+        "notes": len(accepted),
+        "added": 0,
+        "accepted": len(accepted),
+        "links": 0,
+        "links_accepted": body["stats"]["links_accepted"],
+    }
+    closed_count = None
+    if is_self:
+        closed_count = len(await closed_paths_for_user(database, target.id))
+    return {
+        "user": {
+            "id": target.id,
+            "username": target.username,
+            "display_name": target.display_name,
+            "role": target.role,
+            "is_author": target.is_author,
+        },
+        "self": is_self,
+        "stats": stats,
+        "notes": accepted if not is_self else [
+            {"path": note["path"], "title": note["title"], "state": note["state"]}
+            for note in body["notes"]
+            if note["state"] != "personal" or is_self
+        ],
+        "review": body["review"] if is_self else None,
+        "closed_count": closed_count,
     }
 
 

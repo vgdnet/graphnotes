@@ -85,3 +85,26 @@ class UserContributionsRow(BaseModel):
 
 class AdminContributionsResponse(BaseModel):
     users: list[UserContributionsRow]
+
+
+class UserCardPerson(BaseModel):
+    id: UUID
+    username: str
+    display_name: str
+    role: str
+    is_author: bool
+
+
+class UserCardNote(BaseModel):
+    path: str
+    title: str
+    state: ContributionState
+
+
+class UserCardResponse(BaseModel):
+    user: UserCardPerson
+    self: bool
+    stats: ContributionStats
+    notes: list[UserCardNote]
+    review: ReviewStats | None = None
+    closed_count: int | None = None
