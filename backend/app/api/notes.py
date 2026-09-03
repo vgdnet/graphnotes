@@ -1,8 +1,15 @@
 from typing import NoReturn
+from uuid import UUID
 
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 
-from app.api.dependencies import CurrentAuthor, CurrentUser, DatabaseSession
+from app.api.dependencies import (
+    CurrentAuthor,
+    CurrentEditor,
+    CurrentUser,
+    DatabaseSession,
+    OptionalUser,
+)
 from app.schemas.notes import (
     ClosePathRequest,
     ClosedPathListResponse,
@@ -11,6 +18,15 @@ from app.schemas.notes import (
     NoteListResponse,
     UploadHistoryResponse,
 )
+from app.schemas.comments import (
+    CommentCreateRequest,
+    CommentItem,
+    CommentListResponse,
+    CommentModerateRequest,
+)
+from app.schemas.provenance import NoteFeedResponse
+from app.services.comments import CommentError, create_comment, list_comments, moderate_comment
+from app.services.provenance import list_note_feed
 from app.services.github import GitHubAppClient
 from app.services.closed_corpus import (
     ClosedCorpusError,
@@ -46,6 +62,64 @@ async def shared_notes(database: DatabaseSession) -> NoteListResponse:
     except IngestError as exc:
         _raise(exc)
     return NoteListResponse.model_validate(payload)
+
+
+@router.get("/shared/notes/{note_path:path}/feed", response_model=NoteFeedResponse)
+async def shared_note_feed(note_path: str, database: DatabaseSession) -> NoteFeedResponse:
+    payload = await list_note_feed(database, note_path)
+    return NoteFeedResponse.model_validate(payload)
+
+
+@router.get("/shared/notes/{note_path:path}/comments", response_model=CommentListResponse)
+async def shared_note_comments(
+    note_path: str,
+    database: DatabaseSession,
+    viewer: OptionalUser,
+) -> CommentListResponse:
+    try:
+        payload = await list_comments(database, note_path, viewer)
+    except CommentError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+    return CommentListResponse.model_validate(payload)
+
+
+@router.post("/shared/notes/{note_path:path}/comments", response_model=CommentItem)
+async def add_shared_note_comment(
+    note_path: str,
+    payload: CommentCreateRequest,
+    user: CurrentUser,
+    database: DatabaseSession,
+) -> CommentItem:
+    try:
+        body = await create_comment(
+            database,
+            user=user,
+            path=note_path,
+            body=payload.body,
+            client=_client(),
+        )
+    except CommentError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+    return CommentItem.model_validate(body)
+
+
+@router.post("/comments/{comment_id}/moderate", response_model=CommentItem)
+async def moderate_shared_comment(
+    comment_id: UUID,
+    payload: CommentModerateRequest,
+    editor: CurrentEditor,
+    database: DatabaseSession,
+) -> CommentItem:
+    try:
+        body = await moderate_comment(
+            database,
+            editor=editor,
+            comment_id=comment_id,
+            status=payload.status,
+        )
+    except CommentError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+    return CommentItem.model_validate(body)
 
 
 @router.get("/shared/notes/{note_path:path}", response_model=NoteDetail)

@@ -403,6 +403,11 @@ async def _approve(
     row.previous_sha = shared.observed_sha
     await database.commit()
     await database.refresh(row)
+    from app.services.provenance import record_publication_events, snapshot_shared_revision
+
+    before_paths, before_edges = await snapshot_shared_revision(
+        client, shared.owner, shared.name, shared.observed_sha
+    )
     try:
         merged = await client.merge_branch(
             shared.owner,
@@ -432,6 +437,9 @@ async def _approve(
             row.status = ProposalStatus.PUBLISHED.value
             row.published_at = datetime.now(UTC)
             row.error = None
+            await record_publication_events(
+                database, row, before_paths=before_paths, before_edges=before_edges
+            )
         else:
             row.status = ProposalStatus.FAILED.value
             row.error = "index rebuild did not reach the merged revision"

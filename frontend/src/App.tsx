@@ -145,6 +145,31 @@ type ContributionsResponse = {
   review: ReviewStats | null;
 };
 type ContributionUserRef = { id: string; username: string; display_name: string; role: string };
+type NoteFeedEvent = {
+  id: string;
+  kind: string;
+  path: string;
+  other_path: string | null;
+  proposal_id: string | null;
+  created_at: string;
+  actor: { id: string; username: string; display_name: string } | null;
+};
+type NoteCommentItem = {
+  id: string;
+  path: string;
+  body: string;
+  status: string;
+  created_at: string;
+  author: { id: string; username: string; display_name: string };
+};
+type UserCard = {
+  user: { id: string; username: string; display_name: string; role: string; is_author: boolean };
+  self: boolean;
+  stats: ContributionStats;
+  notes: { path: string; title: string; state: ContributionState }[];
+  review: ReviewStats | null;
+  closed_count: number | null;
+};
 type AdminContributionsResponse = {
   users: {
     user: ContributionUserRef;
@@ -280,6 +305,10 @@ export function App() {
   const [graphLoading, setGraphLoading] = useState(false);
   const [graphCenter, setGraphCenter] = useState<string | null>(null);
   const [authorContract, setAuthorContract] = useState<AuthorContract | null>(null);
+  const [userCard, setUserCard] = useState<UserCard | null>(null);
+  const [noteFeed, setNoteFeed] = useState<NoteFeedEvent[]>([]);
+  const [noteComments, setNoteComments] = useState<NoteCommentItem[]>([]);
+  const [commentDraft, setCommentDraft] = useState("");
 
   useEffect(() => {
     const controller = new AbortController();
@@ -450,6 +479,22 @@ export function App() {
 
   useEffect(() => {
     if (!user) {
+      setUserCard(null);
+      return;
+    }
+    const controller = new AbortController();
+    void fetch(`/api/users/${user.id}/card`, { signal: controller.signal })
+      .then(async (response) => {
+        if (!response.ok) throw new Error(await readError(response));
+        return (await response.json()) as UserCard;
+      })
+      .then(setUserCard)
+      .catch(() => undefined);
+    return () => controller.abort();
+  }, [user, uploadStamp, repository?.shared.updated_at]);
+
+  useEffect(() => {
+    if (!user) {
       setProposals([]);
       return;
     }
@@ -529,6 +574,8 @@ export function App() {
     if (path.startsWith("unresolved:")) return;
     if (path.startsWith("locked:")) {
       const title = path.slice("locked:".length);
+      setNoteFeed([]);
+      setNoteComments([]);
       setOpenNote({
         path,
         title,
@@ -554,7 +601,19 @@ export function App() {
     try {
       const response = await fetch(endpoint);
       if (!response.ok) throw new Error(await readError(response));
-      setOpenNote((await response.json()) as NoteDetail);
+      const detail = (await response.json()) as NoteDetail;
+      setOpenNote(detail);
+      if (origin !== "personal" && !detail.locked) {
+        const [feed, comments] = await Promise.all([
+          fetch(`/api/shared/notes/${encodeURI(filePath)}/feed`),
+          fetch(`/api/shared/notes/${encodeURI(filePath)}/comments`),
+        ]);
+        if (feed.ok) setNoteFeed(((await feed.json()) as { events: NoteFeedEvent[] }).events);
+        if (comments.ok) setNoteComments(((await comments.json()) as { comments: NoteCommentItem[] }).comments);
+      } else {
+        setNoteFeed([]);
+        setNoteComments([]);
+      }
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "Ошибка соединения");
     } finally {
@@ -759,6 +818,8 @@ export function App() {
     try {
       const response = await fetch(`/api/personal/notes/${encodeURI(path)}`);
       if (!response.ok) throw new Error(await readError(response));
+      setNoteFeed([]);
+      setNoteComments([]);
       setOpenNote((await response.json()) as NoteDetail);
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "Ошибка соединения");
@@ -905,6 +966,60 @@ export function App() {
       setUser((await response.json()) as User);
       setDifferences([]);
       setProposedPaths([]);
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "Ошибка соединения");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function submitComment(path: string) {
+    if (!commentDraft.trim()) return;
+    setSubmitting(true);
+    setError("");
+    try {
+      const response = await fetch(`/api/shared/notes/${encodeURI(path)}/comments`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ body: commentDraft }),
+      });
+      if (!response.ok) throw new Error(await readError(response));
+      setCommentDraft("");
+      const listed = await fetch(`/api/shared/notes/${encodeURI(path)}/comments`);
+      if (listed.ok) setNoteComments(((await listed.json()) as { comments: NoteCommentItem[] }).comments);
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "Ошибка соединения");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function moderateComment(id: string, status: "approved" | "rejected", path: string) {
+    setSubmitting(true);
+    setError("");
+    try {
+      const response = await fetch(`/api/comments/${id}/moderate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status }),
+      });
+      if (!response.ok) throw new Error(await readError(response));
+      const listed = await fetch(`/api/shared/notes/${encodeURI(path)}/comments`);
+      if (listed.ok) setNoteComments(((await listed.json()) as { comments: NoteCommentItem[] }).comments);
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "Ошибка соединения");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function openUserCard(userId: string) {
+    setSubmitting(true);
+    setError("");
+    try {
+      const response = await fetch(`/api/users/${userId}/card`);
+      if (!response.ok) throw new Error(await readError(response));
+      setUserCard((await response.json()) as UserCard);
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "Ошибка соединения");
     } finally {
@@ -1116,6 +1231,48 @@ export function App() {
                   ) : (
                     <pre>{openNote.body}</pre>
                   )}
+                  {noteFeed.length > 0 && (
+                    <div>
+                      <p className="admin-panel__hint">Кто трогал карточку (не git log и не тела в PostgreSQL).</p>
+                      <ul className="note-list">
+                        {noteFeed.map((item) => (
+                          <li key={item.id}>
+                            <span className="note-link">
+                              <strong>{item.actor?.display_name || "автор"}</strong>
+                              <small>{item.kind}{item.other_path ? ` · ${item.other_path}` : ""}</small>
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  {!openNote.locked && (
+                    <div>
+                      <p className="admin-panel__hint">Комментарии: любой вошедший; editor принимает.</p>
+                      <ul className="note-list">
+                        {noteComments.map((item) => (
+                          <li key={item.id}>
+                            <span className="note-link">
+                              <strong>{item.author.display_name}</strong>
+                              <small>{item.status} · {item.body}</small>
+                            </span>
+                            {canReview && item.status === "pending" && (
+                              <button className="button button--quiet" type="button" onClick={() => void moderateComment(item.id, "approved", openNote.path)}>
+                                Принять
+                              </button>
+                            )}
+                          </li>
+                        ))}
+                      </ul>
+                      <form className="connect-form" onSubmit={(event) => { event.preventDefault(); void submitComment(openNote.path); }}>
+                        <label>
+                          Комментарий
+                          <input value={commentDraft} onChange={(event) => setCommentDraft(event.target.value)} maxLength={2000} required />
+                        </label>
+                        <button className="button button--quiet" type="submit" disabled={submitting}>Отправить</button>
+                      </form>
+                    </div>
+                  )}
                 </article>
               )}
             </section>
@@ -1127,8 +1284,38 @@ export function App() {
                 <h2 id="contrib-heading">Мой вклад</h2>
                 <p className="admin-panel__hint">
                   Пустой Differ не стирает принятое. Состояния: только в личном слое, предложено, принято в общую.
+                  Карточка — след вклада в GraphNotes, не профиль GitHub.
                 </p>
               </div>
+              {userCard && (
+                <div className="profile-card" style={{ marginBottom: "1.25rem" }}>
+                  <div className="avatar" aria-hidden="true">{userCard.user.display_name.slice(0, 1).toUpperCase()}</div>
+                  <div>
+                    <strong>{userCard.user.display_name}</strong>
+                    <span>
+                      @{userCard.user.username} · {userCard.user.role}
+                      {userCard.user.is_author ? " · автор" : ""}
+                      {userCard.self && userCard.closed_count != null ? ` · закрыто ${userCard.closed_count}` : ""}
+                    </span>
+                  </div>
+                  <p className="admin-panel__hint">
+                    Принято в общую: {userCard.stats.accepted} заметок, {userCard.stats.links_accepted} связей.
+                    {userCard.self ? "" : " Чужой подробный журнал недоступен."}
+                  </p>
+                  {userCard.notes.length > 0 && (
+                    <ul className="note-list">
+                      {userCard.notes.slice(0, 8).map((item) => (
+                        <li key={`${item.state}-${item.path}`}>
+                          <span className="note-link">
+                            <strong>{item.title}</strong>
+                            <small>{item.path} · {item.state}</small>
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              )}
               {contributions && (
                 <div className="stat-grid" aria-label="Моя статистика">
                   <div className="stat-card">
@@ -1231,7 +1418,10 @@ export function App() {
               <article className="proposal-detail">
                 <h3>{openProposal.summary}</h3>
                 <p className="admin-panel__hint">
-                  {openProposal.author.display_name} · {proposalStatusLabel(openProposal.status)}
+                  <button className="note-link" type="button" onClick={() => void openUserCard(openProposal.author.id)}>
+                    {openProposal.author.display_name}
+                  </button>
+                  {" · "}{proposalStatusLabel(openProposal.status)}
                   {openProposal.reason ? ` · ${openProposal.reason}` : ""}
                 </p>
                 <GraphDiffView diff={proposalDiff} loading={proposalDiffLoading} />
