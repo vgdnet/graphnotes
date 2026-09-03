@@ -2,7 +2,7 @@ from typing import NoReturn
 
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 
-from app.api.dependencies import CurrentUser, DatabaseSession
+from app.api.dependencies import CurrentAuthor, CurrentUser, DatabaseSession
 from app.schemas.notes import (
     IngestReport,
     NoteDetail,
@@ -93,7 +93,7 @@ async def personal_uploads(
 
 @router.post("/personal/import-md", response_model=IngestReport)
 async def import_md(
-    user: CurrentUser,
+    user: CurrentAuthor,
     database: DatabaseSession,
     file: UploadFile = File(...),
     expected_sha: str | None = Form(default=None),

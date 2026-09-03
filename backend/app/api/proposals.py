@@ -3,7 +3,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, HTTPException
 
-from app.api.dependencies import CurrentUser, DatabaseSession
+from app.api.dependencies import CurrentAuthor, CurrentUser, DatabaseSession
 from app.schemas.differ import DifferResponse
 from app.schemas.proposal import (
     ProposalCreateRequest,
@@ -28,7 +28,7 @@ def _raise(error: ProposalError) -> NoReturn:
 
 @router.get("/differ", response_model=DifferResponse)
 async def differ_endpoint(
-    user: CurrentUser,
+    user: CurrentAuthor,
     database: DatabaseSession,
 ) -> DifferResponse:
     try:
@@ -49,7 +49,7 @@ async def shared_archive_endpoint() -> None:
 @router.post("/proposals", response_model=ProposalResponse)
 async def create_proposal_endpoint(
     payload: ProposalCreateRequest,
-    user: CurrentUser,
+    user: CurrentAuthor,
     database: DatabaseSession,
 ) -> ProposalResponse:
     try:

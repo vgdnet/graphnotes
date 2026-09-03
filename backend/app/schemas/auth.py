@@ -22,6 +22,7 @@ class RegisterRequest(BaseModel):
     password: str = Field(min_length=12, max_length=128)
     display_name: str = Field(min_length=1, max_length=80)
     email: EmailStr | None = None
+    accept_author_contract: bool = False
 
     @field_validator("username")
     @classmethod
@@ -63,5 +64,21 @@ class UserResponse(BaseModel):
     display_name: str
     role: str
     is_active: bool
+    is_author: bool
+    author_contract_version: str | None
+    author_contract_accepted_at: datetime | None
+    author_contract_withdrawn_at: datetime | None
     created_at: datetime
     updated_at: datetime
+
+
+class AuthorContractResponse(BaseModel):
+    version: str
+    title: str
+    responsibility: str
+    deposit: str
+    withdraw: str
+
+
+class AuthorAcceptRequest(BaseModel):
+    accepted: bool

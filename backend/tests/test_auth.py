@@ -38,6 +38,8 @@ async def test_registration_session_refresh_and_logout(
     assert registration.json()["username"] == "alice.example"
     assert registration.json()["email"] == "alice@example.com"
     assert registration.json()["role"] == "user"
+    assert registration.json()["is_author"] is False
+    assert registration.json()["author_contract_accepted_at"] is None
     assert "password" not in registration.text
     assert "httponly" in registration.headers["set-cookie"].lower()
     assert "samesite=lax" in registration.headers["set-cookie"].lower()

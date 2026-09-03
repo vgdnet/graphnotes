@@ -92,6 +92,10 @@ select { padding: .65rem .8rem; border: 1px solid #34404c; border-radius: .65rem
 .proposal-actions { display: flex; flex-wrap: wrap; gap: .6rem; align-items: end; margin-top: 1rem; }
 .proposal-actions label { flex: 1 1 16rem; }
 .ingest-report { margin: 0 0 1rem; color: #9ca8b4; }
+.contract-copy { display: grid; gap: .55rem; color: #9ca8b4; font-size: .82rem; font-weight: 450; line-height: 1.55; }
+.contract-copy p { margin: 0; }
+.contract-check { display: flex; gap: .7rem; align-items: flex-start; font-weight: 450; }
+.contract-check input[type="checkbox"] { width: 1.15rem; height: 1.15rem; margin-top: .15rem; padding: 0; flex: 0 0 auto; }
 .note-read { margin-top: 1.5rem; }
 .note-read pre { overflow: auto; padding: 1rem; border: 1px solid #28313b; border-radius: .7rem; background: #0c1117; white-space: pre-wrap; color: #d8dee4; font-size: .85rem; }
 .admin-panel h2 { margin: 0; font-size: 1.7rem; }

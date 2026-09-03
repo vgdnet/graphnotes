@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException
 
-from app.api.dependencies import CurrentAdmin, CurrentUser, DatabaseSession, OptionalUser
+from app.api.dependencies import CurrentAdmin, CurrentAuthor, DatabaseSession, OptionalUser
 from app.models.github import PersonalRepository, SharedRepository
 from app.schemas.repository import (
     PersonalConnectRequest,
@@ -91,7 +91,7 @@ async def connect_shared(
 @router.post("/personal/connect", response_model=RepositoryStatusResponse)
 async def connect_personal(
     payload: PersonalConnectRequest,
-    user: CurrentUser,
+    user: CurrentAuthor,
     database: DatabaseSession,
 ) -> RepositoryStatusResponse:
     try:

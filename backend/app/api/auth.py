@@ -14,6 +14,7 @@ from app.models.auth_session import AuthSession
 from app.models.user import User
 from app.schemas.auth import LoginRequest, RegisterRequest, UserResponse
 from app.services.audit import record_audit_event
+from app.services.author_contract import apply_accept
 from app.services.auth import (
     DUMMY_PASSWORD_HASH,
     hash_password,
@@ -48,6 +49,8 @@ async def register(
         email=payload.email,
         display_name=payload.display_name,
     )
+    if payload.accept_author_contract:
+        apply_accept(user)
     database.add(user)
 
     try:
@@ -59,6 +62,15 @@ async def register(
             target_user_id=user.id,
             subject_username=user.username,
         )
+        if payload.accept_author_contract:
+            record_audit_event(
+                database,
+                action="author.contract_accepted",
+                actor_user_id=user.id,
+                target_user_id=user.id,
+                subject_username=user.username,
+                details={"version": user.author_contract_version},
+            )
         auth_session, token = new_auth_session(user.id)
         database.add(auth_session)
         await database.commit()

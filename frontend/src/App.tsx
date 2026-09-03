@@ -15,6 +15,18 @@ type User = {
   display_name: string;
   role: "user" | "editor" | "admin";
   is_active: boolean;
+  is_author: boolean;
+  author_contract_version: string | null;
+  author_contract_accepted_at: string | null;
+  author_contract_withdrawn_at: string | null;
+};
+
+type AuthorContract = {
+  version: string;
+  title: string;
+  responsibility: string;
+  deposit: string;
+  withdraw: string;
 };
 
 type AdminUsersResponse = { users: User[] };
@@ -204,6 +216,26 @@ function personalLabel(status: RepositoryStatus | null): string {
   return `Git ${status.owner}/${status.name} связан, коммитов пока нет.`;
 }
 
+function AuthorContractCopy({ contract }: { contract: AuthorContract | null }) {
+  if (!contract) {
+    return (
+      <div className="contract-copy">
+        <p>Автор отвечает за содержание своих заметок и связанных связей.</p>
+        <p>Принятие фиксирует авторство вклада: кто и когда принял договор.</p>
+        <p>Статус автора можно отозвать; новые вклады блокируются до повторного принятия.</p>
+      </div>
+    );
+  }
+  return (
+    <div className="contract-copy">
+      <p><strong>{contract.title}</strong> · версия {contract.version}</p>
+      <p>{contract.responsibility}</p>
+      <p>{contract.deposit}</p>
+      <p>{contract.withdraw}</p>
+    </div>
+  );
+}
+
 async function readError(response: Response): Promise<string> {
   try {
     const body = (await response.json()) as { detail?: unknown };
@@ -244,6 +276,7 @@ export function App() {
   const [sharedGraph, setSharedGraph] = useState<GraphResponse | null>(null);
   const [graphLoading, setGraphLoading] = useState(false);
   const [graphCenter, setGraphCenter] = useState<string | null>(null);
+  const [authorContract, setAuthorContract] = useState<AuthorContract | null>(null);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -285,6 +318,14 @@ export function App() {
           setError(requestError instanceof Error ? requestError.message : "Ошибка соединения");
         }
       });
+
+    void fetch("/api/author/contract", { signal: controller.signal })
+      .then(async (response) => {
+        if (!response.ok) throw new Error(await readError(response));
+        return (await response.json()) as AuthorContract;
+      })
+      .then(setAuthorContract)
+      .catch(() => undefined);
 
     return () => controller.abort();
   }, []);
@@ -372,7 +413,7 @@ export function App() {
   }, [user, repository?.personal?.connected, repository?.personal?.updated_at, uploadStamp]);
 
   useEffect(() => {
-    if (!user || !repository?.shared.connected) {
+    if (!user?.is_author || !repository?.shared.connected) {
       setDifferences([]);
       setDifferLoading(false);
       return;
@@ -395,7 +436,7 @@ export function App() {
       });
     return () => controller.abort();
   }, [
-    user,
+    user?.is_author,
     repository?.shared.connected,
     repository?.shared.updated_at,
     repository?.shared.index_status,
@@ -719,6 +760,7 @@ export function App() {
           password: form.get("password"),
           display_name: form.get("displayName"),
           email: form.get("email") || null,
+          accept_author_contract: form.get("acceptAuthorContract") === "on",
         }
       : {
           username: form.get("username"),
@@ -790,6 +832,42 @@ export function App() {
     }
   }
 
+  async function acceptAuthorContract(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const accepted = new FormData(event.currentTarget).get("acceptAuthorContract") === "on";
+    setSubmitting(true);
+    setError("");
+    try {
+      const response = await fetch("/api/author/accept", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ accepted }),
+      });
+      if (!response.ok) throw new Error(await readError(response));
+      setUser((await response.json()) as User);
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "Ошибка соединения");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function withdrawAuthorContract() {
+    setSubmitting(true);
+    setError("");
+    try {
+      const response = await fetch("/api/author/withdraw", { method: "POST" });
+      if (!response.ok) throw new Error(await readError(response));
+      setUser((await response.json()) as User);
+      setDifferences([]);
+      setProposedPaths([]);
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "Ошибка соединения");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
   const canReview = user?.role === "editor" || user?.role === "admin";
 
   return (
@@ -816,6 +894,7 @@ export function App() {
               <p className="summary">{sharedLabel(repository?.shared ?? null)}</p>
               <p className="summary">{personalLabel(repository?.personal ?? null)}</p>
               {error && <p className="form-error" role="alert">{error}</p>}
+              {user.is_author ? (
               <form className="connect-form" onSubmit={(event) => void connectPersonal(event)}>
                 <label>
                   Свой git
@@ -830,6 +909,21 @@ export function App() {
                   Связать личный git
                 </button>
               </form>
+              ) : (
+                <form className="connect-form" onSubmit={(event) => void acceptAuthorContract(event)}>
+                  <p className="admin-panel__hint">
+                    Чтобы предлагать, загружать и связывать git как вклад, примите договор автора.
+                  </p>
+                  <AuthorContractCopy contract={authorContract} />
+                  <label className="contract-check">
+                    <input name="acceptAuthorContract" type="checkbox" required />
+                    <span>Принимаю договор автора</span>
+                  </label>
+                  <button className="button button--primary" type="submit" disabled={submitting}>
+                    Стать автором
+                  </button>
+                </form>
+              )}
               {user.role === "admin" && (
                 <button
                   className="button button--quiet"
@@ -847,14 +941,24 @@ export function App() {
               </div>
               <div>
                 <strong>{user.display_name}</strong>
-                <span>@{user.username} · {user.role}</span>
+                <span>@{user.username} · {user.role}{user.is_author ? " · автор" : ""}</span>
               </div>
+              {user.is_author && (
+                <button
+                  className="button button--quiet"
+                  type="button"
+                  onClick={() => void withdrawAuthorContract()}
+                  disabled={submitting}
+                >
+                  Отозвать статус автора
+                </button>
+              )}
               <button className="button button--quiet" onClick={() => void logout()} disabled={submitting}>
                 Выйти
               </button>
             </aside>
           </section>
-          {repository?.shared.connected && user && (
+          {repository?.shared.connected && user?.is_author && (
             <section className="notes-panel" aria-labelledby="differ-heading">
               <div>
                 <p className="eyebrow">Отличия</p>
@@ -1248,6 +1352,15 @@ export function App() {
                 />
               </label>
               {mode === "register" && <p className="hint">Минимум 12 символов.</p>}
+              {mode === "register" && (
+                <>
+                  <AuthorContractCopy contract={authorContract} />
+                  <label className="contract-check">
+                    <input name="acceptAuthorContract" type="checkbox" />
+                    <span>Принимаю договор автора (нужен, чтобы предлагать вклад)</span>
+                  </label>
+                </>
+              )}
               {error && <p className="form-error" role="alert">{error}</p>}
               <button className="button button--primary" type="submit" disabled={submitting}>
                 {submitting ? "Подождите…" : mode === "register" ? "Создать личную ризому" : "Войти"}

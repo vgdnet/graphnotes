@@ -237,13 +237,19 @@ def _install(
     return github
 
 
-async def _register(client: AsyncClient, username: str) -> None:
+async def _register(
+    client: AsyncClient,
+    username: str,
+    *,
+    accept_author: bool = True,
+) -> None:
     response = await client.post(
         "/auth/register",
         json={
             "username": username,
             "password": "a sufficiently long password",
             "display_name": username.title(),
+            "accept_author_contract": accept_author,
         },
     )
     assert response.status_code in {200, 201}

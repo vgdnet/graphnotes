@@ -10,6 +10,7 @@ from app.db.session import get_db_session
 from app.models.auth_session import AuthSession
 from app.models.user import User, UserRole
 from app.services.auth import hash_session_token, session_is_expired
+from app.services.author_contract import AUTHOR_CONTRACT_REQUIRED
 from app.services.session_cookie import session_cookie_deletion_header
 
 DatabaseSession = Annotated[AsyncSession, Depends(get_db_session)]
@@ -62,6 +63,18 @@ async def get_current_user(
 
 
 CurrentUser = Annotated[User, Depends(get_current_user)]
+
+
+async def get_current_author(user: CurrentUser) -> User:
+    if not user.is_author:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=AUTHOR_CONTRACT_REQUIRED,
+        )
+    return user
+
+
+CurrentAuthor = Annotated[User, Depends(get_current_author)]
 
 
 async def get_current_admin(user: CurrentUser) -> User:

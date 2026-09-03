@@ -130,6 +130,7 @@ async def test_personal_connect_isolation_and_shared_rejection(
             "username": "efimov",
             "password": "a sufficiently long password",
             "display_name": "Efimov",
+            "accept_author_contract": True,
         },
     )
     rejected_shared = await first.post(
@@ -163,6 +164,7 @@ async def test_personal_connect_isolation_and_shared_rejection(
                 "username": "other-user",
                 "password": "a sufficiently long password",
                 "display_name": "Other",
+                "accept_author_contract": True,
             },
         )
         stolen = await second.post(
