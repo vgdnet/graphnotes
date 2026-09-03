@@ -92,10 +92,52 @@ type ContributionNode = {
   tags: string[];
   state: ContributionState;
 };
+type ContributionEdge = {
+  source: string;
+  target: string;
+  type: string;
+  state: ContributionState;
+  unresolved: boolean;
+};
 type ContributionProposal = { id: string; status: string; summary: string; paths: string[] };
+type ContributionStats = {
+  notes: number;
+  added: number;
+  accepted: number;
+  links: number;
+  links_accepted: number;
+};
+type ReviewDecision = {
+  proposal_id: string;
+  action: "approved" | "rejected" | "returned" | "rolled_back" | string;
+  status: string;
+  summary: string;
+  paths: string[];
+  links: { source: string; target: string }[];
+};
+type ReviewStats = {
+  accepted: number;
+  rejected: number;
+  returned: number;
+  rolled_back: number;
+  decisions: ReviewDecision[];
+};
 type ContributionsResponse = {
   notes: ContributionNode[];
+  edges?: ContributionEdge[];
   proposals: ContributionProposal[];
+  stats: ContributionStats;
+  review: ReviewStats | null;
+};
+type ContributionUserRef = { id: string; username: string; display_name: string; role: string };
+type AdminContributionsResponse = {
+  users: {
+    user: ContributionUserRef;
+    stats: ContributionStats;
+    review: ReviewStats | null;
+    notes: ContributionNode[];
+    links: ContributionEdge[];
+  }[];
 };
 type UploadEventItem = { path: string; content_hash: string; created_at: string };
 type UploadHistoryResponse = { events: UploadEventItem[] };
@@ -135,6 +177,21 @@ function contributionStateLabel(state: string): string {
   return state;
 }
 
+function reviewActionLabel(action: string): string {
+  switch (action) {
+    case "approved":
+      return "принял";
+    case "rejected":
+      return "отклонил";
+    case "returned":
+      return "вернул";
+    case "rolled_back":
+      return "откатил";
+    default:
+      return action;
+  }
+}
+
 function sharedLabel(status: RepositoryStatus | null): string {
   if (!status?.connected) return "Общая ризома ещё не подключена.";
   if (status.has_content) return "Общая ризома доступна.";
@@ -165,6 +222,7 @@ export function App() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [adminUsers, setAdminUsers] = useState<User[]>([]);
+  const [adminContributions, setAdminContributions] = useState<AdminContributionsResponse | null>(null);
   const [adminLoading, setAdminLoading] = useState(false);
   const [repository, setRepository] = useState<RepositoryStatusResponse | null>(null);
   const [sharedNotes, setSharedNotes] = useState<NoteProjection[]>([]);
@@ -234,17 +292,26 @@ export function App() {
   useEffect(() => {
     if (user?.role !== "admin") {
       setAdminUsers([]);
+      setAdminContributions(null);
       return;
     }
 
     const controller = new AbortController();
     setAdminLoading(true);
-    void fetch("/api/admin/users", { signal: controller.signal })
-      .then(async (response) => {
+    void Promise.all([
+      fetch("/api/admin/users", { signal: controller.signal }).then(async (response) => {
         if (!response.ok) throw new Error(await readError(response));
         return (await response.json()) as AdminUsersResponse;
+      }),
+      fetch("/api/admin/contributions", { signal: controller.signal }).then(async (response) => {
+        if (!response.ok) throw new Error(await readError(response));
+        return (await response.json()) as AdminContributionsResponse;
+      }),
+    ])
+      .then(([usersBody, contribBody]) => {
+        setAdminUsers(usersBody.users);
+        setAdminContributions(contribBody);
       })
-      .then((body) => setAdminUsers(body.users))
       .catch((requestError: unknown) => {
         if (!(requestError instanceof DOMException && requestError.name === "AbortError")) {
           setError(requestError instanceof Error ? requestError.message : "Ошибка соединения");
@@ -577,6 +644,16 @@ export function App() {
       if (differ.ok) {
         setDifferences(((await differ.json()) as DifferResponse).differences);
       }
+      const mine = await fetch("/api/contributions/me");
+      if (mine.ok) {
+        setContributions((await mine.json()) as ContributionsResponse);
+      }
+      if (user?.role === "admin") {
+        const all = await fetch("/api/admin/contributions");
+        if (all.ok) {
+          setAdminContributions((await all.json()) as AdminContributionsResponse);
+        }
+      }
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "Ошибка соединения");
     } finally {
@@ -701,6 +778,10 @@ export function App() {
       setAdminUsers((users) => users.map((item) => item.id === updated.id ? updated : item));
       if (updated.id === user?.id) {
         setUser(updated.is_active ? updated : null);
+      }
+      const contrib = await fetch("/api/admin/contributions");
+      if (contrib.ok) {
+        setAdminContributions((await contrib.json()) as AdminContributionsResponse);
       }
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "Ошибка соединения");
@@ -869,6 +950,58 @@ export function App() {
                   Пустой Differ не стирает принятое. Состояния: только в личном слое, предложено, принято в общую.
                 </p>
               </div>
+              {contributions && (
+                <div className="stat-grid" aria-label="Моя статистика">
+                  <div className="stat-card">
+                    <strong>{contributions.stats.notes}</strong>
+                    <span>Карточки</span>
+                  </div>
+                  <div className="stat-card">
+                    <strong>{contributions.stats.added}</strong>
+                    <span>Добавлено</span>
+                  </div>
+                  <div className="stat-card">
+                    <strong>{contributions.stats.accepted}</strong>
+                    <span>Принято</span>
+                  </div>
+                  <div className="stat-card">
+                    <strong>{contributions.stats.links}</strong>
+                    <span>
+                      Связи
+                      {contributions.stats.links_accepted > 0
+                        ? ` · принято ${contributions.stats.links_accepted}`
+                        : ""}
+                    </span>
+                  </div>
+                </div>
+              )}
+              {contributions?.review && (
+                <div className="review-stats">
+                  <h3>Редакционные решения</h3>
+                  <p className="admin-panel__hint">
+                    Принял {contributions.review.accepted}, отклонил {contributions.review.rejected},
+                    вернул {contributions.review.returned}, откатил {contributions.review.rolled_back}.
+                    Это работа по очереди, не авторский вклад.
+                  </p>
+                  {contributions.review.decisions.length > 0 && (
+                    <ul className="note-list">
+                      {contributions.review.decisions.map((item, index) => (
+                        <li key={`${item.proposal_id}-${item.action}-${index}`}>
+                          <span className="note-link">
+                            <strong>{reviewActionLabel(item.action)} · {item.summary || item.paths.join(", ")}</strong>
+                            <small>
+                              {item.paths.join(", ") || "без путей"}
+                              {item.links.length > 0
+                                ? ` · связи: ${item.links.map((link) => `${link.source} → ${link.target}`).join("; ")}`
+                                : ""}
+                            </small>
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              )}
               {!contributions || contributions.notes.length === 0 ? (
                 <p className="admin-panel__hint">Пока нет заметок в личном слое и принятого вклада.</p>
               ) : (
@@ -1000,14 +1133,19 @@ export function App() {
               <div>
                 <p className="eyebrow">Администрирование</p>
                 <h2 id="admin-heading">Пользователи</h2>
-                <p className="admin-panel__hint">Роли глобальны: editor включает права user, admin — все права.</p>
+                <p className="admin-panel__hint">
+                  Роли глобальны: editor включает права user, admin — все права.
+                  Статистика вклада по всем учётным записям видна только здесь.
+                </p>
               </div>
               {error && <p className="form-error" role="alert">{error}</p>}
               {adminLoading ? (
                 <p className="admin-panel__hint">Загружаем пользователей…</p>
               ) : (
                 <div className="user-list">
-                  {adminUsers.map((managedUser) => (
+                  {adminUsers.map((managedUser) => {
+                    const contribRow = adminContributions?.users.find((row) => row.user.id === managedUser.id);
+                    return (
                     <article className="user-row" key={managedUser.id}>
                       <div className="user-row__identity">
                         <strong>{managedUser.display_name}</strong>
@@ -1038,8 +1176,18 @@ export function App() {
                       >
                         {managedUser.is_active ? "Заблокировать" : "Активировать"}
                       </button>
+                      {contribRow && (
+                        <p className="user-row__stats">
+                          Карточки {contribRow.stats.notes} · добавлено {contribRow.stats.added} ·
+                          принято {contribRow.stats.accepted} · связи {contribRow.stats.links}
+                          {contribRow.review
+                            ? ` · решения: принял ${contribRow.review.accepted}, отклонил ${contribRow.review.rejected}, вернул ${contribRow.review.returned}, откатил ${contribRow.review.rolled_back}`
+                            : ""}
+                        </p>
+                      )}
                     </article>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </section>

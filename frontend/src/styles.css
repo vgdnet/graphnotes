@@ -100,6 +100,13 @@ select { padding: .65rem .8rem; border: 1px solid #34404c; border-radius: .65rem
 .user-row { display: grid; grid-template-columns: minmax(12rem, 1fr) 10rem auto; gap: 1rem; align-items: end; padding: 1rem; border: 1px solid #28313b; border-radius: .8rem; background: #0c1117; }
 .user-row__identity { display: grid; gap: .25rem; }
 .user-row__identity span { color: #85919d; font-size: .8rem; }
+.user-row__stats { grid-column: 1 / -1; margin: 0; color: #85919d; font-size: .8rem; line-height: 1.45; }
+.stat-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .7rem; margin: 0 0 1.25rem; }
+.stat-card { display: grid; gap: .25rem; padding: .85rem .9rem; border: 1px solid #28313b; border-radius: .7rem; background: #0c1117; }
+.stat-card strong { font-size: 1.45rem; letter-spacing: -.03em; }
+.stat-card span { color: #85919d; font-size: .75rem; }
+.review-stats { margin: 0 0 1.25rem; }
+.review-stats h3 { margin: 0 0 .4rem; font-size: 1rem; }
 
 .graph-view { display: grid; gap: 1rem; }
 .graph-toolbar { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.8rem; }
@@ -150,4 +157,5 @@ select { padding: .65rem .8rem; border: 1px solid #34404c; border-radius: .65rem
   .notes-grid { grid-template-columns: 1fr; }
   .graph-toolbar { grid-template-columns: 1fr; }
   .user-row { grid-template-columns: 1fr; align-items: stretch; }
+  .stat-grid { grid-template-columns: 1fr 1fr; }
 }

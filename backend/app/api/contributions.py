@@ -19,4 +19,3 @@ async def contributions_me(
 ) -> ContributionsResponse:
     body = await get_contributions_me(database, user=user, client=_client())
     return ContributionsResponse.model_validate(body)
-

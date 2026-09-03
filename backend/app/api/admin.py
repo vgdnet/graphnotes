@@ -8,7 +8,9 @@ from app.models.auth_session import AuthSession
 from app.models.user import User, UserRole
 from app.schemas.admin import AdminUserListResponse, AdminUserUpdate
 from app.schemas.auth import UserResponse
+from app.schemas.contributions import AdminContributionsResponse
 from app.services.audit import record_audit_event
+from app.services.contributions import list_admin_contributions
 
 router = APIRouter(prefix="/admin", tags=["administration"])
 
@@ -22,6 +24,15 @@ async def list_users(
         await database.scalars(select(User).order_by(User.username, User.id))
     ).all()
     return AdminUserListResponse(users=list(users))
+
+
+@router.get("/contributions", response_model=AdminContributionsResponse)
+async def list_contributions(
+    _: CurrentAdmin,
+    database: DatabaseSession,
+) -> AdminContributionsResponse:
+    body = await list_admin_contributions(database)
+    return AdminContributionsResponse.model_validate(body)
 
 
 @router.patch("/users/{user_id}", response_model=UserResponse)

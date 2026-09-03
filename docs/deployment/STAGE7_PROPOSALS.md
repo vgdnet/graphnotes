@@ -20,6 +20,13 @@ GraphNotes does **not** offer ZIP download of published shared (`Скачать`
 Editors accept, reject, return or roll back in product language. GitHub
 pull-request URLs, branch names and SHAs stay out of public JSON.
 
+`GET /api/contributions/me` returns derived author counts: cards (`notes`),
+`added`, `accepted`, `links`, `links_accepted`. An editor or admin also
+receives their own review stats (which proposals and links they decided).
+`GET /api/admin/contributions` is admin-only and lists the same stats for
+every account. A user cannot read another user's stats. No new canonical
+note bodies are stored for this.
+
 ## API
 
 ```text
@@ -27,6 +34,7 @@ GET  /api/differ
 POST /api/personal/import-md
 GET  /api/personal/uploads
 GET  /api/contributions/me
+GET  /api/admin/contributions
 POST /api/proposals
 GET  /api/proposals
 GET  /api/proposals/{id}
