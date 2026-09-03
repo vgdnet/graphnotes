@@ -5,8 +5,8 @@ from datetime import UTC, datetime
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.config import settings
 from app.models.github import PersonalRepository, SharedRepository
+from app.models.personal_upload import PersonalUpload, UploadEvent
 from app.models.user import User
 from app.services.archive import ArchiveError, read_markdown_bytes, read_zip_markdown
 from app.services.audit import record_audit_event
@@ -34,20 +34,56 @@ def _http_status(error: GitHubAppError) -> int:
     }.get(error.status, 502)
 
 
-async def _shared(database: AsyncSession) -> SharedRepository:
-    row = await database.get(SharedRepository, SHARED_SINGLETON_ID)
-    if row is None:
-        raise IngestError(409, "the shared rhizome is not connected")
-    return row
-
-
-async def _personal(database: AsyncSession, user_id) -> PersonalRepository:
-    row = await database.scalar(
+async def _personal_or_none(database: AsyncSession, user_id) -> PersonalRepository | None:
+    return await database.scalar(
         select(PersonalRepository).where(PersonalRepository.user_id == user_id)
     )
-    if row is None:
-        raise IngestError(409, "connect your git first")
-    return row
+
+
+async def list_upload_events(database: AsyncSession, user: User) -> dict[str, object]:
+    rows = (
+        await database.scalars(
+            select(UploadEvent)
+            .where(UploadEvent.user_id == user.id)
+            .order_by(UploadEvent.created_at.desc())
+            .limit(100)
+        )
+    ).all()
+    return {
+        "events": [
+            {
+                "path": row.path,
+                "content_hash": row.content_hash,
+                "created_at": row.created_at,
+            }
+            for row in rows
+        ]
+    }
+
+
+async def _uploads_for(database: AsyncSession, user_id) -> list[PersonalUpload]:
+    return list(
+        (
+            await database.scalars(
+                select(PersonalUpload)
+                .where(PersonalUpload.user_id == user_id)
+                .order_by(PersonalUpload.path)
+            )
+        ).all()
+    )
+
+
+def _projection_from_text(path: str, text: str, available: set[str]) -> dict[str, object]:
+    parsed = parse_markdown(path, text)
+    return {
+        "path": path,
+        "title": parsed.title,
+        "tags": list(parsed.tags),
+        "aliases": list(parsed.aliases),
+        "links": list(parsed.links),
+        "unresolved_links": list(unresolved_links(parsed.links, available)),
+        "warnings": list(parsed.warnings),
+    }
 
 
 def _github_to_ingest(error: GitHubAppError) -> IngestError:
@@ -82,9 +118,16 @@ async def list_personal_notes(
     user: User,
     client: GitHubAppClient,
 ) -> dict[str, object]:
-    row = await _personal(database, user.id)
-    if not row.observed_sha:
-        return {"notes": [], "revision": None, "updated_at": row.observed_at}
+    row = await _personal_or_none(database, user.id)
+    if row is None or not row.observed_sha:
+        uploads = await _uploads_for(database, user.id)
+        available = {item.path for item in uploads}
+        latest = max((item.updated_at for item in uploads), default=None)
+        return {
+            "notes": [_projection_from_text(item.path, item.body, available) for item in uploads],
+            "revision": None,
+            "updated_at": latest,
+        }
     try:
         notes = await _project_repo(client, row.owner, row.name, row.observed_sha)
         snapshot = await client.get_repository(row.owner, row.name)
@@ -111,9 +154,29 @@ async def get_personal_note(
         normalized = normalize_git_path(path)
     except PathError as exc:
         raise IngestError(400, str(exc)) from exc
-    row = await _personal(database, user.id)
-    if not row.observed_sha:
-        raise IngestError(404, "note was not found")
+    row = await _personal_or_none(database, user.id)
+    if row is None or not row.observed_sha:
+        upload = await database.scalar(
+            select(PersonalUpload).where(
+                PersonalUpload.user_id == user.id,
+                PersonalUpload.path == normalized,
+            )
+        )
+        if upload is None:
+            raise IngestError(404, "note was not found")
+        available = {item.path for item in await _uploads_for(database, user.id)}
+        parsed = parse_markdown(normalized, upload.body)
+        return {
+            "path": normalized,
+            "title": parsed.title,
+            "tags": list(parsed.tags),
+            "aliases": list(parsed.aliases),
+            "links": list(parsed.links),
+            "unresolved_links": list(unresolved_links(parsed.links, available)),
+            "warnings": list(parsed.warnings),
+            "body": parsed.body,
+            "content_hash": parsed.content_hash,
+        }
     try:
         text = await client.get_file(row.owner, row.name, normalized, row.observed_sha)
         paths = set(await client.list_markdown_files(row.owner, row.name, row.observed_sha))
@@ -164,133 +227,6 @@ async def get_shared_note(
     }
 
 
-async def take_from_shared(
-    database: AsyncSession,
-    *,
-    user: User,
-    paths: list[str],
-    expected_sha: str | None,
-    client: GitHubAppClient,
-) -> dict[str, object]:
-    if len(paths) > settings.take_max_paths:
-        raise IngestError(400, "too many notes in one take")
-    shared = await _shared(database)
-    personal = await _personal(database, user.id)
-    if not shared.observed_sha:
-        raise IngestError(409, "the shared rhizome has no notes yet")
-
-    normalized_paths: list[str] = []
-    rejected: list[dict[str, str]] = []
-    seen: set[str] = set()
-    for raw in paths:
-        try:
-            path = normalize_git_path(raw)
-        except PathError as exc:
-            rejected.append({"path": raw, "reason": str(exc)})
-            continue
-        if path in seen:
-            continue
-        seen.add(path)
-        normalized_paths.append(path)
-
-    try:
-        shared_files = set(
-            await client.list_markdown_files(shared.owner, shared.name, shared.observed_sha)
-        )
-    except GitHubAppError as exc:
-        apply_error(shared, exc)
-        await database.commit()
-        raise _github_to_ingest(exc) from exc
-
-    accepted: list[str] = []
-    skipped: list[str] = []
-    conflicted: list[str] = []
-    warnings: list[str] = []
-    to_commit: dict[str, str] = {}
-
-    for path in normalized_paths:
-        if path not in shared_files:
-            rejected.append({"path": path, "reason": "note is not in the shared rhizome"})
-            continue
-        try:
-            shared_text = await client.get_file(
-                shared.owner, shared.name, path, shared.observed_sha
-            )
-            existing = await _existing_file(client, personal, path)
-        except GitHubAppError as exc:
-            if exc.status in {"forbidden", "rate_limited", "unavailable", "stale"}:
-                apply_error(personal, exc)
-                await database.commit()
-                raise _github_to_ingest(exc) from exc
-            rejected.append({"path": path, "reason": exc.message})
-            continue
-        parsed = parse_markdown(path, shared_text)
-        warnings.extend(f"{path}: {item}" for item in parsed.warnings)
-        if existing is None:
-            accepted.append(path)
-            to_commit[path] = shared_text
-        elif existing == shared_text:
-            skipped.append(path)
-        else:
-            conflicted.append(path)
-
-    revision = personal.observed_sha
-    if to_commit:
-        try:
-            revision = await client.commit_markdown(
-                personal.owner,
-                personal.name,
-                personal.default_branch,
-                to_commit,
-                "Take notes from the shared rhizome",
-                expected_sha,
-            )
-        except GitHubAppError as exc:
-            apply_error(personal, exc)
-            await database.commit()
-            raise _github_to_ingest(exc) from exc
-        personal.observed_sha = revision
-        personal.observed_at = datetime.now(UTC)
-        personal.sync_status = "ready"
-        personal.last_error = None
-        record_audit_event(
-            database,
-            action="notes.take_from_shared",
-            actor_user_id=user.id,
-            target_user_id=user.id,
-            subject_username=user.username,
-            details={
-                "accepted": accepted,
-                "conflicted": conflicted,
-                "skipped": skipped,
-                "revision": revision,
-            },
-        )
-        await database.commit()
-        await database.refresh(personal)
-        try:
-            from app.services.index import IndexerError, rebuild_personal
-
-            await rebuild_personal(
-                database,
-                user.id,
-                client,
-                actor_user_id=user.id,
-                paths=set(accepted),
-            )
-        except IndexerError:
-            pass
-
-    return {
-        "accepted": accepted,
-        "rejected": rejected,
-        "skipped": skipped,
-        "conflicted": conflicted,
-        "warnings": warnings,
-        "revision": revision,
-    }
-
-
 async def import_markdown(
     database: AsyncSession,
     *,
@@ -300,7 +236,7 @@ async def import_markdown(
     expected_sha: str | None,
     client: GitHubAppClient,
 ) -> dict[str, object]:
-    personal = await _personal(database, user.id)
+    personal = await _personal_or_none(database, user.id)
     try:
         if filename.lower().endswith(".zip") or data.startswith(b"PK"):
             incoming = read_zip_markdown(data)
@@ -310,6 +246,13 @@ async def import_markdown(
             raise IngestError(400, "upload a Markdown file or a ZIP archive")
     except (ArchiveError, PathError) as exc:
         raise IngestError(400, str(exc)) from exc
+
+    if personal is None:
+        return await _import_without_git(
+            database,
+            user=user,
+            incoming=incoming,
+        )
 
     accepted: list[str] = []
     skipped: list[str] = []
@@ -334,6 +277,9 @@ async def import_markdown(
             skipped.append(path)
         else:
             conflicted.append(path)
+        database.add(
+            UploadEvent(user_id=user.id, path=path, content_hash=parsed.content_hash)
+        )
 
     revision = personal.observed_sha
     if to_commit:
@@ -381,6 +327,8 @@ async def import_markdown(
             )
         except IndexerError:
             pass
+    else:
+        await database.commit()
 
     return {
         "accepted": accepted,
@@ -389,6 +337,67 @@ async def import_markdown(
         "conflicted": conflicted,
         "warnings": warnings,
         "revision": revision,
+    }
+
+
+async def _import_without_git(
+    database: AsyncSession,
+    *,
+    user: User,
+    incoming: list[tuple[str, str]],
+) -> dict[str, object]:
+    accepted: list[str] = []
+    skipped: list[str] = []
+    conflicted: list[str] = []
+    warnings: list[str] = []
+    existing_rows = {
+        row.path: row
+        for row in await _uploads_for(database, user.id)
+    }
+    for path, text in incoming:
+        parsed = parse_markdown(path, text)
+        warnings.extend(f"{path}: {item}" for item in parsed.warnings)
+        current = existing_rows.get(path)
+        database.add(
+            UploadEvent(user_id=user.id, path=path, content_hash=parsed.content_hash)
+        )
+        if current is None:
+            row = PersonalUpload(
+                user_id=user.id,
+                path=path,
+                body=text,
+                content_hash=parsed.content_hash,
+            )
+            database.add(row)
+            existing_rows[path] = row
+            accepted.append(path)
+        elif current.body == text:
+            skipped.append(path)
+        else:
+            current.body = text
+            current.content_hash = parsed.content_hash
+            accepted.append(path)
+    record_audit_event(
+        database,
+        action="notes.import_md",
+        actor_user_id=user.id,
+        target_user_id=user.id,
+        subject_username=user.username,
+        details={
+            "accepted": accepted,
+            "conflicted": conflicted,
+            "skipped": skipped,
+            "source": "upload",
+        },
+    )
+    await database.commit()
+    return {
+        "accepted": accepted,
+        "rejected": [],
+        "skipped": skipped,
+        "conflicted": conflicted,
+        "warnings": warnings,
+        "revision": None,
     }
 
 

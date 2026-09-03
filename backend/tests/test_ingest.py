@@ -8,14 +8,13 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from app.api import graph as graph_api
 from app.api import notes as notes_api
 from app.api import proposals as proposals_api
+from app.api import contributions as contributions_api
 from app.api import repository as repository_api
 from app.api import webhooks as webhooks_api
 from app.core.config import settings
 from app.main import app
-from app.models.audit_event import AuditEvent
 from app.services.admin import bootstrap_admin
 from app.services.github import GitHubAppError, GitHubRepoSnapshot
-from sqlalchemy import select
 
 
 @dataclass
@@ -230,6 +229,7 @@ def _install(
     monkeypatch.setattr(notes_api, "_client", lambda: github)
     monkeypatch.setattr(repository_api, "_client", lambda: github)
     monkeypatch.setattr(proposals_api, "_client", lambda: github)
+    monkeypatch.setattr(contributions_api, "_client", lambda: github)
     monkeypatch.setattr(graph_api, "_client", lambda: github)
     monkeypatch.setattr(webhooks_api, "GitHubAppClient", lambda *args, **kwargs: github)
     monkeypatch.setattr(settings, "github_shared_owner", "vgdnet")
@@ -293,29 +293,30 @@ def _github() -> MemoryGitHub:
     )
 
 
-async def test_take_from_shared_and_conflict(
+async def test_take_from_shared_is_gone(
     auth_test_context: tuple[AsyncClient, async_sessionmaker[AsyncSession]],
     monkeypatch: MonkeyPatch,
 ) -> None:
     client, session_factory = auth_test_context
     github = _install(monkeypatch, _github())
+    github.repos["vgdnet/guide_psy"].files["card.md"] = (
+        github.repos["vgdnet/rhizome"].files["card.md"]
+    )
     github.repos["vgdnet/guide_psy"].files["source.md"] = "# Different\n"
     await _register(client, "efimov")
     await _bind_shared(client, session_factory, "efimov")
     await _connect_pair(client, "vgdnet/guide_psy")
 
-    report = await client.post(
+    gone = await client.post(
         "/personal/take-from-shared",
-        json={"paths": ["card.md", "source.md", "../secret.md"], "expected_sha": "personal-sha"},
+        json={"paths": ["card.md", "source.md"], "expected_sha": "personal-sha"},
     )
-    assert report.status_code == 200
-    body = report.json()
-    assert body["accepted"] == ["card.md"]
-    assert body["conflicted"] == ["source.md"]
-    assert body["revision"] == "sha-commit-1"
-    assert "card.md" in github.repos["vgdnet/guide_psy"].files
+    assert gone.status_code == 410
+    assert "card.md" not in github.repos["vgdnet/guide_psy"].files or (
+        github.repos["vgdnet/guide_psy"].files["card.md"]
+        == github.repos["vgdnet/rhizome"].files["card.md"]
+    )
     assert github.repos["vgdnet/guide_psy"].files["source.md"] == "# Different\n"
-    assert "../secret.md" not in github.repos["vgdnet/guide_psy"].files
 
     notes = await client.get("/personal/notes")
     assert notes.status_code == 200
@@ -329,12 +330,6 @@ async def test_take_from_shared_and_conflict(
     assert detail.status_code == 200
     assert "See [[missing]]." in detail.json()["body"]
 
-    async with session_factory() as database:
-        actions = {event.action for event in (await database.scalars(select(AuditEvent))).all()}
-        assert "notes.take_from_shared" in actions
-        for event in (await database.scalars(select(AuditEvent))).all():
-            assert "See [[missing]]" not in str(event.details)
-
 
 async def test_stale_revision_and_two_user_isolation(
     auth_test_context: tuple[AsyncClient, async_sessionmaker[AsyncSession]],
@@ -347,8 +342,9 @@ async def test_stale_revision_and_two_user_isolation(
     await _connect_pair(first, "vgdnet/guide_psy")
 
     stale = await first.post(
-        "/personal/take-from-shared",
-        json={"paths": ["card.md"], "expected_sha": "not-the-head"},
+        "/personal/import-md",
+        files={"file": ("fresh.md", b"# Fresh\n", "text/markdown")},
+        data={"expected_sha": "not-the-head"},
     )
     assert stale.status_code == 409
 
@@ -462,3 +458,66 @@ async def test_shared_notes_are_public_and_take_requires_auth(
         assert take.status_code == 401
         personal = await anonymous.get("/personal/notes")
         assert personal.status_code == 401
+
+
+async def test_upload_without_git_feeds_differ(
+    auth_test_context: tuple[AsyncClient, async_sessionmaker[AsyncSession]],
+    monkeypatch: MonkeyPatch,
+) -> None:
+    client, session_factory = auth_test_context
+    _install(monkeypatch, _github())
+    await _register(client, "upload-admin")
+    await _bind_shared(client, session_factory, "upload-admin")
+
+    author = AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver")
+    await _register(author, "no-git-user")
+    empty = await author.get("/differ")
+    assert empty.status_code == 200
+    assert empty.json()["differences"] == []
+
+    uploaded = await author.post(
+        "/personal/import-md",
+        files={"file": ("fresh.md", b"# Fresh from upload\n", "text/markdown")},
+    )
+    assert uploaded.status_code == 200
+    assert uploaded.json()["accepted"] == ["fresh.md"]
+    assert uploaded.json()["revision"] is None
+
+    notes = await author.get("/personal/notes")
+    assert {item["path"] for item in notes.json()["notes"]} == {"fresh.md"}
+
+    differ = await author.get("/differ")
+    assert differ.status_code == 200
+    kinds = {item["path"]: item["kind"] for item in differ.json()["differences"]}
+    assert kinds["fresh.md"] == "added"
+
+    created = await author.post("/proposals", json={"paths": ["fresh.md"]})
+    assert created.status_code == 200
+    assert created.json()["added"] == ["fresh.md"]
+
+    history = await author.get("/personal/uploads")
+    assert history.status_code == 200
+    events = history.json()["events"]
+    assert events[0]["path"] == "fresh.md"
+    assert events[0]["content_hash"]
+
+    contrib = await author.get("/contributions/me")
+    assert contrib.status_code == 200
+    nodes = {node["path"]: node for node in contrib.json()["notes"]}
+    assert nodes["fresh.md"]["state"] == "proposed"
+
+    published = await client.post(
+        f"/proposals/{created.json()['id']}/approve", json={"reason": ""}
+    )
+    assert published.status_code == 200
+    assert published.json()["status"] == "published"
+
+    after = await author.get("/differ")
+    leftover = {item["path"] for item in after.json()["differences"]}
+    assert "fresh.md" not in leftover
+
+    accepted = await author.get("/contributions/me")
+    assert accepted.status_code == 200
+    states = {node["path"]: node["state"] for node in accepted.json()["notes"]}
+    assert states["fresh.md"] == "accepted"
+    await author.aclose()

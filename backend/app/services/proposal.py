@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.models.github import PersonalRepository, SharedRepository
+from app.models.personal_upload import PersonalUpload
 from app.models.proposal import Proposal, ProposalStatus
 from app.models.user import User, UserRole
 from app.services.audit import record_audit_event
@@ -48,6 +49,30 @@ def _github(error: GitHubAppError) -> ProposalError:
     if error.status == "stale":
         return ProposalError(409, "git changed, retry")
     return ProposalError(status, error.message)
+
+
+async def _personal_layer_file(
+    database: AsyncSession,
+    client: GitHubAppClient,
+    user_id: uuid.UUID,
+    personal: PersonalRepository | None,
+    path: str,
+) -> str | None:
+    if personal is not None and personal.observed_sha:
+        try:
+            return await client.get_file(
+                personal.owner, personal.name, path, personal.observed_sha
+            )
+        except GitHubAppError as exc:
+            if exc.status != "not_found":
+                raise
+    row = await database.scalar(
+        select(PersonalUpload).where(
+            PersonalUpload.user_id == user_id,
+            PersonalUpload.path == path,
+        )
+    )
+    return None if row is None else row.body
 
 
 def _is_editor(user: User) -> bool:
@@ -107,9 +132,9 @@ async def create_proposal(
     )
     if shared is None or not published_sha(shared):
         raise ProposalError(409, "the shared rhizome is not connected")
-    if personal is None or not personal.observed_sha:
-        raise ProposalError(409, "connect your git first")
-    if expected_sha is not None and expected_sha != personal.observed_sha:
+    if personal is not None and expected_sha is not None and expected_sha != personal.observed_sha:
+        raise ProposalError(409, "your git changed, retry")
+    if (personal is None or not personal.observed_sha) and expected_sha is not None:
         raise ProposalError(409, "your git changed, retry")
     shared_ref = published_sha(shared)
     assert shared_ref is not None
@@ -135,7 +160,11 @@ async def create_proposal(
             await client.list_markdown_files(shared.owner, shared.name, shared_ref)
         )
         for path in normalized:
-            text = await client.get_file(personal.owner, personal.name, path, personal.observed_sha)
+            text = await _personal_layer_file(
+                database, client, user.id, personal, path
+            )
+            if text is None:
+                raise ProposalError(404, "note was not found")
             files[path] = text
             if path not in shared_listed:
                 added.append(path)

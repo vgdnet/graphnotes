@@ -1,11 +1,6 @@
 from datetime import datetime
 
-from pydantic import BaseModel, Field
-
-
-class TakeFromSharedRequest(BaseModel):
-    paths: list[str] = Field(min_length=1, max_length=50)
-    expected_sha: str | None = Field(default=None, max_length=40)
+from pydantic import BaseModel
 
 
 class NoteProjection(BaseModel):
@@ -36,3 +31,13 @@ class IngestReport(BaseModel):
     conflicted: list[str]
     warnings: list[str]
     revision: str | None = None
+
+
+class UploadEventItem(BaseModel):
+    path: str
+    content_hash: str
+    created_at: datetime
+
+
+class UploadHistoryResponse(BaseModel):
+    events: list[UploadEventItem]

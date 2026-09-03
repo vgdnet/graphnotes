@@ -1,19 +1,21 @@
-# Stage 7 proposals, Differ and download
+# Stage 7 proposals, Differ (no shared ZIP)
 
-Differ compares the caller's connected git to the **published** shared rhizome
-and lists what can be offered: paths missing from shared, or paths whose
-content differs. Comparison is derived from Git trees: Markdown paths are
-compared by blob SHA. Differ does not download every note body and does not
-read canonical note bodies from PostgreSQL. Files that exist only in shared
-are not Differ results.
+Differ compares the caller's **personal layer** to the **published** shared
+rhizome and lists what can be offered: paths missing from shared, or paths
+whose content differs. Personal layer is connected git **or** `.md`/ZIP upload
+without git (TZ 2.6). Git comparison is derived from Git trees by blob SHA.
+Upload comparison uses the same path/content rule. Differ does not read
+canonical **published** note bodies from PostgreSQL. Files that exist only in
+shared are not Differ results.
 
 The user selects those rows and creates a proposal. GraphNotes copies only
-those files onto a hidden branch of the shared repository. The personal git
-is not rewritten. After the editor accepts and the index catches up, those
-paths disappear from Differ.
+those files onto a hidden branch of the shared repository. Connected personal
+git is not rewritten. Upload-without-git is not a write into published shared
+until an editor accepts. After accept and index catch-up, those paths leave
+Differ.
 
-`Скачать` is a ZIP of the same published shared Markdown the graph shows. It is
-not a GraphNotes commit into the user's git.
+GraphNotes does **not** offer ZIP download of published shared (`Скачать` /
+`GET /api/shared/archive` removed, TZ 2.5). Shared is read in the app.
 
 Editors accept, reject, return or roll back in product language. GitHub
 pull-request URLs, branch names and SHAs stay out of public JSON.
@@ -22,7 +24,9 @@ pull-request URLs, branch names and SHAs stay out of public JSON.
 
 ```text
 GET  /api/differ
-GET  /api/shared/archive
+POST /api/personal/import-md
+GET  /api/personal/uploads
+GET  /api/contributions/me
 POST /api/proposals
 GET  /api/proposals
 GET  /api/proposals/{id}
@@ -35,4 +39,4 @@ POST /api/proposals/{id}/rollback
 Reject, return and rollback require a reason. Authors cannot decide on their
 own proposal, including admin authors.
 
-Alembic revision: `0005_proposals`.
+Alembic revision: `0005_proposals`. Personal upload staging: `0006_personal_uploads`.

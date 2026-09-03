@@ -269,13 +269,10 @@ async def test_self_approval_conflict_inactive_and_index_failure(
     await reviewer.aclose()
 
 
-async def test_differ_lists_one_way_and_archive_is_published_zip(
+async def test_differ_lists_one_way_and_shared_archive_is_gone(
     auth_test_context: tuple[AsyncClient, async_sessionmaker[AsyncSession]],
     monkeypatch: MonkeyPatch,
 ) -> None:
-    import io
-    import zipfile
-
     admin, session_factory = auth_test_context
     github = _install(monkeypatch, _github())
     github.repos["vgdnet/guide_psy"].files["card.md"] = "# Personal card\n"
@@ -286,13 +283,7 @@ async def test_differ_lists_one_way_and_archive_is_published_zip(
     async with guest:
         assert (await guest.get("/differ")).status_code == 401
         archive = await guest.get("/shared/archive")
-        assert archive.status_code == 200
-        assert archive.headers["content-type"].startswith("application/zip")
-        assert "shared-rhizome.zip" in archive.headers.get("content-disposition", "")
-        names = zipfile.ZipFile(io.BytesIO(archive.content)).namelist()
-        assert set(names) == {"card.md", "source.md"}
-        assert "html_url" not in archive.text
-        assert "gn-p-" not in archive.text
+        assert archive.status_code == 410
 
     author = await _second("efimov")
     await _connect_pair(author, "vgdnet/guide_psy")
@@ -326,10 +317,7 @@ async def test_differ_lists_one_way_and_archive_is_published_zip(
     assert "already.md" not in leftover
     assert "card.md" in leftover
 
-    zipped = await author.get("/shared/archive")
-    packed = set(zipfile.ZipFile(io.BytesIO(zipped.content)).namelist())
-    assert "already.md" in packed
-    assert "card.md" in packed
+    assert (await author.get("/shared/archive")).status_code == 410
 
     await author.aclose()
     await editor.aclose()

@@ -85,6 +85,21 @@ type DifferItem = {
 type DifferResponse = { differences: DifferItem[] };
 type ProposalListResponse = { proposals: Proposal[] };
 
+type ContributionState = "personal" | "proposed" | "accepted";
+type ContributionNode = {
+  path: string;
+  title: string;
+  tags: string[];
+  state: ContributionState;
+};
+type ContributionProposal = { id: string; status: string; summary: string; paths: string[] };
+type ContributionsResponse = {
+  notes: ContributionNode[];
+  proposals: ContributionProposal[];
+};
+type UploadEventItem = { path: string; content_hash: string; created_at: string };
+type UploadHistoryResponse = { events: UploadEventItem[] };
+
 function differKindLabel(kind: string): string {
   if (kind === "added") return "нет в общей";
   if (kind === "changed") return "отличается";
@@ -113,6 +128,13 @@ function proposalStatusLabel(status: string): string {
   }
 }
 
+function contributionStateLabel(state: string): string {
+  if (state === "personal") return "только в личном слое";
+  if (state === "proposed") return "предложено";
+  if (state === "accepted") return "принято в общую";
+  return state;
+}
+
 function sharedLabel(status: RepositoryStatus | null): string {
   if (!status?.connected) return "Общая ризома ещё не подключена.";
   if (status.has_content) return "Общая ризома доступна.";
@@ -120,7 +142,7 @@ function sharedLabel(status: RepositoryStatus | null): string {
 }
 
 function personalLabel(status: RepositoryStatus | null): string {
-  if (!status?.connected) return "Личный git ещё не связан.";
+  if (!status?.connected) return "Личный git не связан — можно загрузить .md в личный слой без git.";
   if (status.has_content) return `Связан git ${status.owner}/${status.name}.`;
   return `Git ${status.owner}/${status.name} связан, коммитов пока нет.`;
 }
@@ -158,6 +180,9 @@ export function App() {
   const [decisionReason, setDecisionReason] = useState("");
   const [openNote, setOpenNote] = useState<NoteDetail | null>(null);
   const [report, setReport] = useState<IngestReport | null>(null);
+  const [uploadStamp, setUploadStamp] = useState(0);
+  const [contributions, setContributions] = useState<ContributionsResponse | null>(null);
+  const [uploadEvents, setUploadEvents] = useState<UploadEventItem[]>([]);
   const [sharedGraph, setSharedGraph] = useState<GraphResponse | null>(null);
   const [graphLoading, setGraphLoading] = useState(false);
   const [graphCenter, setGraphCenter] = useState<string | null>(null);
@@ -260,7 +285,7 @@ export function App() {
   }, [repository?.shared.connected, repository?.shared.updated_at]);
 
   useEffect(() => {
-    if (!user || !repository?.personal?.connected) {
+    if (!user) {
       setPersonalNotes([]);
       setPersonalRevision(null);
       return;
@@ -277,10 +302,10 @@ export function App() {
       })
       .catch(() => undefined);
     return () => controller.abort();
-  }, [user, repository?.personal?.connected, repository?.personal?.updated_at]);
+  }, [user, repository?.personal?.connected, repository?.personal?.updated_at, uploadStamp]);
 
   useEffect(() => {
-    if (!user || !repository?.shared.connected || !repository.personal?.connected) {
+    if (!user || !repository?.shared.connected) {
       setDifferences([]);
       setDifferLoading(false);
       return;
@@ -296,7 +321,7 @@ export function App() {
       .catch((requestError: unknown) => {
         if (requestError instanceof DOMException && requestError.name === "AbortError") return;
         setDifferences([]);
-        setError(requestError instanceof Error ? requestError.message : "Не удалось сравнить git");
+        setError(requestError instanceof Error ? requestError.message : "Не удалось сравнить с общей");
       })
       .finally(() => {
         if (!controller.signal.aborted) setDifferLoading(false);
@@ -309,6 +334,7 @@ export function App() {
     repository?.shared.index_status,
     repository?.personal?.connected,
     repository?.personal?.updated_at,
+    uploadStamp,
   ]);
 
   useEffect(() => {
@@ -326,6 +352,35 @@ export function App() {
       .catch(() => undefined);
     return () => controller.abort();
   }, [user, repository?.shared.updated_at]);
+
+  useEffect(() => {
+    if (!user) {
+      setContributions(null);
+      setUploadEvents([]);
+      return;
+    }
+    const controller = new AbortController();
+    void fetch("/api/contributions/me", { signal: controller.signal })
+      .then(async (response) => {
+        if (!response.ok) throw new Error(await readError(response));
+        return (await response.json()) as ContributionsResponse;
+      })
+      .then((body) => setContributions(body))
+      .catch(() => undefined);
+    void fetch("/api/personal/uploads", { signal: controller.signal })
+      .then(async (response) => {
+        if (!response.ok) throw new Error(await readError(response));
+        return (await response.json()) as UploadHistoryResponse;
+      })
+      .then((body) => setUploadEvents(body.events))
+      .catch(() => undefined);
+    return () => controller.abort();
+  }, [
+    user,
+    uploadStamp,
+    repository?.shared.updated_at,
+    repository?.personal?.updated_at,
+  ]);
 
   useEffect(() => {
     if (!repository?.shared.connected) {
@@ -455,6 +510,7 @@ export function App() {
       if (differ.ok) {
         setDifferences(((await differ.json()) as DifferResponse).differences);
       }
+      setUploadStamp((value) => value + 1);
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "Ошибка соединения");
     } finally {
@@ -543,6 +599,7 @@ export function App() {
       if (!response.ok) throw new Error(await readError(response));
       const body = (await response.json()) as IngestReport;
       setReport(body);
+      setUploadStamp((value) => value + 1);
       formElement.reset();
       const notes = await fetch("/api/personal/notes");
       if (notes.ok) {
@@ -716,20 +773,20 @@ export function App() {
               </button>
             </aside>
           </section>
-          {repository?.shared.connected && repository.personal?.connected && (
+          {repository?.shared.connected && user && (
             <section className="notes-panel" aria-labelledby="differ-heading">
               <div>
                 <p className="eyebrow">Отличия</p>
                 <h2 id="differ-heading">Differ</h2>
                 <p className="admin-panel__hint">
-                  Сравнение вашего git с опубликованной общей ризомой в одну сторону:
-                  чего в общей ещё нет или что отличается. Отметьте и предложите в очередь.
-                  Личный git не меняется.
+                  Сравнение личного слоя (git или загруженные .md) с опубликованной общей
+                  в одну сторону: чего в общей ещё нет или что отличается. Git не обязателен.
+                  Личный git при предложении не меняется.
                 </p>
               </div>
               {error && <p className="form-error" role="alert">{error}</p>}
               {differLoading ? (
-                <p className="admin-panel__hint" role="status">Сравниваем ваш git с общей ризомой…</p>
+                <p className="admin-panel__hint" role="status">Сравниваем личный слой с общей ризомой…</p>
               ) : differences.length === 0 ? (
                 <p className="admin-panel__hint">Отличий нет — в общую предлагать нечего.</p>
               ) : (
@@ -768,11 +825,11 @@ export function App() {
               </button>
               <form className="connect-form" onSubmit={(event) => void importFallback(event)}>
                 <label>
-                  Запасной импорт (.md или ZIP)
+                  Загрузка .md или ZIP без git
                   <input name="file" type="file" accept=".md,.zip,text/markdown,application/zip" required />
                 </label>
                 <button className="button button--quiet" type="submit" disabled={submitting}>
-                  Загрузить в git
+                  Загрузить в личный слой
                 </button>
               </form>
               {report && (
@@ -780,11 +837,58 @@ export function App() {
                   Принято: {report.accepted.length}. Пропущено: {report.skipped.length}. Конфликт: {report.conflicted.length}.
                 </p>
               )}
+              {uploadEvents.length > 0 && (
+                <div>
+                  <p className="admin-panel__hint">История загрузок в личный слой — в GraphNotes, не в git log.</p>
+                  <ul className="note-list">
+                    {uploadEvents.slice(0, 8).map((item) => (
+                      <li key={`${item.path}-${item.created_at}`}>
+                        <span className="note-link">
+                          <strong>{item.path}</strong>
+                          <small>{new Date(item.created_at).toLocaleString("ru")} · {item.content_hash.slice(0, 8)}</small>
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
               {openNote && (
                 <article className="note-read">
                   <h3>{openNote.title}</h3>
                   <pre>{openNote.body}</pre>
                 </article>
+              )}
+            </section>
+          )}
+          {user && (
+            <section className="notes-panel" aria-labelledby="contrib-heading">
+              <div>
+                <p className="eyebrow">Автор</p>
+                <h2 id="contrib-heading">Мой вклад</h2>
+                <p className="admin-panel__hint">
+                  Пустой Differ не стирает принятое. Состояния: только в личном слое, предложено, принято в общую.
+                </p>
+              </div>
+              {!contributions || contributions.notes.length === 0 ? (
+                <p className="admin-panel__hint">Пока нет заметок в личном слое и принятого вклада.</p>
+              ) : (
+                <ul className="note-list">
+                  {contributions.notes.map((item) => (
+                    <li key={item.path}>
+                      <button
+                        className="note-link"
+                        type="button"
+                        onClick={() => {
+                          if (item.state === "accepted") void openGraphNote(item.path, "shared");
+                          else void openPersonalNote(item.path);
+                        }}
+                      >
+                        <strong>{item.title}</strong>
+                        <small>{item.path} · {contributionStateLabel(item.state)}</small>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
               )}
             </section>
           )}
@@ -883,9 +987,6 @@ export function App() {
                 onOpen={(path, origin) => void openGraphNote(path, origin)}
                 onExpand={setGraphCenter}
               />
-              <p className="admin-panel__hint">
-                <a className="note-link" href="/api/shared/archive">Скачать общую ризому (ZIP)</a>
-              </p>
               {openNote && (
                 <article className="note-read">
                   <h3>{openNote.title}</h3>
@@ -951,8 +1052,9 @@ export function App() {
             <p className="eyebrow">Связанное знание</p>
             <h1>Собирайте мысли в живую ризому.</h1>
             <p className="summary">
-              {sharedLabel(repository?.shared ?? null)} Markdown остаётся в git.
-              GraphNotes показывает общую ризому. Скачайте ZIP актуальных заметок или предложите свои отличия.
+              {sharedLabel(repository?.shared ?? null)} Markdown остаётся в git
+              общей ризомы. GraphNotes показывает её в приложении и файлами не отдаёт.
+              Войдите, чтобы сравнить свой слой (git или загрузка .md) с общей.
             </p>
             {sharedGraph && sharedGraph.nodes.length > 0 && (
               <p className="summary">
@@ -1020,9 +1122,6 @@ export function App() {
               onOpen={(path, origin) => void openGraphNote(path, origin)}
               onExpand={setGraphCenter}
             />
-            <p className="admin-panel__hint">
-              <a className="note-link" href="/api/shared/archive">Скачать общую ризому (ZIP)</a>
-            </p>
             {openNote && (
               <article className="note-read">
                 <h3>{openNote.title}</h3>

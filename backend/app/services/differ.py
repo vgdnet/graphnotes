@@ -4,6 +4,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.github import PersonalRepository, SharedRepository
+from app.models.personal_upload import PersonalUpload
 from app.models.user import User
 from app.services.github import GitHubAppClient, GitHubAppError
 from app.services.proposal import ProposalError, _github
@@ -23,15 +24,33 @@ async def list_differences(
     client: GitHubAppClient,
 ) -> dict[str, object]:
     shared = await database.get(SharedRepository, SHARED_SINGLETON_ID)
+    if shared is None or not published_sha(shared):
+        raise ProposalError(409, "the shared rhizome is not connected")
     personal = await database.scalar(
         select(PersonalRepository).where(PersonalRepository.user_id == user.id)
     )
-    if shared is None or not published_sha(shared):
-        raise ProposalError(409, "the shared rhizome is not connected")
-    if personal is None or not personal.observed_sha:
-        raise ProposalError(409, "connect your git first")
+    if personal is not None and personal.observed_sha:
+        return await _differ_from_git(client, shared, personal)
+    uploads = list(
+        (
+            await database.scalars(
+                select(PersonalUpload).where(PersonalUpload.user_id == user.id)
+            )
+        ).all()
+    )
+    if not uploads:
+        return {"differences": []}
+    return await _differ_from_uploads(client, shared, uploads)
+
+
+async def _differ_from_git(
+    client: GitHubAppClient,
+    shared: SharedRepository,
+    personal: PersonalRepository,
+) -> dict[str, object]:
     shared_ref = published_sha(shared)
     assert shared_ref is not None
+    assert personal.observed_sha is not None
     try:
         personal_blobs = await client.list_markdown_blobs(
             personal.owner, personal.name, personal.observed_sha
@@ -48,4 +67,29 @@ async def list_differences(
             continue
         if blob != shared_blobs[path]:
             differences.append({"path": path, "title": _title_from_path(path), "kind": "changed"})
+    return {"differences": differences}
+
+
+async def _differ_from_uploads(
+    client: GitHubAppClient,
+    shared: SharedRepository,
+    uploads: list[PersonalUpload],
+) -> dict[str, object]:
+    shared_ref = published_sha(shared)
+    assert shared_ref is not None
+    try:
+        shared_listed = set(await client.list_markdown_files(shared.owner, shared.name, shared_ref))
+    except GitHubAppError as exc:
+        raise _github(exc) from exc
+    differences: list[dict[str, str]] = []
+    for row in sorted(uploads, key=lambda item: item.path):
+        if row.path not in shared_listed:
+            differences.append({"path": row.path, "title": _title_from_path(row.path), "kind": "added"})
+            continue
+        try:
+            current = await client.get_file(shared.owner, shared.name, row.path, shared_ref)
+        except GitHubAppError as exc:
+            raise _github(exc) from exc
+        if current != row.body:
+            differences.append({"path": row.path, "title": _title_from_path(row.path), "kind": "changed"})
     return {"differences": differences}

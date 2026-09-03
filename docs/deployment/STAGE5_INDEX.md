@@ -13,10 +13,10 @@ Stage 6.
 ## Rebuild
 
 - Full rebuild reads every Markdown file at the observed revision.
-- Incremental rebuild, used after historical take-from-shared or ZIP/MD upload
-  fallback, fetches only new and requested paths, reconstructs unchanged notes
-  from the current index, then re-resolves links. Incremental result must
-  equal a clean full rebuild.
+- Incremental rebuild, used after Markdown ingest into connected personal git,
+  fetches only new and requested paths, reconstructs unchanged notes from the
+  current index, then re-resolves links. Incremental result must equal a clean
+  full rebuild. Upload-without-git is personal staging, not a shared-index path.
 - Each layer keeps only the current revision. Previous projections are deleted.
 - At most 20 `sync_jobs` rows are retained.
 

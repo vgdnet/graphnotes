@@ -22,3 +22,5 @@ node_modules/
 frontend/dist/
 *.tsbuildinfo
 .secrets/
+tmp/
+output/

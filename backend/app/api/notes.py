@@ -7,7 +7,7 @@ from app.schemas.notes import (
     IngestReport,
     NoteDetail,
     NoteListResponse,
-    TakeFromSharedRequest,
+    UploadHistoryResponse,
 )
 from app.services.github import GitHubAppClient
 from app.services.ingest import (
@@ -17,7 +17,7 @@ from app.services.ingest import (
     import_markdown,
     list_personal_notes,
     list_shared_notes,
-    take_from_shared,
+    list_upload_events,
 )
 
 router = APIRouter(tags=["notes"])
@@ -74,23 +74,21 @@ async def personal_note(
     return NoteDetail.model_validate(payload)
 
 
-@router.post("/personal/take-from-shared", response_model=IngestReport)
-async def take_shared_notes(
-    payload: TakeFromSharedRequest,
+@router.post("/personal/take-from-shared", response_model=None)
+async def take_shared_notes(_user: CurrentUser) -> None:
+    raise HTTPException(
+        status_code=410,
+        detail="published shared is read in the app; GraphNotes does not write it into the personal layer",
+    )
+
+
+@router.get("/personal/uploads", response_model=UploadHistoryResponse)
+async def personal_uploads(
     user: CurrentUser,
     database: DatabaseSession,
-) -> IngestReport:
-    try:
-        report = await take_from_shared(
-            database,
-            user=user,
-            paths=payload.paths,
-            expected_sha=payload.expected_sha,
-            client=_client(),
-        )
-    except IngestError as exc:
-        _raise(exc)
-    return IngestReport.model_validate(report)
+) -> UploadHistoryResponse:
+    payload = await list_upload_events(database, user)
+    return UploadHistoryResponse.model_validate(payload)
 
 
 @router.post("/personal/import-md", response_model=IngestReport)

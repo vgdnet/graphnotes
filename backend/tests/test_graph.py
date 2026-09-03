@@ -89,8 +89,9 @@ async def test_personal_isolation_and_obsidian_sha_refresh(
     async with session_factory() as database:
         await bootstrap_admin(database, "efimov")
     assert (await first.post("/repository/connect")).status_code == 200
+    github.repos["vgdnet/guide_psy"].files["card.md"] = github.repos["vgdnet/rhizome"].files["card.md"]
+    github.repos["vgdnet/guide_psy"].sha = "with-card"
     await _connect_pair(first, "vgdnet/guide_psy")
-    await first.post("/personal/take-from-shared", json={"paths": ["card.md"]})
 
     mine = await first.get("/graph/personal")
     assert mine.status_code == 200
@@ -359,8 +360,7 @@ async def test_personal_overlay_isolation_shared_read_and_xss_inert(
     github.repos["vgdnet/rhizome"].files["xss.md"] = "# <script>alert(1)</script>\n<img src=x>\n"
     await _admin_connect(client, session_factory, "efimov")
     await _connect_pair(client, "vgdnet/guide_psy")
-    taken = await client.post("/personal/take-from-shared", json={"paths": ["card.md"]})
-    assert taken.status_code == 200
+    github.repos["vgdnet/guide_psy"].files["card.md"] = github.repos["vgdnet/rhizome"].files["card.md"]
     github.repos["vgdnet/guide_psy"].files["mine.md"] = "# Mine\nSee [[card]].\n"
     github.repos["vgdnet/guide_psy"].sha = "overlay-sha"
 
