@@ -10,7 +10,10 @@ class NoteProjection(BaseModel):
     aliases: list[str]
     links: list[str]
     unresolved_links: list[str]
+    locked_links: list[str] = []
     warnings: list[str]
+    locked: bool = False
+    closed: bool = False
 
 
 class NoteDetail(NoteProjection):
@@ -41,3 +44,17 @@ class UploadEventItem(BaseModel):
 
 class UploadHistoryResponse(BaseModel):
     events: list[UploadEventItem]
+
+
+class ClosedPathItem(BaseModel):
+    path: str
+    created_at: datetime | None = None
+    closed: bool = True
+
+
+class ClosedPathListResponse(BaseModel):
+    paths: list[ClosedPathItem]
+
+
+class ClosePathRequest(BaseModel):
+    path: str

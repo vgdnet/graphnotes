@@ -10,6 +10,7 @@ from app.core.config import settings
 from app.models.github import PersonalRepository, SharedRepository
 from app.models.graph import NoteIndex, NoteLayer, NoteLink, NoteTag, SyncJob, SyncJobStatus, Tag
 from app.services.audit import record_audit_event
+from app.services.closed_corpus import all_closed_keys, matches_closed
 from app.services.github import GitHubAppClient, GitHubAppError
 from app.services.markdown import (
     ParsedLink,
@@ -555,6 +556,7 @@ async def _graph_payload(
         link.target_id for link in links if link.target_id in chosen_ids
     }
     origin = "personal" if layer == NoteLayer.PERSONAL.value else "shared"
+    closed_keys = await all_closed_keys(database)
     nodes = []
     for note in chosen_notes:
         nodes.append(
@@ -564,27 +566,44 @@ async def _graph_payload(
                 "tags": tag_map.get(note.id, []),
                 "isolated": note.id not in linked_targets,
                 "unresolved": False,
+                "locked": False,
                 "origin": origin,
             }
         )
     edges = []
     unresolved_nodes: dict[str, str] = {}
+    locked_nodes: dict[str, str] = {}
     for link in links:
         source = by_id.get(link.source_id)
         if source is None or source.path not in chosen_paths:
             continue
         if link.unresolved or link.target_id is None:
-            node_id = f"unresolved:{link.target_raw}"
-            unresolved_nodes[node_id] = link.target_raw
-            edges.append(
-                {
-                    "source": source.path,
-                    "target": node_id,
-                    "type": link.link_type,
-                    "unresolved": True,
-                    "origin": origin,
-                }
-            )
+            if matches_closed(link.target_raw, closed_keys):
+                node_id = f"locked:{link.target_raw}"
+                locked_nodes[node_id] = link.target_raw
+                edges.append(
+                    {
+                        "source": source.path,
+                        "target": node_id,
+                        "type": link.link_type,
+                        "unresolved": False,
+                        "locked": True,
+                        "origin": origin,
+                    }
+                )
+            else:
+                node_id = f"unresolved:{link.target_raw}"
+                unresolved_nodes[node_id] = link.target_raw
+                edges.append(
+                    {
+                        "source": source.path,
+                        "target": node_id,
+                        "type": link.link_type,
+                        "unresolved": True,
+                        "locked": False,
+                        "origin": origin,
+                    }
+                )
             continue
         target = by_id.get(link.target_id)
         if target is None or target.path not in chosen_paths:
@@ -595,6 +614,7 @@ async def _graph_payload(
                 "target": target.path,
                 "type": link.link_type,
                 "unresolved": False,
+                "locked": False,
                 "origin": origin,
             }
         )
@@ -606,6 +626,19 @@ async def _graph_payload(
                 "tags": [],
                 "isolated": False,
                 "unresolved": True,
+                "locked": False,
+                "origin": origin,
+            }
+        )
+    for node_id, title in locked_nodes.items():
+        nodes.append(
+            {
+                "path": node_id,
+                "title": title,
+                "tags": [],
+                "isolated": False,
+                "unresolved": False,
+                "locked": True,
                 "origin": origin,
             }
         )

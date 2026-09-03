@@ -4,12 +4,20 @@ from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 
 from app.api.dependencies import CurrentAuthor, CurrentUser, DatabaseSession
 from app.schemas.notes import (
+    ClosePathRequest,
+    ClosedPathListResponse,
     IngestReport,
     NoteDetail,
     NoteListResponse,
     UploadHistoryResponse,
 )
 from app.services.github import GitHubAppClient
+from app.services.closed_corpus import (
+    ClosedCorpusError,
+    close_path,
+    list_closed_paths,
+    unclose_path,
+)
 from app.services.ingest import (
     IngestError,
     get_personal_note,
@@ -89,6 +97,41 @@ async def personal_uploads(
 ) -> UploadHistoryResponse:
     payload = await list_upload_events(database, user)
     return UploadHistoryResponse.model_validate(payload)
+
+
+@router.get("/personal/closed-paths", response_model=ClosedPathListResponse)
+async def personal_closed_paths(
+    user: CurrentUser,
+    database: DatabaseSession,
+) -> ClosedPathListResponse:
+    paths = await list_closed_paths(database, user)
+    return ClosedPathListResponse.model_validate({"paths": paths})
+
+
+@router.put("/personal/closed-paths", response_model=ClosedPathListResponse)
+async def close_personal_path(
+    payload: ClosePathRequest,
+    user: CurrentAuthor,
+    database: DatabaseSession,
+) -> ClosedPathListResponse:
+    try:
+        await close_path(database, user, payload.path)
+    except ClosedCorpusError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+    paths = await list_closed_paths(database, user)
+    return ClosedPathListResponse.model_validate({"paths": paths})
+
+
+@router.delete("/personal/closed-paths/{note_path:path}", status_code=204)
+async def unclose_personal_path(
+    note_path: str,
+    user: CurrentAuthor,
+    database: DatabaseSession,
+) -> None:
+    try:
+        await unclose_path(database, user, note_path)
+    except ClosedCorpusError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
 
 
 @router.post("/personal/import-md", response_model=IngestReport)

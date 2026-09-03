@@ -10,6 +10,13 @@ from app.models.personal_upload import PersonalUpload, UploadEvent
 from app.models.user import User
 from app.services.archive import ArchiveError, read_markdown_bytes, read_zip_markdown
 from app.services.audit import record_audit_event
+from app.services.closed_corpus import (
+    all_closed_keys,
+    closed_paths_for_user,
+    is_globally_closed,
+    lock_stub,
+    matches_closed,
+)
 from app.services.git_paths import PathError, normalize_git_path
 from app.services.github import GitHubAppClient, GitHubAppError
 from app.services.markdown import parse_markdown, unresolved_links
@@ -82,7 +89,10 @@ def _projection_from_text(path: str, text: str, available: set[str]) -> dict[str
         "aliases": list(parsed.aliases),
         "links": list(parsed.links),
         "unresolved_links": list(unresolved_links(parsed.links, available)),
+        "locked_links": [],
         "warnings": list(parsed.warnings),
+        "locked": False,
+        "closed": False,
     }
 
 
@@ -123,8 +133,15 @@ async def list_personal_notes(
         uploads = await _uploads_for(database, user.id)
         available = {item.path for item in uploads}
         latest = max((item.updated_at for item in uploads), default=None)
+        closed = await closed_paths_for_user(database, user.id)
         return {
-            "notes": [_projection_from_text(item.path, item.body, available) for item in uploads],
+            "notes": [
+                {
+                    **_projection_from_text(item.path, item.body, available),
+                    "closed": item.path in closed,
+                }
+                for item in uploads
+            ],
             "revision": None,
             "updated_at": latest,
         }
@@ -137,6 +154,9 @@ async def list_personal_notes(
         await database.commit()
         raise _github_to_ingest(exc) from exc
     await database.commit()
+    closed = await closed_paths_for_user(database, user.id)
+    for note in notes:
+        note["closed"] = note.get("path") in closed
     return {
         "notes": notes,
         "revision": row.observed_sha,
@@ -173,9 +193,12 @@ async def get_personal_note(
             "aliases": list(parsed.aliases),
             "links": list(parsed.links),
             "unresolved_links": list(unresolved_links(parsed.links, available)),
+            "locked_links": [],
             "warnings": list(parsed.warnings),
             "body": parsed.body,
             "content_hash": parsed.content_hash,
+            "locked": False,
+            "closed": normalized in await closed_paths_for_user(database, user.id),
         }
     try:
         text = await client.get_file(row.owner, row.name, normalized, row.observed_sha)
@@ -190,9 +213,12 @@ async def get_personal_note(
         "aliases": list(parsed.aliases),
         "links": list(parsed.links),
         "unresolved_links": list(unresolved_links(parsed.links, paths)),
+        "locked_links": [],
         "warnings": list(parsed.warnings),
         "body": parsed.body,
         "content_hash": parsed.content_hash,
+        "locked": False,
+        "closed": normalized in await closed_paths_for_user(database, user.id),
     }
 
 
@@ -207,23 +233,39 @@ async def get_shared_note(
         raise IngestError(400, str(exc)) from exc
     row = await database.get(SharedRepository, SHARED_SINGLETON_ID)
     if row is None or not row.observed_sha:
+        if await is_globally_closed(database, normalized):
+            return lock_stub(normalized)
         raise IngestError(404, "note was not found")
     try:
-        text = await client.get_file(row.owner, row.name, normalized, row.observed_sha)
         paths = set(await client.list_markdown_files(row.owner, row.name, row.observed_sha))
     except GitHubAppError as exc:
         raise _github_to_ingest(exc) from exc
+    if normalized not in paths:
+        if await is_globally_closed(database, normalized):
+            return lock_stub(normalized)
+        raise IngestError(404, "note was not found")
+    try:
+        text = await client.get_file(row.owner, row.name, normalized, row.observed_sha)
+    except GitHubAppError as exc:
+        raise _github_to_ingest(exc) from exc
     parsed = parse_markdown(normalized, text)
+    missing = list(unresolved_links(parsed.links, paths))
+    closed_keys = await all_closed_keys(database)
+    locked = [item for item in missing if matches_closed(item, closed_keys)]
+    unresolved = [item for item in missing if item not in locked]
     return {
         "path": normalized,
         "title": parsed.title,
         "tags": list(parsed.tags),
         "aliases": list(parsed.aliases),
         "links": list(parsed.links),
-        "unresolved_links": list(unresolved_links(parsed.links, paths)),
+        "unresolved_links": unresolved,
+        "locked_links": locked,
         "warnings": list(parsed.warnings),
         "body": parsed.body,
         "content_hash": parsed.content_hash,
+        "locked": False,
+        "closed": False,
     }
 
 

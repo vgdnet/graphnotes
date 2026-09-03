@@ -7,6 +7,7 @@ class GraphNode(BaseModel):
     tags: list[str] = []
     isolated: bool = False
     unresolved: bool = False
+    locked: bool = False
     origin: str = "shared"
 
 
@@ -15,6 +16,7 @@ class GraphEdge(BaseModel):
     target: str
     type: str
     unresolved: bool = False
+    locked: bool = False
     origin: str = "shared"
 
 

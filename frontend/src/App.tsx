@@ -53,7 +53,10 @@ type NoteProjection = {
   aliases: string[];
   links: string[];
   unresolved_links: string[];
+  locked_links?: string[];
   warnings: string[];
+  locked?: boolean;
+  closed?: boolean;
 };
 
 type NoteDetail = NoteProjection & { body: string; content_hash: string };
@@ -524,6 +527,24 @@ export function App() {
 
   async function openGraphNote(path: string, origin: string) {
     if (path.startsWith("unresolved:")) return;
+    if (path.startsWith("locked:")) {
+      const title = path.slice("locked:".length);
+      setOpenNote({
+        path,
+        title,
+        tags: [],
+        aliases: [],
+        links: [],
+        unresolved_links: [],
+        locked_links: [],
+        warnings: [],
+        locked: true,
+        closed: false,
+        body: "",
+        content_hash: "",
+      });
+      return;
+    }
     const filePath = path.startsWith("personal:") ? path.slice("personal:".length) : path;
     const endpoint = origin === "personal"
       ? `/api/personal/notes/${encodeURI(filePath)}`
@@ -852,6 +873,29 @@ export function App() {
     }
   }
 
+  async function toggleClosedPath(path: string, closed: boolean) {
+    setSubmitting(true);
+    setError("");
+    try {
+      const response = await fetch(
+        closed ? `/api/personal/closed-paths/${encodeURI(path)}` : "/api/personal/closed-paths",
+        closed
+          ? { method: "DELETE" }
+          : {
+              method: "PUT",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ path }),
+            },
+      );
+      if (!response.ok) throw new Error(await readError(response));
+      setUploadStamp((value) => value + 1);
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "Ошибка соединения");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
   async function withdrawAuthorContract() {
     setSubmitting(true);
     setError("");
@@ -1037,10 +1081,41 @@ export function App() {
                   </ul>
                 </div>
               )}
+              {personalNotes.length > 0 && user.is_author && (
+                <div>
+                  <p className="admin-panel__hint">
+                    Закрытый корпус остаётся у вас: не в Differ и не в общей. Ссылка из общей — замок, не текст.
+                  </p>
+                  <ul className="note-list">
+                    {personalNotes.map((item) => (
+                      <li key={`closed-${item.path}`}>
+                        <div className="note-pick">
+                          <button className="note-link" type="button" onClick={() => void openPersonalNote(item.path)}>
+                            <strong>{item.title}</strong>
+                            <small>{item.path}{item.closed ? " · закрыто" : ""}</small>
+                          </button>
+                          <button
+                            className="button button--quiet"
+                            type="button"
+                            disabled={submitting}
+                            onClick={() => void toggleClosedPath(item.path, Boolean(item.closed))}
+                          >
+                            {item.closed ? "Открыть себе" : "Закрыть"}
+                          </button>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
               {openNote && (
                 <article className="note-read">
                   <h3>{openNote.title}</h3>
-                  <pre>{openNote.body}</pre>
+                  {openNote.locked ? (
+                    <p className="admin-panel__hint">Закрытая заметка. Тело в общей ризоме не показывается.</p>
+                  ) : (
+                    <pre>{openNote.body}</pre>
+                  )}
                 </article>
               )}
             </section>

@@ -9,6 +9,7 @@ export type GraphNode = {
   tags: string[];
   isolated: boolean;
   unresolved: boolean;
+  locked?: boolean;
   origin?: string;
 };
 
@@ -17,6 +18,7 @@ export type GraphEdge = {
   target: string;
   type: string;
   unresolved: boolean;
+  locked?: boolean;
   origin?: string;
 };
 
@@ -112,6 +114,7 @@ export function GraphView({
         { selector: "node[origin = 'personal']", style: { "background-color": "#6b8cff", "border-color": "#24305a" } },
         { selector: "node[origin = 'both']", style: { "background-color": "#c9a227", "border-color": "#4d3e12" } },
         { selector: "node[unresolved = 1]", style: { "background-color": "#ff6b6b", "border-color": "#7a3030" } },
+        { selector: "node[locked = 1]", style: { "background-color": "#c9a227", "border-color": "#4d3e12", "border-style": "double" } },
         { selector: "node:selected", style: { "border-color": "#f4f7fa", "border-width": 3 } },
         {
           selector: "edge",
@@ -125,6 +128,7 @@ export function GraphView({
         },
         { selector: "edge[origin = 'overlay']", style: { "line-style": "dashed", "line-color": "#6b8cff", "target-arrow-color": "#6b8cff" } },
         { selector: "edge[unresolved = 1]", style: { "line-style": "dotted", "line-color": "#ff6b6b", "target-arrow-color": "#ff6b6b" } },
+        { selector: "edge[locked = 1]", style: { "line-style": "dotted", "line-color": "#c9a227", "target-arrow-color": "#c9a227" } },
       ],
     });
     cyRef.current = cy;
@@ -160,6 +164,7 @@ export function GraphView({
           label: node.title,
           origin: node.origin || "shared",
           unresolved: node.unresolved ? 1 : 0,
+          locked: node.locked ? 1 : 0,
         },
       })),
       ...visible.edges.map((edge, index) => ({
@@ -170,6 +175,7 @@ export function GraphView({
           target: edge.target,
           origin: edge.origin || "shared",
           unresolved: edge.unresolved ? 1 : 0,
+          locked: edge.locked ? 1 : 0,
         },
       })),
     ]);
@@ -215,7 +221,7 @@ export function GraphView({
       if (node) onOpen(node.path, node.origin || "shared");
     } else if (event.key === "e" || event.key === "E") {
       const node = currentNode();
-      if (node && !node.unresolved && !node.path.startsWith("personal:")) onExpand(node.path);
+      if (node && !node.unresolved && !node.locked && !node.path.startsWith("personal:")) onExpand(node.path);
     } else if (event.key === "Escape") {
       setFocusPath(null);
     }
@@ -271,7 +277,7 @@ export function GraphView({
         <div className="graph-selection">
           <p>
             <strong>{selected.title}</strong>
-            <small> {originLabel(selected.origin)} · {selected.unresolved ? "нет заметки" : selected.path}</small>
+            <small> {originLabel(selected.origin)} · {selected.locked ? "замок" : selected.unresolved ? "нет заметки" : selected.path}</small>
           </p>
           <div className="graph-actions">
             <button
@@ -285,7 +291,7 @@ export function GraphView({
             <button
               className="button button--quiet"
               type="button"
-              disabled={selected.unresolved || selected.path.startsWith("personal:")}
+              disabled={selected.unresolved || Boolean(selected.locked) || selected.path.startsWith("personal:")}
               onClick={() => onExpand(selected.path)}
             >
               Соседи

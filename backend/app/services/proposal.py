@@ -14,6 +14,7 @@ from app.models.personal_upload import PersonalUpload
 from app.models.proposal import Proposal, ProposalStatus
 from app.models.user import User, UserRole
 from app.services.audit import record_audit_event
+from app.services.closed_corpus import closed_paths_for_user
 from app.services.git_paths import PathError, normalize_git_path
 from app.services.github import GitHubAppClient, GitHubAppError
 from app.services.index import IndexerError, rebuild_shared
@@ -151,6 +152,9 @@ async def create_proposal(
             normalized.append(path)
     if not normalized:
         raise ProposalError(400, "choose notes to propose")
+    closed = await closed_paths_for_user(database, user.id)
+    if any(path in closed for path in normalized):
+        raise ProposalError(403, "closed notes cannot be proposed")
 
     added: list[str] = []
     changed: list[str] = []
