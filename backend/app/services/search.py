@@ -2,7 +2,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.github import PersonalRepository, SharedRepository
-from app.models.graph import NoteIndex, NoteLayer
+from app.models.graph import NoteIndex, NoteLayer, NoteTag, Tag
 from app.models.user import User
 from app.services.repository import SHARED_SINGLETON_ID
 
@@ -12,40 +12,35 @@ async def search_visible_cards(
     query: str,
     *,
     user: User | None,
+    tag: str = "",
     limit: int = 40,
 ) -> dict[str, object]:
     trimmed = query.strip()
-    if not trimmed:
-        return {"query": trimmed, "hits": []}
-    pattern = f"%{trimmed.casefold()}%"
+    tag_name = tag.strip()
     cap = max(1, min(limit, 80))
-    hits: list[dict[str, str]] = []
+    hits: list[dict[str, object]] = []
     seen: set[str] = set()
+    note_ids: list[object] = []
 
     shared = await database.get(SharedRepository, SHARED_SINGLETON_ID)
     if shared is not None and shared.indexed_sha:
         shared_rows = (
             await database.scalars(
-                select(NoteIndex)
-                .where(
-                    NoteIndex.layer == NoteLayer.SHARED.value,
-                    NoteIndex.owner_user_id.is_(None),
-                    NoteIndex.revision_sha == shared.indexed_sha,
-                    or_(
-                        func.lower(NoteIndex.title).like(pattern),
-                        func.lower(NoteIndex.path).like(pattern),
-                        func.lower(NoteIndex.slug).like(pattern),
-                    ),
-                )
-                .order_by(NoteIndex.title, NoteIndex.path)
-                .limit(cap)
+                _note_query(
+                    layer=NoteLayer.SHARED.value,
+                    owner_id=None,
+                    revision=shared.indexed_sha,
+                    text=trimmed,
+                    tag_name=tag_name,
+                ).order_by(NoteIndex.title, NoteIndex.path).limit(cap)
             )
         ).all()
         for note in shared_rows:
             if note.path in seen:
                 continue
             seen.add(note.path)
-            hits.append({"path": note.path, "title": note.title})
+            note_ids.append(note.id)
+            hits.append({"path": note.path, "title": note.title, "tags": []})
 
     if user is not None:
         personal = await database.scalar(
@@ -55,19 +50,13 @@ async def search_visible_cards(
         if personal is not None and personal.indexed_sha and leftover > 0:
             personal_rows = (
                 await database.scalars(
-                    select(NoteIndex)
-                    .where(
-                        NoteIndex.layer == NoteLayer.PERSONAL.value,
-                        NoteIndex.owner_user_id == user.id,
-                        NoteIndex.revision_sha == personal.indexed_sha,
-                        or_(
-                            func.lower(NoteIndex.title).like(pattern),
-                            func.lower(NoteIndex.path).like(pattern),
-                            func.lower(NoteIndex.slug).like(pattern),
-                        ),
-                    )
-                    .order_by(NoteIndex.title, NoteIndex.path)
-                    .limit(leftover)
+                    _note_query(
+                        layer=NoteLayer.PERSONAL.value,
+                        owner_id=user.id,
+                        revision=personal.indexed_sha,
+                        text=trimmed,
+                        tag_name=tag_name,
+                    ).order_by(NoteIndex.title, NoteIndex.path).limit(leftover)
                 )
             ).all()
             for note in personal_rows:
@@ -75,6 +64,143 @@ async def search_visible_cards(
                 if path in seen or note.path in seen:
                     continue
                 seen.add(path)
-                hits.append({"path": path, "title": note.title})
+                note_ids.append(note.id)
+                hits.append({"path": path, "title": note.title, "tags": []})
 
-    return {"query": trimmed, "hits": hits}
+    tag_map = await _tags_for_notes(database, note_ids)
+    for hit, note_id in zip(hits, note_ids, strict=True):
+        hit["tags"] = tag_map.get(note_id, [])
+
+    return {
+        "query": trimmed,
+        "tag": tag_name,
+        "hits": hits,
+        "available_tags": await _available_tags(database, user=user),
+    }
+
+
+def _note_query(
+    *,
+    layer: str,
+    owner_id: object | None,
+    revision: str,
+    text: str,
+    tag_name: str,
+):
+    clauses = [
+        NoteIndex.layer == layer,
+        NoteIndex.revision_sha == revision,
+    ]
+    if owner_id is None:
+        clauses.append(NoteIndex.owner_user_id.is_(None))
+    else:
+        clauses.append(NoteIndex.owner_user_id == owner_id)
+    if text:
+        pattern = f"%{text.casefold()}%"
+        clauses.append(
+            or_(
+                func.lower(NoteIndex.title).like(pattern),
+                func.lower(NoteIndex.path).like(pattern),
+                func.lower(NoteIndex.slug).like(pattern),
+                NoteIndex.id.in_(_tag_name_match(pattern)),
+            )
+        )
+    if tag_name:
+        clauses.append(NoteIndex.id.in_(_tag_exact(tag_name)))
+    elif not text:
+        clauses.append(NoteIndex.id.is_(None))
+    return select(NoteIndex).where(*clauses)
+
+
+def _tag_name_match(pattern: str):
+    return (
+        select(NoteTag.note_id)
+        .join(Tag, Tag.id == NoteTag.tag_id)
+        .where(func.lower(Tag.name).like(pattern))
+    )
+
+
+def _tag_exact(tag_name: str):
+    return (
+        select(NoteTag.note_id)
+        .join(Tag, Tag.id == NoteTag.tag_id)
+        .where(func.lower(Tag.name) == tag_name.casefold())
+    )
+
+
+async def _tags_for_notes(
+    database: AsyncSession,
+    note_ids: list[object],
+) -> dict[object, list[str]]:
+    if not note_ids:
+        return {}
+    rows = (
+        await database.execute(
+            select(NoteTag.note_id, Tag.name)
+            .join(Tag, Tag.id == NoteTag.tag_id)
+            .where(NoteTag.note_id.in_(note_ids))
+            .order_by(Tag.name)
+        )
+    ).all()
+    mapping: dict[object, list[str]] = {}
+    for note_id, name in rows:
+        mapping.setdefault(note_id, []).append(name)
+    return mapping
+
+
+async def _available_tags(database: AsyncSession, *, user: User | None) -> list[str]:
+    names: set[str] = set()
+    shared = await database.get(SharedRepository, SHARED_SINGLETON_ID)
+    if shared is not None and shared.indexed_sha:
+        names.update(
+            await _layer_tag_names(
+                database,
+                layer=NoteLayer.SHARED.value,
+                owner_id=None,
+                revision=shared.indexed_sha,
+            )
+        )
+    if user is not None:
+        personal = await database.scalar(
+            select(PersonalRepository).where(PersonalRepository.user_id == user.id)
+        )
+        if personal is not None and personal.indexed_sha:
+            names.update(
+                await _layer_tag_names(
+                    database,
+                    layer=NoteLayer.PERSONAL.value,
+                    owner_id=user.id,
+                    revision=personal.indexed_sha,
+                )
+            )
+    return sorted(names)[:80]
+
+
+async def _layer_tag_names(
+    database: AsyncSession,
+    *,
+    layer: str,
+    owner_id: object | None,
+    revision: str,
+) -> list[str]:
+    owner_clause = (
+        NoteIndex.owner_user_id.is_(None)
+        if owner_id is None
+        else NoteIndex.owner_user_id == owner_id
+    )
+    rows = (
+        await database.scalars(
+            select(Tag.name)
+            .join(NoteTag, NoteTag.tag_id == Tag.id)
+            .join(NoteIndex, NoteIndex.id == NoteTag.note_id)
+            .where(
+                NoteIndex.layer == layer,
+                NoteIndex.revision_sha == revision,
+                owner_clause,
+            )
+            .distinct()
+            .order_by(Tag.name)
+            .limit(80)
+        )
+    ).all()
+    return list(rows)

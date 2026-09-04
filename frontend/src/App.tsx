@@ -5,7 +5,8 @@ import type { GraphResponse } from "./GraphView";
 import { GraphDiffView } from "./GraphDiffView";
 import type { GraphDiffResponse } from "./GraphDiffView";
 import { MarkdownBody } from "./MarkdownBody";
-import { cardApiUrl, cardHash, pathFromCardHash } from "./cardRoute";
+import { CardSearch } from "./CardSearch";
+import { cardApiUrl, cardHash, cardSearchHash, parseCardRoute } from "./cardRoute";
 import { ThemeSwitcher } from "./ThemeSwitcher";
 import {
   applyTheme,
@@ -18,7 +19,7 @@ import {
 
 type HealthState = "checking" | "online" | "offline";
 type AuthMode = "login" | "register";
-type ShellView = "graph" | "settings" | "differ" | "queue" | "admin" | "card";
+type ShellView = "graph" | "settings" | "differ" | "queue" | "admin" | "card" | "search";
 type SettingsBlock = "profile" | "git" | "contract";
 
 type User = {
@@ -305,9 +306,12 @@ export function App() {
   const [health, setHealth] = useState<HealthState>("checking");
   const [user, setUser] = useState<User | null>(null);
   const [authChecking, setAuthChecking] = useState(true);
-  const [view, setView] = useState<ShellView>(() => (
-    pathFromCardHash(window.location.hash) ? "card" : "graph"
-  ));
+  const [view, setView] = useState<ShellView>(() => {
+    const route = parseCardRoute(window.location.hash);
+    if (route.kind === "card") return "card";
+    if (route.kind === "search") return "search";
+    return "graph";
+  });
   const [authOpen, setAuthOpen] = useState(false);
   const [settingsBlock, setSettingsBlock] = useState<SettingsBlock>("profile");
   const [mode, setMode] = useState<AuthMode>("login");
@@ -683,13 +687,19 @@ export function App() {
     }
   }
 
-  const cardPath = pathFromCardHash(locationHash);
+  const cardRoute = parseCardRoute(locationHash);
+  const cardPath = cardRoute.kind === "card" ? cardRoute.path : null;
   const loadedCardRef = useRef<string | null>(null);
   useEffect(() => {
     if (authChecking) return;
+    if (cardRoute.kind === "search") {
+      loadedCardRef.current = null;
+      setView("search");
+      return;
+    }
     if (!cardPath) {
       loadedCardRef.current = null;
-      setView((current) => (current === "card" ? "graph" : current));
+      setView((current) => (current === "card" || current === "search" ? "graph" : current));
       return;
     }
     setView("card");
@@ -703,7 +713,15 @@ export function App() {
     if (loadedCardRef.current === cardPath) return;
     loadedCardRef.current = cardPath;
     void openGraphNote(cardPath, cardPath.startsWith("personal:") ? "personal" : "shared");
-  }, [authChecking, user, cardPath]);
+  }, [authChecking, user, cardPath, cardRoute.kind]);
+
+  function openCardSearch() {
+    if (window.location.hash === cardSearchHash() || window.location.hash === "#/card") {
+      setView("search");
+      return;
+    }
+    window.location.hash = cardSearchHash();
+  }
 
   function backToGraph() {
     const path = openNote && !openNote.path.startsWith("locked:") ? openNote.path : selectedCardPath;
@@ -1017,9 +1035,8 @@ export function App() {
       if (!response.ok) throw new Error(await readError(response));
       setUser((await response.json()) as User);
       setAuthOpen(false);
-      if (!pathFromCardHash(window.location.hash)) {
-        setView("graph");
-      }
+      const route = parseCardRoute(window.location.hash);
+      if (route.kind === "none") setView("graph");
       formElement.reset();
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "Ошибка соединения");
@@ -1219,6 +1236,14 @@ export function App() {
           <button className={view === "graph" ? "button button--quiet tab--active" : "button button--quiet"} type="button" onClick={() => backToGraph()}>
             Граф
           </button>
+          <button
+            className={view === "card" || view === "search" ? "button button--quiet tab--active" : "button button--quiet"}
+            type="button"
+            onClick={() => openCardSearch()}
+            aria-current={view === "card" || view === "search" ? "page" : undefined}
+          >
+            Карточки
+          </button>
           {user && (
             <button className={view === "differ" ? "button button--quiet tab--active" : "button button--quiet"} type="button" onClick={() => { backToGraph(); openDiffer(); }}>
               Differ
@@ -1264,6 +1289,9 @@ export function App() {
         <section className="loading" aria-live="polite">Загружаем вашу ризому…</section>
       ) : user ? (
         <>
+          {view === "search" && (
+            <CardSearch canReadNotes onNeedAuth={() => setAuthOpen(true)} />
+          )}
           {view === "card" && (
           <section className="notes-panel notes-panel--card" aria-labelledby="card-heading">
             <div>
@@ -1273,9 +1301,14 @@ export function App() {
                 Отрисованный Markdown на чтение. Правки текста здесь нет — авторство в git.
               </p>
             </div>
+            <div className="graph-actions">
+            <button className="button button--quiet" type="button" onClick={() => openCardSearch()}>
+              К поиску
+            </button>
             <button className="button button--quiet" type="button" onClick={() => backToGraph()}>
               К графу
             </button>
+            </div>
             {error && <p className="form-error" role="alert">{error}</p>}
             {openNote?.locked ? (
               <p className="admin-panel__hint">Закрытая заметка. Тело не показывается.</p>
@@ -1964,6 +1997,9 @@ export function App() {
           </div>
           </section>
         )}
+        {view === "search" && (
+          <CardSearch canReadNotes={false} onNeedAuth={() => setAuthOpen(true)} />
+        )}
         {view === "card" && (
           <section className="notes-panel notes-panel--card" aria-labelledby="guest-card-heading">
             <div>
@@ -1971,9 +2007,17 @@ export function App() {
               <h2 id="guest-card-heading">Карточка ризомы</h2>
               <p className="admin-panel__hint" role="status">Войдите, чтобы открыть эту карточку.</p>
             </div>
+            <div className="graph-actions">
+            <button className="button button--quiet" type="button" onClick={() => openCardSearch()}>
+              К поиску
+            </button>
+            <button className="button button--quiet" type="button" onClick={() => backToGraph()}>
+              К графу
+            </button>
+            </div>
           </section>
         )}
-        {view !== "card" && repository?.shared.connected && (
+        {view !== "card" && view !== "search" && repository?.shared.connected && (
           <section className="notes-panel notes-panel--graph" aria-labelledby="public-graph-heading">
             <div>
               <p className="eyebrow">Граф</p>

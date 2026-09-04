@@ -1,11 +1,18 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { cardApiUrl, cardHash, pathFromCardHash } from "../test-out/cardRoute.js";
+import { cardApiUrl, cardHash, cardSearchHash, parseCardRoute, pathFromCardHash } from "../test-out/cardRoute.js";
 import { renderBlocks } from "../test-out/markdownRender.js";
 
 const UNICODE_PATH = "personal:вариант Б — конспекты/Паранойя (Б).md";
 const emptyNote = { links: [], unresolved_links: [] };
+
+test("empty #/card/ is the rhizome search hub, not a card path", () => {
+  assert.deepEqual(parseCardRoute("#/card/"), { kind: "search" });
+  assert.deepEqual(parseCardRoute("#/card"), { kind: "search" });
+  assert.equal(pathFromCardHash("#/card/"), null);
+  assert.equal(cardSearchHash(), "#/card/");
+});
 
 test("card hash round-trips encoded personal unicode paths with slash", () => {
   const hash = cardHash(UNICODE_PATH);

@@ -39,6 +39,12 @@ async def test_search_highlights_without_card_body_for_guest(
         _assert_no_git_sha_keys(body)
         paths = {item["path"] for item in body["hits"]}
         assert "card.md" in paths
+        assert "src" in body["available_tags"]
+        tagged = await guest.get("/search", params={"tag": "src"})
+        assert tagged.status_code == 200
+        assert "card.md" in {item["path"] for item in tagged.json()["hits"]}
+        by_tag_text = await guest.get("/search", params={"q": "src"})
+        assert "card.md" in {item["path"] for item in by_tag_text.json()["hits"]}
         assert (await guest.get("/cards/card.md")).status_code == 401
         assert (await guest.get("/shared/notes/card.md")).status_code == 401
 

@@ -46,9 +46,10 @@ async def search_cards(
     database: DatabaseSession,
     viewer: OptionalUser,
     q: Annotated[str, Query(max_length=200)] = "",
+    tag: Annotated[str, Query(max_length=80)] = "",
     limit: Annotated[int, Query(ge=1, le=80)] = 40,
 ) -> SearchResponse:
-    payload = await search_visible_cards(database, q, user=viewer, limit=limit)
+    payload = await search_visible_cards(database, q, user=viewer, tag=tag, limit=limit)
     return SearchResponse.model_validate(payload)
 
 

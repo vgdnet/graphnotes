@@ -29,3 +29,8 @@ The graph shows layer and `index_status` (`empty` / `current` / `updating` /
 The layer filter option, personal-origin legend and node origin copy say
 «ваша ризома», not «ваш git». Git vs server store is a settings fact, not
 the layer name.
+
+Card URLs: `#/card/` opens rhizome search (words and tags from the derived
+index). `#/card/{path}` opens the card page. The chrome tab is «Карточки».
+MVP search is PostgreSQL (`GET /api/search`). Elasticsearch is the next
+iteration (ADR-015), not this Stage 6 stack.
