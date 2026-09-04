@@ -58,6 +58,7 @@ button { color: inherit; }
 form { display: grid; gap: 1rem; }
 label { display: grid; gap: .5rem; color: #b9c2cb; font-size: .84rem; font-weight: 650; }
 input { width: 100%; padding: .85rem .95rem; border: 1px solid #34404c; border-radius: .65rem; outline: none; background: #0c1117; color: #f4f6f8; transition: border-color .15s, box-shadow .15s; }
+input:read-only { background: #12181f; color: #d8dee4; cursor: default; }
 input:focus { border-color: #3ecf8e; box-shadow: 0 0 0 .2rem rgb(62 207 142 / 10%); }
 select { padding: .65rem .8rem; border: 1px solid #34404c; border-radius: .65rem; background: #0c1117; color: #f4f6f8; }
 .optional, .hint { color: #727e89; font-size: .75rem; font-weight: 450; }
@@ -78,6 +79,14 @@ select { padding: .65rem .8rem; border: 1px solid #34404c; border-radius: .65rem
 .avatar { display: grid; width: 4rem; height: 4rem; place-items: center; border-radius: 1.1rem; background: #173f30; color: #65e3ad; font-size: 1.5rem; font-weight: 800; }
 .connect-form { display: grid; gap: .8rem; max-width: 28rem; margin-top: 1.5rem; }
 .connect-form .button { margin-top: 0; }
+.settings-stack { display: grid; gap: 1rem; margin-top: 1.5rem; }
+.settings-stack .connect-form { margin-top: 0; }
+.settings-stack .admin-panel__hint { margin: 0; }
+.settings-login { display: grid; gap: .3rem; margin: .15rem 0 1rem; }
+.settings-login span { color: #b9c2cb; font-size: .84rem; font-weight: 650; }
+.settings-login strong { color: #f4f6f8; font-size: 1.05rem; letter-spacing: -.02em; }
+.settings-actions { display: flex; flex-wrap: wrap; gap: .6rem; align-items: center; }
+.settings-actions .button { margin-top: 0; }
 .loading { display: grid; min-height: calc(100vh - 6rem); place-items: center; color: #84909d; }
 
 .admin-panel { width: min(100%, 72rem); margin: -5rem auto 3rem; padding: 1.5rem; border: 1px solid #28313b; border-radius: 1.3rem; background: rgb(17 23 30 / 92%); }
@@ -86,10 +95,11 @@ select { padding: .65rem .8rem; border: 1px solid #34404c; border-radius: .65rem
 .notes-panel--graph { width: min(100%, 96rem); padding: 1.15rem 1.25rem 1.4rem; }
 .notes-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
 .note-list { list-style: none; margin: 0 0 1rem; padding: 0; display: grid; gap: .55rem; max-height: 22rem; overflow: auto; }
-.note-list label, .note-link { display: flex; gap: .7rem; align-items: flex-start; width: 100%; padding: .7rem .8rem; border: 1px solid #28313b; border-radius: .7rem; background: #0c1117; color: inherit; text-align: left; cursor: pointer; }
+.note-list label, .note-link { display: flex; flex-direction: column; gap: .25rem; align-items: flex-start; width: 100%; padding: .7rem .8rem; border: 1px solid #28313b; border-radius: .7rem; background: #0c1117; color: inherit; text-align: left; cursor: pointer; }
 .note-list small { display: block; color: #85919d; font-size: .75rem; }
-.note-pick { display: flex; gap: .7rem; align-items: flex-start; }
-.note-pick .note-link { flex: 1; }
+.note-pick { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: .7rem; align-items: center; }
+.note-pick .note-link { min-width: 0; }
+.note-pick input[type="checkbox"] { width: 1.15rem; height: 1.15rem; margin: 0; padding: 0; justify-self: end; }
 .proposal-list { list-style: none; margin: 0 0 1rem; padding: 0; display: grid; gap: .55rem; }
 .proposal-row { display: grid; gap: .25rem; width: 100%; padding: .8rem .9rem; border: 1px solid #28313b; border-radius: .7rem; background: #0c1117; color: inherit; text-align: left; cursor: pointer; }
 .proposal-row span { color: #85919d; font-size: .8rem; }

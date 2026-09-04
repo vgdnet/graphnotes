@@ -1296,6 +1296,10 @@ export function App() {
             <div>
               <p className="eyebrow">Аккаунт</p>
               <h2 id="settings-heading">Настройки</h2>
+              <p className="settings-login">
+                <span>Логин</span>
+                <strong>{user.username}</strong>
+              </p>
               <p className="admin-panel__hint">
                 Здесь имя, почта, контакты, свой git и договор автора. Это не граф и не очередь.
               </p>
@@ -1308,6 +1312,10 @@ export function App() {
             </div>
             {settingsBlock === "profile" && (
               <form className="connect-form" onSubmit={(event) => void saveProfile(event)}>
+                <label>
+                  Логин <span className="optional">вход в GraphNotes</span>
+                  <input value={user.username} readOnly autoComplete="username" />
+                </label>
                 <label>
                   Отображаемое имя
                   <input name="displayName" defaultValue={user.display_name} maxLength={80} required />
@@ -1340,7 +1348,7 @@ export function App() {
               </form>
             )}
             {settingsBlock === "git" && (
-              <div>
+              <div className="settings-stack">
                 <p className="admin-panel__hint">{personalLabel(repository?.personal ?? null)}</p>
                 {user.is_author ? (
                   <form className="connect-form" onSubmit={(event) => void connectPersonal(event)}>
@@ -1348,34 +1356,47 @@ export function App() {
                       Свой git
                       <input name="repository" placeholder="владелец/имя" maxLength={200} required />
                     </label>
-                    <button className="button button--primary" type="submit" disabled={submitting}>Связать личный git</button>
+                    <div className="settings-actions">
+                      <button className="button button--primary" type="submit" disabled={submitting}>Связать личный git</button>
+                      {repository?.personal?.connected && (
+                        <button className="button button--danger" type="button" disabled={submitting} onClick={() => void disconnectPersonal()}>
+                          Отключить git
+                        </button>
+                      )}
+                    </div>
                   </form>
                 ) : (
                   <p className="admin-panel__hint">Подключение git как вклад требует договор автора.</p>
                 )}
-                {repository?.personal?.connected && (
-                  <button className="button button--danger" type="button" disabled={submitting} onClick={() => void disconnectPersonal()}>
-                    Отключить git
-                  </button>
+                {!user.is_author && repository?.personal?.connected && (
+                  <div className="settings-actions">
+                    <button className="button button--danger" type="button" disabled={submitting} onClick={() => void disconnectPersonal()}>
+                      Отключить git
+                    </button>
+                  </div>
                 )}
                 {user.role === "admin" && (
-                  <button className="button button--quiet" type="button" onClick={() => void connectShared()} disabled={submitting}>
-                    Подключить общую ризому
-                  </button>
+                  <div className="settings-actions">
+                    <button className="button button--quiet" type="button" onClick={() => void connectShared()} disabled={submitting}>
+                      Подключить общую ризому
+                    </button>
+                  </div>
                 )}
               </div>
             )}
             {settingsBlock === "contract" && (
               user.is_author ? (
-                <div>
+                <div className="settings-stack">
                   <p className="admin-panel__hint">
                     Договор принят{user.author_contract_version ? `, версия ${user.author_contract_version}` : ""}
                     {user.author_contract_accepted_at ? ` · ${new Date(user.author_contract_accepted_at).toLocaleString("ru")}` : ""}.
                   </p>
                   <AuthorContractCopy contract={authorContract} />
-                  <button className="button button--danger" type="button" onClick={() => void withdrawAuthorContract()} disabled={submitting}>
-                    Отозвать статус автора
-                  </button>
+                  <div className="settings-actions">
+                    <button className="button button--danger" type="button" onClick={() => void withdrawAuthorContract()} disabled={submitting}>
+                      Отозвать статус автора
+                    </button>
+                  </div>
                 </div>
               ) : (
                 <form className="connect-form" onSubmit={(event) => void acceptAuthorContract(event)}>
@@ -1411,6 +1432,10 @@ export function App() {
                   {differences.map((item) => (
                     <li key={item.path}>
                       <div className="note-pick">
+                        <button className="note-link" type="button" onClick={() => void openPersonalNote(item.path)}>
+                          <strong>{item.title}</strong>
+                          <small>{item.path} · {differKindLabel(item.kind)}</small>
+                        </button>
                         <input
                           type="checkbox"
                           checked={proposedPaths.includes(item.path)}
@@ -1423,10 +1448,6 @@ export function App() {
                           }}
                           aria-label={`Предложить ${item.title}`}
                         />
-                        <button className="note-link" type="button" onClick={() => void openPersonalNote(item.path)}>
-                          <strong>{item.title}</strong>
-                          <small>{item.path} · {differKindLabel(item.kind)}</small>
-                        </button>
                       </div>
                     </li>
                   ))}
