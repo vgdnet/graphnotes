@@ -1194,6 +1194,12 @@ export function App() {
 
   const canReview = user?.role === "editor" || user?.role === "admin";
 
+  function openSettings(block: SettingsBlock = "profile") {
+    backToGraph();
+    setView("settings");
+    setSettingsBlock(block);
+  }
+
   return (
     <main className="shell">
       <header className="topbar">
@@ -1214,11 +1220,6 @@ export function App() {
             Граф
           </button>
           {user && (
-            <button className={view === "settings" ? "button button--quiet tab--active" : "button button--quiet"} type="button" onClick={() => { backToGraph(); setView("settings"); setSettingsBlock("profile"); }}>
-              Настройки
-            </button>
-          )}
-          {user && (
             <button className={view === "differ" ? "button button--quiet tab--active" : "button button--quiet"} type="button" onClick={() => { backToGraph(); openDiffer(); }}>
               Differ
             </button>
@@ -1237,8 +1238,15 @@ export function App() {
         <div className="topbar__end">
           <ThemeSwitcher theme={theme} onToggle={toggleTheme} />
           {user ? (
-            <button className="button button--quiet" type="button" onClick={() => void logout()} disabled={submitting}>
-              Выйти
+            <button
+              className={view === "settings" ? "whoami whoami--active" : "whoami"}
+              type="button"
+              onClick={() => openSettings("profile")}
+              aria-current={view === "settings" ? "page" : undefined}
+              aria-label={`Настройки, ${user.display_name}`}
+            >
+              <span className="whoami__name">{user.display_name}</span>
+              <span className="whoami__meta">@{user.username}</span>
             </button>
           ) : (
             <button className="button button--primary" type="button" onClick={() => setAuthOpen(true)}>
@@ -1444,6 +1452,12 @@ export function App() {
                 </form>
               )
             )}
+            <div className="settings-session">
+              <p className="admin-panel__hint">Сессия: {user.display_name} (@{user.username})</p>
+              <button className="button button--quiet" type="button" onClick={() => void logout()} disabled={submitting}>
+                Выйти
+              </button>
+            </div>
           </section>
           )}
           {view === "differ" && repository?.shared.connected && user?.is_author && (

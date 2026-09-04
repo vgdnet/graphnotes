@@ -49,8 +49,8 @@ const STATUS_LABEL: Record<string, string> = {
 };
 
 function originLabel(origin: string | undefined): string {
-  if (origin === "personal") return "ваш git";
-  if (origin === "both") return "общая и ваш git";
+  if (origin === "personal") return "ваша ризома";
+  if (origin === "both") return "общая и ваша ризома";
   if (origin === "overlay") return "связь с общей";
   return "общая";
 }
@@ -275,7 +275,7 @@ export function GraphView({
             <option value="all">все узлы</option>
             <option value="unresolved">нет заметки</option>
             <option value="isolated">отдельно</option>
-            {canReadNotes && <option value="overlay">ваш git</option>}
+            {canReadNotes && <option value="overlay">ваша ризома</option>}
           </select>
         </label>
         <label>
@@ -284,7 +284,7 @@ export function GraphView({
         </label>
       </div>
       <p className="admin-panel__hint" role="status">
-        Слой: {graph?.layer === "overlay" ? "общая ризома и связи вашего git" : "общая ризома"}. Состояние: {status}.
+        Слой: {graph?.layer === "overlay" ? "общая и ваша ризома" : "общая ризома"}. Состояние: {status}.
         {graph?.truncated ? " Показана часть узлов — выберите узел и нажмите «Соседи»." : ""}
         {loading ? " Обновляем граф…" : ""}
         {query.trim() && matches.length > 0 ? ` Совпадений на графе: ${matches.length}.` : ""}
@@ -304,7 +304,7 @@ export function GraphView({
       <div className="graph-legend" aria-hidden="true">
         <span><i className="swatch swatch--shared" /> общая</span>
         <span><i className="swatch swatch--both" /> есть у вас</span>
-        <span><i className="swatch swatch--personal" /> ваш git</span>
+        <span><i className="swatch swatch--personal" /> ваша ризома</span>
         <span><i className="swatch swatch--missing" /> нет заметки</span>
       </div>
       {query.trim() && remoteHits.length > 0 && (

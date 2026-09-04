@@ -134,6 +134,34 @@ button { color: inherit; }
 .topnav { display: flex; flex-wrap: wrap; gap: .4rem; }
 .topnav .button { margin: 0; padding: .5rem .8rem; font-size: .8rem; }
 .topbar__end { display: flex; align-items: center; gap: .75rem; }
+.whoami {
+  display: grid;
+  gap: .12rem;
+  max-width: 14rem;
+  padding: .45rem .75rem;
+  border: 1px solid var(--gn-border);
+  border-radius: .65rem;
+  background: var(--gn-quiet-bg);
+  color: var(--gn-text-strong);
+  text-align: left;
+  cursor: pointer;
+}
+.whoami:hover { border-color: var(--gn-accent-muted); }
+.whoami--active { border-color: var(--gn-accent); background: var(--gn-tab-active); }
+.whoami__name { font-size: .88rem; font-weight: 750; line-height: 1.2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.whoami__meta { color: var(--gn-text-dim); font-size: .72rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.settings-session {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .75rem;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 2rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid var(--gn-border);
+}
+.settings-session .admin-panel__hint { margin: 0; max-width: 36rem; }
+.settings-session .button { margin-top: 0; }
 .theme-switcher {
   --ts-gap: .14rem;
   --ts-knob: 1.28rem;

@@ -26,3 +26,6 @@ The UI shows truncation and can expand neighbors of a selected shared node.
 
 The graph shows layer and `index_status` (`empty` / `current` / `updating` /
 `error`). Public JSON still does not include Git SHA, `html_url` or secrets.
+The layer filter option, personal-origin legend and node origin copy say
+«ваша ризома», not «ваш git». Git vs server store is a settings fact, not
+the layer name.
