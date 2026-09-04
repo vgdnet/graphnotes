@@ -117,6 +117,8 @@ class GitHubAppClient:
                 continue
             path = str(entry.get("path") or "")
             sha = str(entry.get("sha") or "")
+            # Trees and gitlinks are folders, not notes. A folder named
+            # GraphNotes must not hide GraphNotes/GraphNotes.md.
             if path.lower().endswith(".md") and not path.startswith(".") and sha:
                 blobs[path] = sha
         return blobs

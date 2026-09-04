@@ -183,6 +183,8 @@ def _link_key(target: str) -> str:
 
 
 def _lookup_keys(path: str) -> set[str]:
+    if not path.lower().endswith(".md"):
+        return set()
     stem = _link_key(path)
     name = path.rsplit("/", 1)[-1]
     return {stem, _link_key(name)}

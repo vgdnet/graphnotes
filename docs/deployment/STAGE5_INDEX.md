@@ -15,7 +15,9 @@ Stage 6.
 - Full rebuild lists the recursive git tree and reads every Markdown blob
   at the observed revision (blob SHA, not only the contents-by-path API).
   A unique basename, full path, or unique title/alias resolves `[[wikilink]]`
-  after Unicode NFC.
+  after Unicode NFC. A folder or gitlink name is not a missing note:
+  `[[GraphNotes]]` still resolves to `GraphNotes/GraphNotes.md` when that
+  basename is unique.
 - Incremental rebuild, used after Markdown ingest into connected personal git,
   fetches only new and requested paths, reconstructs unchanged notes from the
   current index, then re-resolves links. Incremental result must equal a clean
