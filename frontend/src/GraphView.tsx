@@ -2,6 +2,13 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { KeyboardEvent } from "react";
 import cytoscape from "cytoscape";
 import type { Core, EventObject } from "cytoscape";
+import {
+  GRAPH_STYLESHEET,
+  applyDegreeScores,
+  bindNeighborhoodHighlight,
+  highlightNeighborhood,
+  runFcoseLayout,
+} from "./cytoscapeFcose";
 
 export type GraphNode = {
   path: string;
@@ -52,12 +59,16 @@ export function GraphView({
   selectedPath,
   onOpen,
   onExpand,
+  canReadNotes = true,
+  onNeedAuth,
 }: {
   graph: GraphResponse | null;
   loading?: boolean;
   selectedPath?: string | null;
   onOpen: (path: string, origin: string) => void;
   onExpand: (path: string) => void;
+  canReadNotes?: boolean;
+  onNeedAuth?: () => void;
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const cyRef = useRef<Core | null>(null);
@@ -83,6 +94,9 @@ export function GraphView({
     return { nodes, edges };
   }, [graph, query, kind, tag]);
 
+  const focusPathRef = useRef<string | null>(null);
+  focusPathRef.current = focusPath || selectedPath || null;
+
   const onOpenRef = useRef(onOpen);
   onOpenRef.current = onOpen;
 
@@ -92,46 +106,13 @@ export function GraphView({
     const cy = cytoscape({
       container: host,
       elements: [],
-      minZoom: 0.3,
-      maxZoom: 2.5,
-      wheelSensitivity: 0.3,
-      style: [
-        {
-          selector: "node",
-          style: {
-            label: "data(label)",
-            color: "#e8edf2",
-            "font-size": 10,
-            "text-wrap": "wrap",
-            "text-max-width": "90px",
-            "background-color": "#3ecf8e",
-            width: 28,
-            height: 28,
-            "border-width": 2,
-            "border-color": "#173f30",
-          },
-        },
-        { selector: "node[origin = 'personal']", style: { "background-color": "#6b8cff", "border-color": "#24305a" } },
-        { selector: "node[origin = 'both']", style: { "background-color": "#c9a227", "border-color": "#4d3e12" } },
-        { selector: "node[unresolved = 1]", style: { "background-color": "#ff6b6b", "border-color": "#7a3030" } },
-        { selector: "node[locked = 1]", style: { "background-color": "#c9a227", "border-color": "#4d3e12", "border-style": "double" } },
-        { selector: "node:selected", style: { "border-color": "#f4f7fa", "border-width": 3 } },
-        {
-          selector: "edge",
-          style: {
-            width: 1.4,
-            "curve-style": "bezier",
-            "target-arrow-shape": "triangle",
-            "target-arrow-color": "#5d6b78",
-            "line-color": "#5d6b78",
-          },
-        },
-        { selector: "edge[origin = 'overlay']", style: { "line-style": "dashed", "line-color": "#6b8cff", "target-arrow-color": "#6b8cff" } },
-        { selector: "edge[unresolved = 1]", style: { "line-style": "dotted", "line-color": "#ff6b6b", "target-arrow-color": "#ff6b6b" } },
-        { selector: "edge[locked = 1]", style: { "line-style": "dotted", "line-color": "#c9a227", "target-arrow-color": "#c9a227" } },
-      ],
+      minZoom: 0.15,
+      maxZoom: 3,
+      wheelSensitivity: 0.25,
+      style: GRAPH_STYLESHEET,
     });
     cyRef.current = cy;
+    bindNeighborhoodHighlight(cy, () => focusPathRef.current);
     const onTap = (event: EventObject) => {
       if (event.target === cy || typeof event.target.isNode !== "function") {
         setFocusPath(null);
@@ -155,6 +136,7 @@ export function GraphView({
   useEffect(() => {
     const cy = cyRef.current;
     if (!cy) return;
+    cy.stop();
     cy.elements().remove();
     cy.add([
       ...visible.nodes.map((node) => ({
@@ -179,8 +161,9 @@ export function GraphView({
         },
       })),
     ]);
+    applyDegreeScores(cy);
     if (visible.nodes.length > 0) {
-      cy.layout({ name: "cose", animate: false, fit: true, padding: 24 }).run();
+      runFcoseLayout(cy);
     }
   }, [visible]);
 
@@ -191,6 +174,9 @@ export function GraphView({
     const path = selectedPath || focusPath;
     if (path && cy.getElementById(path).nonempty()) {
       cy.getElementById(path).select();
+      highlightNeighborhood(cy, path);
+    } else {
+      highlightNeighborhood(cy, null);
     }
   }, [selectedPath, focusPath, visible]);
 
@@ -243,7 +229,7 @@ export function GraphView({
             <option value="all">все узлы</option>
             <option value="unresolved">нет заметки</option>
             <option value="isolated">отдельно</option>
-            <option value="overlay">ваш git</option>
+            {canReadNotes && <option value="overlay">ваш git</option>}
           </select>
         </label>
         <label>
@@ -284,9 +270,15 @@ export function GraphView({
               className="button button--primary"
               type="button"
               disabled={selected.unresolved}
-              onClick={() => onOpen(selected.path, selected.origin || "shared")}
+              onClick={() => {
+                if (!canReadNotes) {
+                  onNeedAuth?.();
+                  return;
+                }
+                onOpen(selected.path, selected.origin || "shared");
+              }}
             >
-              Открыть Markdown
+              {canReadNotes ? "Открыть карточку" : "Войдите, чтобы читать"}
             </button>
             <button
               className="button button--quiet"

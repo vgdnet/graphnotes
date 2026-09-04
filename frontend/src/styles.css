@@ -78,6 +78,7 @@ select { padding: .65rem .8rem; border: 1px solid #34404c; border-radius: .65rem
 .admin-panel { width: min(100%, 72rem); margin: -5rem auto 3rem; padding: 1.5rem; border: 1px solid #28313b; border-radius: 1.3rem; background: rgb(17 23 30 / 92%); }
 .notes-panel { width: min(100%, 72rem); margin: 0 auto 3rem; padding: 1.5rem; border: 1px solid #28313b; border-radius: 1.3rem; background: rgb(17 23 30 / 92%); }
 .notes-panel h2, .notes-panel h3 { margin: 0 0 .75rem; }
+.notes-panel--graph { width: min(100%, 96rem); padding: 1.15rem 1.25rem 1.4rem; }
 .notes-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
 .note-list { list-style: none; margin: 0 0 1rem; padding: 0; display: grid; gap: .55rem; max-height: 22rem; overflow: auto; }
 .note-list label, .note-link { display: flex; gap: .7rem; align-items: flex-start; width: 100%; padding: .7rem .8rem; border: 1px solid #28313b; border-radius: .7rem; background: #0c1117; color: inherit; text-align: left; cursor: pointer; }
@@ -116,14 +117,14 @@ select { padding: .65rem .8rem; border: 1px solid #34404c; border-radius: .65rem
 .graph-toolbar { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.8rem; }
 .graph-canvas {
   width: 100%;
-  height: min(70vh, 36rem);
+  height: min(78vh, 52rem);
   border: 1px solid #28313b;
   border-radius: 0.8rem;
-  background: #0c1117;
+  background: #000;
   outline: none;
 }
 .graph-canvas:focus { border-color: #3ecf8e; box-shadow: 0 0 0 .2rem rgb(62 207 142 / 10%); }
-.graph-canvas--diff { height: min(48vh, 24rem); }
+.graph-canvas--diff { height: min(56vh, 32rem); }
 .graph-legend { display: flex; flex-wrap: wrap; gap: 1rem; color: #85919d; font-size: 0.78rem; }
 .swatch { display: inline-block; width: 0.7rem; height: 0.7rem; margin-right: 0.4rem; border-radius: 50%; vertical-align: -0.1rem; }
 .swatch--shared { background: #3ecf8e; }

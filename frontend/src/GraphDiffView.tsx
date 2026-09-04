@@ -2,6 +2,12 @@ import { useEffect, useRef, useState } from "react";
 import type { KeyboardEvent } from "react";
 import cytoscape from "cytoscape";
 import type { Core, EventObject } from "cytoscape";
+import {
+  DIFF_STYLESHEET,
+  applyDegreeScores,
+  bindNeighborhoodHighlight,
+  runFcoseLayout,
+} from "./cytoscapeFcose";
 
 export type GraphDiffNode = {
   path: string;
@@ -132,6 +138,8 @@ export function GraphDiffView({
   const containerRef = useRef<HTMLDivElement | null>(null);
   const cyRef = useRef<Core | null>(null);
   const [focusPath, setFocusPath] = useState<string | null>(null);
+  const focusPathRef = useRef<string | null>(null);
+  focusPathRef.current = focusPath;
 
   useEffect(() => {
     const host = containerRef.current;
@@ -139,49 +147,13 @@ export function GraphDiffView({
     const cy = cytoscape({
       container: host,
       elements: [],
-      minZoom: 0.3,
-      maxZoom: 2.5,
-      wheelSensitivity: 0.3,
-      style: [
-        {
-          selector: "node",
-          style: {
-            label: "data(label)",
-            color: "#e8edf2",
-            "font-size": 10,
-            "text-wrap": "wrap",
-            "text-max-width": "90px",
-            "background-color": "#85919d",
-            width: 28,
-            height: 28,
-            "border-width": 2,
-            "border-color": "#d8dee4",
-            shape: "ellipse",
-          },
-        },
-        { selector: "node[marker = 'triangle']", style: { shape: "triangle", "background-color": "#3ecf8e" } },
-        { selector: "node[marker = 'octagon']", style: { shape: "octagon", "border-style": "dashed", "background-color": "#5d6b78" } },
-        { selector: "node[marker = 'rectangle']", style: { shape: "rectangle", "background-color": "#c9a227" } },
-        { selector: "node[marker = 'diamond']", style: { shape: "diamond", "background-color": "#6b8cff" } },
-        { selector: "node[marker = 'star']", style: { shape: "star", "border-style": "dotted", "background-color": "#ff6b6b" } },
-        { selector: "node:selected", style: { "border-color": "#f4f7fa", "border-width": 3 } },
-        {
-          selector: "edge",
-          style: {
-            width: 1.4,
-            "curve-style": "bezier",
-            "target-arrow-shape": "triangle",
-            "target-arrow-color": "#5d6b78",
-            "line-color": "#5d6b78",
-          },
-        },
-        { selector: "edge[change = 'added']", style: { "line-style": "solid", width: 2.4, "line-color": "#3ecf8e", "target-arrow-color": "#3ecf8e" } },
-        { selector: "edge[change = 'removed']", style: { "line-style": "dashed", "line-color": "#85919d", "target-arrow-color": "#85919d" } },
-        { selector: "edge[change = 'type_changed']", style: { "line-style": "dotted", width: 2, "line-color": "#c9a227", "target-arrow-color": "#c9a227" } },
-        { selector: "edge[change = 'unresolved_changed']", style: { "line-style": "dotted", "line-color": "#ff6b6b", "target-arrow-color": "#ff6b6b" } },
-      ],
+      minZoom: 0.15,
+      maxZoom: 3,
+      wheelSensitivity: 0.25,
+      style: DIFF_STYLESHEET,
     });
     cyRef.current = cy;
+    bindNeighborhoodHighlight(cy, () => focusPathRef.current);
     const onTap = (event: EventObject) => {
       if (event.target === cy || typeof event.target.isNode !== "function") {
         setFocusPath(null);
@@ -199,6 +171,7 @@ export function GraphDiffView({
   useEffect(() => {
     const cy = cyRef.current;
     if (!cy) return;
+    cy.stop();
     cy.elements().remove();
     if (!diff) return;
     cy.add([
@@ -221,8 +194,9 @@ export function GraphDiffView({
         },
       })),
     ]);
+    applyDegreeScores(cy);
     if (diff.nodes.length > 0) {
-      cy.layout({ name: "cose", animate: false, fit: true, padding: 24 }).run();
+      runFcoseLayout(cy);
     }
   }, [diff]);
 

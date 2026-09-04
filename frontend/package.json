@@ -11,13 +11,14 @@
   },
   "dependencies": {
     "cytoscape": "3.34.1",
+    "cytoscape-fcose": "2.2.0",
     "react": "latest",
     "react-dom": "latest"
   },
   "devDependencies": {
-    "@vitejs/plugin-react": "latest",
     "@types/react": "latest",
     "@types/react-dom": "latest",
+    "@vitejs/plugin-react": "latest",
     "typescript": "latest",
     "vite": "latest"
   }
