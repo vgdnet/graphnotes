@@ -354,6 +354,7 @@ async def test_stale_revision_and_two_user_isolation(
         data={"expected_sha": "not-the-head"},
     )
     assert stale.status_code == 409
+    assert stale.json()["detail"] == "disconnect your git before uploading files"
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as second:
         await _register(second, "other-user")
@@ -369,20 +370,17 @@ async def test_import_md_zip_and_xss_inert(
     monkeypatch: MonkeyPatch,
 ) -> None:
     client, _ = auth_test_context
-    github = _install(monkeypatch, _github())
+    _install(monkeypatch, _github())
     await _register(client, "efimov")
-    await _connect_pair(client, "vgdnet/guide_psy")
 
     xss = b'---\ntitle: Evil\n---\n<script>alert(1)</script>\n'
     uploaded = await client.post(
         "/personal/import-md",
         files={"file": ("evil.md", xss, "text/markdown")},
-        data={"expected_sha": "personal-sha"},
     )
     assert uploaded.status_code == 200
     assert uploaded.json()["accepted"] == ["evil.md"]
-    stored = github.repos["vgdnet/guide_psy"].files["evil.md"]
-    assert "<script>alert(1)</script>" in stored
+    assert uploaded.json()["revision"] is None
 
     listed = await client.get("/personal/notes")
     assert listed.status_code == 200
@@ -400,7 +398,6 @@ async def test_import_md_zip_and_xss_inert(
     zipped = await client.post(
         "/personal/import-md",
         files={"file": ("notes.zip", buffer.getvalue(), "application/zip")},
-        data={"expected_sha": github.repos["vgdnet/guide_psy"].sha},
     )
     assert zipped.status_code == 200
     assert zipped.json()["accepted"] == ["from-zip.md"]
@@ -411,9 +408,8 @@ async def test_zip_traversal_and_python_yaml_are_rejected(
     monkeypatch: MonkeyPatch,
 ) -> None:
     client, _ = auth_test_context
-    github = _install(monkeypatch, _github())
+    _install(monkeypatch, _github())
     await _register(client, "efimov")
-    await _connect_pair(client, "vgdnet/guide_psy")
 
     import io
     import stat
@@ -429,16 +425,13 @@ async def test_zip_traversal_and_python_yaml_are_rejected(
     bad_zip = await client.post(
         "/personal/import-md",
         files={"file": ("bad.zip", buffer.getvalue(), "application/zip")},
-        data={"expected_sha": "personal-sha"},
     )
     assert bad_zip.status_code == 400
-    assert "escape.md" not in github.repos["vgdnet/guide_psy"].files
 
     unsafe = b"---\n!!python/object:os.system ['id']\n---\n# Hi\n"
     yaml_import = await client.post(
         "/personal/import-md",
         files={"file": ("unsafe.md", unsafe, "text/markdown")},
-        data={"expected_sha": "personal-sha"},
     )
     assert yaml_import.status_code == 200
     assert yaml_import.json()["accepted"] == ["unsafe.md"]
@@ -529,4 +522,76 @@ async def test_upload_without_git_feeds_differ(
     assert accepted.status_code == 200
     states = {node["path"]: node["state"] for node in accepted.json()["notes"]}
     assert states["fresh.md"] == "accepted"
+    await author.aclose()
+
+
+def _zip_bytes(entries: dict[str, bytes], *, stored: bool = False) -> bytes:
+    import io
+    import zipfile
+
+    buffer = io.BytesIO()
+    compression = zipfile.ZIP_STORED if stored else zipfile.ZIP_DEFLATED
+    with zipfile.ZipFile(buffer, "w", compression=compression) as archive:
+        for path, body in entries.items():
+            archive.writestr(path, body)
+    return buffer.getvalue()
+
+
+async def test_zip_import_without_git(
+    auth_test_context: tuple[AsyncClient, async_sessionmaker[AsyncSession]],
+    monkeypatch: MonkeyPatch,
+) -> None:
+    client, session_factory = auth_test_context
+    _install(monkeypatch, _github())
+    await _register(client, "zip-admin")
+    await _bind_shared(client, session_factory, "zip-admin")
+
+    author = AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver")
+    await _register(author, "zip-no-git")
+    zipped = await author.post(
+        "/personal/import-md",
+        files={"file": ("notes.zip", _zip_bytes({"from-zip.md": b"# Zipped\n"}), "application/zip")},
+    )
+    assert zipped.status_code == 200
+    assert zipped.json()["accepted"] == ["from-zip.md"]
+    assert zipped.json()["revision"] is None
+
+    cyrillic = await author.post(
+        "/personal/import-md",
+        files={
+            "file": (
+                "заметки.zip",
+                _zip_bytes({"заметки/привет.md": "# Привет\n".encode()}),
+                "application/zip",
+            )
+        },
+    )
+    assert cyrillic.status_code == 200
+    assert cyrillic.json()["accepted"] == ["заметки/привет.md"]
+
+    notes = await author.get("/personal/notes")
+    assert {item["path"] for item in notes.json()["notes"]} == {
+        "from-zip.md",
+        "заметки/привет.md",
+    }
+    await author.aclose()
+
+
+async def test_zip_over_one_mib_without_git(
+    auth_test_context: tuple[AsyncClient, async_sessionmaker[AsyncSession]],
+    monkeypatch: MonkeyPatch,
+) -> None:
+    _, _ = auth_test_context
+    _install(monkeypatch, _github())
+    author = AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver")
+    await _register(author, "zip-large")
+    chunk = b"# Note\n" + b"n" * 220_000
+    payload = _zip_bytes({f"note{i}.md": chunk for i in range(6)}, stored=True)
+    assert 1_048_576 < len(payload) < 2_097_152
+    uploaded = await author.post(
+        "/personal/import-md",
+        files={"file": ("vault.zip", payload, "application/zip")},
+    )
+    assert uploaded.status_code == 200
+    assert uploaded.json()["accepted"] == [f"note{i}.md" for i in range(6)]
     await author.aclose()

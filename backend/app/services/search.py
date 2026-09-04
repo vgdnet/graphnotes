@@ -3,7 +3,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.github import PersonalRepository, SharedRepository
 from app.models.graph import NoteIndex, NoteLayer, NoteTag, Tag
+from app.models.personal_upload import PersonalUpload
 from app.models.user import User
+from app.services.markdown import parse_markdown
 from app.services.repository import SHARED_SINGLETON_ID
 
 
@@ -66,10 +68,40 @@ async def search_visible_cards(
                 seen.add(path)
                 note_ids.append(note.id)
                 hits.append({"path": path, "title": note.title, "tags": []})
+        elif leftover > 0:
+            uploads = list(
+                (
+                    await database.scalars(
+                        select(PersonalUpload)
+                        .where(PersonalUpload.user_id == user.id)
+                        .order_by(PersonalUpload.path)
+                    )
+                ).all()
+            )
+            for row in uploads:
+                if len(hits) >= cap:
+                    break
+                path = f"personal:{row.path}"
+                if path in seen or row.path in seen:
+                    continue
+                parsed = parse_markdown(row.path, row.body)
+                tags = list(parsed.tags)
+                if tag_name and tag_name.casefold() not in {item.casefold() for item in tags}:
+                    continue
+                if trimmed:
+                    haystack = " ".join((parsed.title, row.path, *tags)).casefold()
+                    if trimmed.casefold() not in haystack:
+                        continue
+                elif not tag_name:
+                    continue
+                seen.add(path)
+                hits.append({"path": path, "title": parsed.title, "tags": tags})
+                note_ids.append(None)
 
-    tag_map = await _tags_for_notes(database, note_ids)
+    tag_map = await _tags_for_notes(database, [item for item in note_ids if item is not None])
     for hit, note_id in zip(hits, note_ids, strict=True):
-        hit["tags"] = tag_map.get(note_id, [])
+        if note_id is not None:
+            hit["tags"] = tag_map.get(note_id, [])
 
     return {
         "query": trimmed,
@@ -173,6 +205,16 @@ async def _available_tags(database: AsyncSession, *, user: User | None) -> list[
                     revision=personal.indexed_sha,
                 )
             )
+        else:
+            uploads = list(
+                (
+                    await database.scalars(
+                        select(PersonalUpload).where(PersonalUpload.user_id == user.id)
+                    )
+                ).all()
+            )
+            for row in uploads:
+                names.update(parse_markdown(row.path, row.body).tags)
     return sorted(names)[:80]
 
 

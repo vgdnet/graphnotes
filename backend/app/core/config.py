@@ -32,6 +32,7 @@ class Settings(BaseSettings):
     index_max_notes: int = 5000
     graph_page_limit: int = 50
     graph_page_max: int = 200
+    personal_sync_interval_seconds: int = 300
 
     model_config = SettingsConfigDict(
         env_file=PROJECT_ROOT / ".env",

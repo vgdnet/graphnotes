@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime
-
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -275,10 +273,13 @@ async def import_markdown(
     user: User,
     filename: str,
     data: bytes,
-    expected_sha: str | None,
-    client: GitHubAppClient,
+    expected_sha: str | None = None,
+    client: GitHubAppClient | None = None,
 ) -> dict[str, object]:
+    del expected_sha, client
     personal = await _personal_or_none(database, user.id)
+    if personal is not None:
+        raise IngestError(409, "disconnect your git before uploading files")
     try:
         if filename.lower().endswith(".zip") or data.startswith(b"PK"):
             incoming = read_zip_markdown(data)
@@ -289,97 +290,11 @@ async def import_markdown(
     except (ArchiveError, PathError) as exc:
         raise IngestError(400, str(exc)) from exc
 
-    if personal is None:
-        return await _import_without_git(
-            database,
-            user=user,
-            incoming=incoming,
-        )
-
-    accepted: list[str] = []
-    skipped: list[str] = []
-    conflicted: list[str] = []
-    rejected: list[dict[str, str]] = []
-    warnings: list[str] = []
-    to_commit: dict[str, str] = {}
-
-    for path, text in incoming:
-        parsed = parse_markdown(path, text)
-        warnings.extend(f"{path}: {item}" for item in parsed.warnings)
-        try:
-            existing = await _existing_file(client, personal, path)
-        except GitHubAppError as exc:
-            apply_error(personal, exc)
-            await database.commit()
-            raise _github_to_ingest(exc) from exc
-        if existing is None:
-            accepted.append(path)
-            to_commit[path] = text
-        elif existing == text:
-            skipped.append(path)
-        else:
-            conflicted.append(path)
-        database.add(
-            UploadEvent(user_id=user.id, path=path, content_hash=parsed.content_hash)
-        )
-
-    revision = personal.observed_sha
-    if to_commit:
-        try:
-            revision = await client.commit_markdown(
-                personal.owner,
-                personal.name,
-                personal.default_branch,
-                to_commit,
-                "Import Markdown into personal git",
-                expected_sha,
-            )
-        except GitHubAppError as exc:
-            apply_error(personal, exc)
-            await database.commit()
-            raise _github_to_ingest(exc) from exc
-        personal.observed_sha = revision
-        personal.observed_at = datetime.now(UTC)
-        personal.sync_status = "ready"
-        personal.last_error = None
-        record_audit_event(
-            database,
-            action="notes.import_md",
-            actor_user_id=user.id,
-            target_user_id=user.id,
-            subject_username=user.username,
-            details={
-                "accepted": accepted,
-                "conflicted": conflicted,
-                "skipped": skipped,
-                "revision": revision,
-            },
-        )
-        await database.commit()
-        await database.refresh(personal)
-        try:
-            from app.services.index import IndexerError, rebuild_personal
-
-            await rebuild_personal(
-                database,
-                user.id,
-                client,
-                actor_user_id=user.id,
-                paths=set(accepted),
-            )
-        except IndexerError:
-            pass
-    else:
-        await database.commit()
-
-    return {
-        "accepted": accepted,
-        "rejected": rejected,
-        "skipped": skipped,
-        "conflicted": conflicted,
-        "warnings": warnings,
-        "revision": revision,
-    }
+    return await _import_without_git(
+        database,
+        user=user,
+        incoming=incoming,
+    )
 
 
 async def _import_without_git(
@@ -441,23 +356,6 @@ async def _import_without_git(
         "warnings": warnings,
         "revision": None,
     }
-
-
-async def _existing_file(
-    client: GitHubAppClient,
-    personal: PersonalRepository,
-    path: str,
-) -> str | None:
-    if not personal.observed_sha:
-        return None
-    try:
-        return await client.get_file(
-            personal.owner, personal.name, path, personal.observed_sha
-        )
-    except GitHubAppError as exc:
-        if exc.status == "not_found":
-            return None
-        raise
 
 
 async def _project_repo(

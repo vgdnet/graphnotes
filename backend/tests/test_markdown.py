@@ -44,3 +44,30 @@ def test_zip_skips_unsafe_entries(monkeypatch: pytest.MonkeyPatch) -> None:
         archive.writestr(info, "target")
     with pytest.raises(ArchiveError):
         read_zip_markdown(buffer.getvalue())
+
+
+def _clear_zip_utf8_flags(data: bytes) -> bytes:
+    raw = bytearray(data)
+    cursor = 0
+    while cursor < len(raw):
+        local = raw.find(b"PK\x03\x04", cursor)
+        central = raw.find(b"PK\x01\x02", cursor)
+        if local == -1 and central == -1:
+            break
+        if central == -1 or (local != -1 and local < central):
+            flag_at = local + 6
+            cursor = local + 4
+        else:
+            flag_at = central + 8
+            cursor = central + 4
+        flag = int.from_bytes(raw[flag_at : flag_at + 2], "little") & ~0x800
+        raw[flag_at : flag_at + 2] = flag.to_bytes(2, "little")
+    return bytes(raw)
+
+
+def test_zip_reads_cyrillic_names_without_utf8_flag() -> None:
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w") as archive:
+        archive.writestr("заметки/привет.md", "# Привет\n")
+    files = read_zip_markdown(_clear_zip_utf8_flags(buffer.getvalue()))
+    assert files == [("заметки/привет.md", "# Привет\n")]

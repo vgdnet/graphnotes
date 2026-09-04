@@ -292,13 +292,37 @@ function AuthorContractCopy({ contract }: { contract: AuthorContract | null }) {
   );
 }
 
+function formatDetail(detail: unknown): string | null {
+  if (typeof detail === "string" && detail.trim()) return detail;
+  if (Array.isArray(detail)) {
+    const parts = detail
+      .map((item) => {
+        if (typeof item === "string" && item.trim()) return item;
+        if (item && typeof item === "object" && "msg" in item) {
+          const message = (item as { msg: unknown }).msg;
+          if (typeof message === "string" && message.trim()) return message;
+        }
+        return null;
+      })
+      .filter((item): item is string => Boolean(item));
+    return parts.length > 0 ? parts.join("; ") : null;
+  }
+  if (detail && typeof detail === "object" && "msg" in detail) {
+    const message = (detail as { msg: unknown }).msg;
+    if (typeof message === "string" && message.trim()) return message;
+  }
+  return null;
+}
+
 async function readError(response: Response): Promise<string> {
   try {
     const body = (await response.json()) as { detail?: unknown };
-    if (typeof body.detail === "string") return body.detail;
+    const formatted = formatDetail(body.detail);
+    if (formatted) return formatted;
   } catch {
-    // Fall back to a user-safe message below.
+    // HTML 413 from nginx, plaintext 500, or a non-object body.
   }
+  if (response.status === 413) return "Файл слишком большой. ZIP — до 2 МиБ.";
   return "Не удалось выполнить запрос. Попробуйте ещё раз.";
 }
 
@@ -611,7 +635,7 @@ export function App() {
     const controller = new AbortController();
     const params = new URLSearchParams({ limit: "50", depth: "1" });
     if (graphCenter) params.set("center", graphCenter);
-    const path = user && repository.personal?.connected
+    const path = user
       ? `/api/graph/personal-overlay?${params}`
       : `/api/graph/shared?${params}`;
     setGraphLoading(true);
@@ -1543,6 +1567,7 @@ export function App() {
               >
                 Предложить в общую
               </button>
+              {!repository?.personal?.connected && (
               <form className="connect-form" onSubmit={(event) => void importFallback(event)}>
                 <label>
                   Загрузка .md или ZIP без git
@@ -1552,6 +1577,12 @@ export function App() {
                   Загрузить в личный слой
                 </button>
               </form>
+              )}
+              {repository?.personal?.connected && (
+                <p className="admin-panel__hint">
+                  Git подключён — загрузка файлов выключена. Отключите git в настройках, чтобы снова грузить .md.
+                </p>
+              )}
               {report && (
                 <p className="ingest-report" role="status">
                   Принято: {report.accepted.length}. Пропущено: {report.skipped.length}. Конфликт: {report.conflicted.length}.

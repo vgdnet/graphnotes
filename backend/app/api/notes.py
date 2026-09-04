@@ -9,6 +9,7 @@ from app.api.dependencies import (
     CurrentUser,
     DatabaseSession,
 )
+from app.core import multipart_limits as _multipart_limits  # noqa: F401
 from app.schemas.notes import (
     ClosePathRequest,
     ClosedPathListResponse,

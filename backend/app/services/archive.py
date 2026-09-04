@@ -3,6 +3,7 @@ from __future__ import annotations
 import io
 import stat
 import zipfile
+import zlib
 
 from app.core.config import settings
 from app.services.git_paths import PathError, normalize_git_path
@@ -27,7 +28,7 @@ def read_zip_markdown(data: bytes) -> list[tuple[str, str]]:
     if not _looks_like_zip(data):
         raise ArchiveError("file is not a ZIP archive")
     try:
-        archive = zipfile.ZipFile(io.BytesIO(data))
+        archive = _open_zip(data)
     except zipfile.BadZipFile as exc:
         raise ArchiveError("archive is unreadable") from exc
 
@@ -53,13 +54,16 @@ def read_zip_markdown(data: bytes) -> list[tuple[str, str]]:
         if info.compress_size and info.file_size > max(64_000, info.compress_size * 100):
             raise ArchiveError("archive looks like a compression bomb")
         try:
-            path = normalize_git_path(info.filename)
+            path = normalize_git_path(_zip_member_name(info))
         except PathError:
             continue
         if path in seen:
             raise ArchiveError("archive contains duplicate Markdown paths")
-        with archive.open(info) as handle:
-            payload = _read_limited(handle, settings.ingest_max_file_bytes)
+        try:
+            with archive.open(info) as handle:
+                payload = _read_limited(handle, settings.ingest_max_file_bytes)
+        except (zipfile.BadZipFile, RuntimeError, OSError, zlib.error) as exc:
+            raise ArchiveError("archive is unreadable") from exc
         unpacked += len(payload)
         if unpacked > settings.ingest_max_unpacked_bytes:
             raise ArchiveError("unpacked archive is too large")
@@ -69,6 +73,35 @@ def read_zip_markdown(data: bytes) -> list[tuple[str, str]]:
     if not files:
         raise ArchiveError("archive contains no Markdown files")
     return files
+
+
+def _open_zip(data: bytes) -> zipfile.ZipFile:
+    last_error: Exception | None = None
+    for encoding in ("utf-8", "cp866"):
+        try:
+            return zipfile.ZipFile(io.BytesIO(data), metadata_encoding=encoding)
+        except zipfile.BadZipFile:
+            raise
+        except UnicodeError as exc:
+            last_error = exc
+            continue
+    raise ArchiveError("archive filenames are not readable") from last_error
+
+
+def _zip_member_name(info: zipfile.ZipInfo) -> str:
+    name = info.filename
+    if info.flag_bits & 0x800:
+        return name
+    try:
+        raw = name.encode("cp437")
+    except UnicodeEncodeError:
+        return name
+    if not any(byte >= 0x80 for byte in raw):
+        return name
+    try:
+        return raw.decode("utf-8")
+    except UnicodeDecodeError:
+        return raw.decode("cp866")
 
 
 def _looks_like_zip(data: bytes) -> bool:

@@ -418,3 +418,31 @@ async def test_personal_overlay_isolation_shared_read_and_xss_inert(
         assert "personal:mine.md" not in paths
         origins = {node["path"]: node["origin"] for node in stolen.json()["nodes"]}
         assert origins.get("card.md") != "both"
+
+
+async def test_overlay_from_uploads_without_git(
+    auth_test_context: tuple[AsyncClient, async_sessionmaker[AsyncSession]],
+    monkeypatch: MonkeyPatch,
+) -> None:
+    client, session_factory = auth_test_context
+    _install_graph(monkeypatch, _github())
+    await _admin_connect(client, session_factory, "overlay-admin")
+
+    author = AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver")
+    await _register(author, "upload-overlay")
+    uploaded = await author.post(
+        "/personal/import-md",
+        files={"file": ("mine.md", b"# Mine\nSee [[card]].\n", "text/markdown")},
+    )
+    assert uploaded.status_code == 200
+
+    overlay = await author.get("/graph/personal-overlay")
+    assert overlay.status_code == 200
+    body = overlay.json()
+    assert body["layer"] == "overlay"
+    assert any(node["path"] == "personal:mine.md" for node in body["nodes"])
+    assert any(
+        edge["origin"] == "overlay" and edge["source"] == "personal:mine.md" and edge["target"] == "card.md"
+        for edge in body["edges"]
+    )
+    await author.aclose()

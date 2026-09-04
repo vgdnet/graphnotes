@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import settings
 from app.models.github import PersonalRepository, SharedRepository
 from app.models.graph import NoteIndex, NoteLayer, NoteLink, NoteTag, SyncJob, SyncJobStatus, Tag
+from app.models.personal_upload import PersonalUpload
 from app.services.audit import record_audit_event
 from app.services.closed_corpus import all_closed_keys, matches_closed
 from app.services.github import GitHubAppClient, GitHubAppError
@@ -476,6 +477,106 @@ async def load_overlay(
         )
         existing_edges.add(key)
         overlay_count += 1
+
+    status = str(shared_payload.get("index_status") or "current")
+    return {
+        "layer": "overlay",
+        "index_status": status,
+        "truncated": bool(shared_payload.get("truncated")) or overlay_truncated,
+        "nodes": nodes,
+        "edges": edges,
+    }
+
+
+async def load_overlay_from_uploads(
+    database: AsyncSession,
+    *,
+    owner_id: uuid.UUID,
+    shared_payload: dict[str, object],
+    overlay_limit: int,
+) -> dict[str, object]:
+    """Overlay «ваша ризома» from server uploads when git is not connected."""
+    shared_nodes = list(shared_payload.get("nodes") or [])
+    shared_edges = list(shared_payload.get("edges") or [])
+    visible = {node["path"] for node in shared_nodes if not node.get("unresolved")}
+    shared_rows = (
+        await database.scalars(
+            select(NoteIndex).where(
+                NoteIndex.layer == NoteLayer.SHARED.value,
+                NoteIndex.owner_user_id.is_(None),
+            )
+        )
+    ).all()
+    lookup = notes_lookup_map({note.path for note in shared_rows})
+    uploads = list(
+        (
+            await database.scalars(
+                select(PersonalUpload)
+                .where(PersonalUpload.user_id == owner_id)
+                .order_by(PersonalUpload.path)
+            )
+        ).all()
+    )
+    personal_by_path = {row.path: row for row in uploads}
+    nodes: list[dict[str, object]] = []
+    for node in shared_nodes:
+        path = str(node["path"])
+        origin = (
+            "both"
+            if (not node.get("unresolved") and path in personal_by_path)
+            else node.get("origin", "shared")
+        )
+        nodes.append({**node, "origin": origin})
+    edges: list[dict[str, object]] = [{**edge, "origin": edge.get("origin", "shared")} for edge in shared_edges]
+    existing_edges = {(edge["source"], edge["target"], edge["type"]) for edge in edges}
+    added_personal: set[str] = set()
+    overlay_truncated = False
+    overlay_count = 0
+
+    def add_personal_node(path: str, title: str, tags: list[str]) -> str:
+        if path in visible:
+            return path
+        key = f"personal:{path}"
+        if key not in added_personal:
+            nodes.append(
+                {
+                    "path": key,
+                    "title": title,
+                    "tags": tags,
+                    "isolated": False,
+                    "unresolved": False,
+                    "origin": "personal",
+                }
+            )
+            added_personal.add(key)
+        return key
+
+    for row in uploads:
+        parsed = parse_markdown(row.path, row.body)
+        for raw in parsed.links:
+            target_path = resolve_link_target(raw, lookup)
+            if target_path is None or target_path not in visible:
+                continue
+            if overlay_count >= overlay_limit:
+                overlay_truncated = True
+                break
+            source_id = add_personal_node(row.path, parsed.title, list(parsed.tags))
+            key = (source_id, target_path, "wikilink")
+            if key in existing_edges:
+                continue
+            edges.append(
+                {
+                    "source": source_id,
+                    "target": target_path,
+                    "type": "wikilink",
+                    "unresolved": False,
+                    "origin": "overlay",
+                }
+            )
+            existing_edges.add(key)
+            overlay_count += 1
+        if overlay_truncated:
+            break
 
     status = str(shared_payload.get("index_status") or "current")
     return {

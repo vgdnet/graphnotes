@@ -1,15 +1,23 @@
 # Stage 6 graph UI
 
-The shared rhizome is shown as a Cytoscape.js graph. Layout coordinates are UI
-state only and are not stored as knowledge.
+The shared rhizome is shown as a Cytoscape.js graph with the **fCoSE** layout
+(`cytoscape-fcose`). Layout coordinates are UI state only and are not stored
+as knowledge. Ordinary edges use haystack; overlay / unresolved / locked edges
+stay directed. Hover highlights the closed neighborhood.
 
-`GET /api/graph/shared` is readable without login. Logged-in users with a
-connected personal git get `GET /api/graph/personal-overlay`: the same bounded
-shared page plus personal notes that link into it. Another user's overlay
-cannot be selected by query.
+`GET /api/graph/shared` is readable without login. Logged-in users get
+`GET /api/graph/personal-overlay`: the same bounded shared page plus **ваша
+ризома** notes that link into it (connected git, or server uploads if git is
+not connected). Another user's overlay cannot be selected by query.
 
-Opening a node reads source Markdown (`GET /api/shared/notes/{path}` or the
-caller's personal note). Titles and bodies are shown as text, not HTML.
+Opening a node for a signed-in viewer with access goes to the **card page**
+(`#/card/{path}`): rendered Markdown on read, not an editor and not a raw
+`<pre>` dump. Guests do not receive card bodies.
+
+Card URLs: `#/card/` opens rhizome search (words and tags from the derived
+index). `#/card/{path}` opens the card page. The chrome tab is «Карточки».
+MVP search is PostgreSQL (`GET /api/search`). Elasticsearch is the next
+iteration (ADR-015), not this Stage 6 stack.
 
 Light and dark themes are browser-local (`localStorage` `graphnotes-theme`,
 else `prefers-color-scheme`). The UI control is a Theme Switcher (sliding
@@ -29,8 +37,3 @@ The graph shows layer and `index_status` (`empty` / `current` / `updating` /
 The layer filter option, personal-origin legend and node origin copy say
 «ваша ризома», not «ваш git». Git vs server store is a settings fact, not
 the layer name.
-
-Card URLs: `#/card/` opens rhizome search (words and tags from the derived
-index). `#/card/{path}` opens the card page. The chrome tab is «Карточки».
-MVP search is PostgreSQL (`GET /api/search`). Elasticsearch is the next
-iteration (ADR-015), not this Stage 6 stack.

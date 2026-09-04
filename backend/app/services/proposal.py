@@ -16,6 +16,7 @@ from app.models.user import User, UserRole
 from app.services.audit import record_audit_event
 from app.services.closed_corpus import closed_paths_for_user
 from app.services.git_paths import PathError, normalize_git_path
+from app.services.sync import refresh_caller_git
 from app.services.github import GitHubAppClient, GitHubAppError
 from app.services.index import IndexerError, rebuild_shared
 from app.services.repository import SHARED_SINGLETON_ID, apply_snapshot, published_sha
@@ -127,10 +128,8 @@ async def create_proposal(
 ) -> dict[str, object]:
     if len(paths) > settings.take_max_paths:
         raise ProposalError(400, "too many notes in one proposal")
+    personal = await refresh_caller_git(database, user.id, client)
     shared = await database.get(SharedRepository, SHARED_SINGLETON_ID)
-    personal = await database.scalar(
-        select(PersonalRepository).where(PersonalRepository.user_id == user.id)
-    )
     if shared is None or not published_sha(shared):
         raise ProposalError(409, "the shared rhizome is not connected")
     if personal is not None and expected_sha is not None and expected_sha != personal.observed_sha:

@@ -1,5 +1,7 @@
 from collections.abc import AsyncIterator
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
+import asyncio
+import logging
 
 from fastapi import FastAPI
 
@@ -15,13 +17,38 @@ from app.api.repository import router as repository_router
 from app.api.users import router as users_router
 from app.api.webhooks import router as webhooks_router
 from app.core.config import settings
-from app.db.session import engine
+from app.db.session import async_session_factory, engine
+from app.services.github import GitHubAppClient
+from app.services.sync import pull_connected_gits
+
+logger = logging.getLogger(__name__)
+
+
+async def _personal_sync_loop() -> None:
+    interval = settings.personal_sync_interval_seconds
+    if interval <= 0:
+        return
+    while True:
+        await asyncio.sleep(interval)
+        try:
+            async with async_session_factory() as database:
+                await pull_connected_gits(database, GitHubAppClient())
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            logger.warning("periodic personal git pull failed", exc_info=True)
 
 
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
-    yield
-    await engine.dispose()
+    task = asyncio.create_task(_personal_sync_loop())
+    try:
+        yield
+    finally:
+        task.cancel()
+        with suppress(asyncio.CancelledError):
+            await task
+        await engine.dispose()
 
 
 app = FastAPI(title=settings.app_name, lifespan=lifespan)

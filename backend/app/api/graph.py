@@ -19,6 +19,7 @@ from app.services.index import (
     index_status_label,
     load_graph,
     load_overlay,
+    load_overlay_from_uploads,
     rebuild_personal,
     rebuild_shared,
 )
@@ -153,8 +154,13 @@ async def personal_overlay(
         select(PersonalRepository).where(PersonalRepository.user_id == user.id)
     )
     if personal is None or not personal.indexed_sha:
-        payload["layer"] = "overlay"
-        return GraphResponse.model_validate(payload)
+        overlay = await load_overlay_from_uploads(
+            database,
+            owner_id=user.id,
+            shared_payload=payload,
+            overlay_limit=_limit(limit),
+        )
+        return GraphResponse.model_validate(overlay)
     overlay = await load_overlay(
         database,
         owner_id=user.id,

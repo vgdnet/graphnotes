@@ -13,6 +13,7 @@ from app import models  # noqa: F401
 
 # Tests use http://testserver. Secure cookies would be dropped on HTTP.
 settings.cookie_secure = False
+settings.personal_sync_interval_seconds = 0
 
 
 @pytest_asyncio.fixture

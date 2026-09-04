@@ -32,6 +32,7 @@ async def test_user_card_hides_other_personal_and_closed(
     )
     assert published.status_code == 200
 
+    assert (await author.delete("/personal/connect")).status_code == 200
     secret = await author.post(
         "/personal/import-md",
         files={"file": ("secret.md", b"# Hidden diary\n", "text/markdown")},

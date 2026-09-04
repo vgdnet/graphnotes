@@ -14,6 +14,13 @@ git is not rewritten. Upload-without-git is not a write into published shared
 until an editor accepts. After accept and index catch-up, those paths leave
 Differ.
 
+Opening Differ reads the caller's connected public git HEAD through the GitHub
+App before comparing trees. The personal index is rebuilt when the SHA moved
+by the in-process poller (`GRAPHNOTES_PERSONAL_SYNC_INTERVAL_SECONDS`, default
+300; `0` disables it), `python -m app.cli.sync_personal`, graph/status
+requests, or a configured GitHub `push` webhook. GraphNotes does not keep a
+second canonical clone of personal Markdown.
+
 GraphNotes does **not** offer ZIP download of published shared (`Скачать` /
 `GET /api/shared/archive` removed, TZ 2.5). Shared is read in the app.
 

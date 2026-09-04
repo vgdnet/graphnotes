@@ -322,3 +322,33 @@ async def test_differ_lists_one_way_and_shared_archive_is_gone(
     await author.aclose()
     await editor.aclose()
 
+
+async def test_differ_pulls_latest_personal_git_after_obsidian_push(
+    auth_test_context: tuple[AsyncClient, async_sessionmaker[AsyncSession]],
+    monkeypatch: MonkeyPatch,
+) -> None:
+    admin, session_factory = auth_test_context
+    github = _install(monkeypatch, _github())
+    await _admin(admin, session_factory, "queue-admin")
+    author = await _second("efimov")
+    await _connect_pair(author, "vgdnet/guide_psy")
+
+    before = await author.get("/differ")
+    assert before.status_code == 200
+    assert "obsidian.md" not in {item["path"] for item in before.json()["differences"]}
+
+    repo = github.repos["vgdnet/guide_psy"]
+    assert repo.sha is not None
+    repo.snapshots[repo.sha] = dict(repo.files)
+    repo.files["obsidian.md"] = "# Pushed from Obsidian\n"
+    repo.sha = "sha-from-obsidian"
+    repo.branches[repo.default_branch] = repo.sha
+
+    after = await author.get("/differ")
+    assert after.status_code == 200
+    body = {item["path"]: item["kind"] for item in after.json()["differences"]}
+    assert body["obsidian.md"] == "added"
+    _assert_hidden(after.text)
+
+    await author.aclose()
+

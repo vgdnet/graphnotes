@@ -3,13 +3,14 @@ from __future__ import annotations
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.github import PersonalRepository, SharedRepository
+from app.models.github import SharedRepository
 from app.models.personal_upload import PersonalUpload
 from app.models.user import User
 from app.services.closed_corpus import closed_paths_for_user
 from app.services.github import GitHubAppClient, GitHubAppError
 from app.services.proposal import ProposalError, _github
 from app.services.repository import SHARED_SINGLETON_ID, published_sha
+from app.services.sync import refresh_caller_git
 
 
 def _title_from_path(path: str) -> str:
@@ -27,9 +28,10 @@ async def list_differences(
     shared = await database.get(SharedRepository, SHARED_SINGLETON_ID)
     if shared is None or not published_sha(shared):
         raise ProposalError(409, "the shared rhizome is not connected")
-    personal = await database.scalar(
-        select(PersonalRepository).where(PersonalRepository.user_id == user.id)
-    )
+    personal = await refresh_caller_git(database, user.id, client)
+    shared = await database.get(SharedRepository, SHARED_SINGLETON_ID)
+    if shared is None or not published_sha(shared):
+        raise ProposalError(409, "the shared rhizome is not connected")
     closed = await closed_paths_for_user(database, user.id)
     if personal is not None and personal.observed_sha:
         payload = await _differ_from_git(client, shared, personal)
