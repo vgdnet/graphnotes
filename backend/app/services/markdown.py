@@ -140,7 +140,7 @@ def notes_lookup_map(
     labels: dict[str, tuple[str, ...]] | None = None,
 ) -> dict[str, str]:
     mapping: dict[str, str] = {}
-    for path in sorted(paths):
+    for path in sorted(paths, key=_path_rank):
         for key in _lookup_keys(path):
             mapping.setdefault(key, path)
     if labels:
@@ -188,3 +188,12 @@ def _lookup_keys(path: str) -> set[str]:
     stem = _link_key(path)
     name = path.rsplit("/", 1)[-1]
     return {stem, _link_key(name)}
+
+
+def _path_rank(path: str) -> tuple[int, str]:
+    name = path.rsplit("/", 1)[-1]
+    stem = name[:-3] if name.lower().endswith(".md") else name
+    parent = path.rsplit("/", 1)[0] if "/" in path else ""
+    folder = parent.rsplit("/", 1)[-1] if parent else ""
+    folder_note = 0 if folder and stem.casefold() == folder.casefold() else 1
+    return (folder_note, path.casefold())

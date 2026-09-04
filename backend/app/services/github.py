@@ -100,28 +100,70 @@ class GitHubAppClient:
             tree_sha = tree.get("sha") if isinstance(tree, dict) else None
             if not tree_sha:
                 raise GitHubAppError("error", "GitHub request failed")
+            payload = await self._tree(client, owner, name, tree_sha, token)
+            if payload.get("truncated"):
+                raise GitHubAppError("error", "repository tree is too large to list")
+            blobs, gitlinks = split_tree_entries(payload.get("tree"))
+            for prefix, link_sha in gitlinks:
+                try:
+                    nested = await self._tree(client, owner, name, link_sha, token)
+                except GitHubAppError:
+                    nested = None
+                if nested and not nested.get("truncated"):
+                    extra, _nested_links = split_tree_entries(nested.get("tree"), prefix=prefix)
+                    for path, sha in extra.items():
+                        relative = path[len(prefix) + 1 :] if path.startswith(f"{prefix}/") else path
+                        if blobs.get(relative) == sha:
+                            continue
+                        blobs[path] = sha
+                folder_note = folder_note_path(prefix)
+                if folder_note and folder_note not in blobs:
+                    probed = await self._contents_blob_sha(
+                        client, owner, name, folder_note, ref, token
+                    )
+                    if probed:
+                        blobs[folder_note] = probed
+            return blobs
+
+    async def _tree(
+        self,
+        client: httpx.AsyncClient,
+        owner: str,
+        name: str,
+        sha: str,
+        token: str,
+    ) -> dict[str, Any]:
+        return await self._get(
+            client,
+            f"/repos/{owner}/{name}/git/trees/{quote(sha, safe='')}",
+            token,
+            params={"recursive": "1"},
+        )
+
+    async def _contents_blob_sha(
+        self,
+        client: httpx.AsyncClient,
+        owner: str,
+        name: str,
+        path: str,
+        ref: str,
+        token: str,
+    ) -> str | None:
+        try:
             payload = await self._get(
                 client,
-                f"/repos/{owner}/{name}/git/trees/{tree_sha}",
+                f"/repos/{owner}/{name}/contents/{quote(path, safe='/')}",
                 token,
-                params={"recursive": "1"},
+                params={"ref": ref},
             )
-        if payload.get("truncated"):
-            raise GitHubAppError("error", "repository tree is too large to list")
-        entries = payload.get("tree")
-        if not isinstance(entries, list):
-            return {}
-        blobs: dict[str, str] = {}
-        for entry in entries:
-            if not isinstance(entry, dict) or entry.get("type") != "blob":
-                continue
-            path = str(entry.get("path") or "")
-            sha = str(entry.get("sha") or "")
-            # Trees and gitlinks are folders, not notes. A folder named
-            # GraphNotes must not hide GraphNotes/GraphNotes.md.
-            if path.lower().endswith(".md") and not path.startswith(".") and sha:
-                blobs[path] = sha
-        return blobs
+        except GitHubAppError as exc:
+            if exc.status in {"not_found", "error"}:
+                return None
+            raise
+        sha = payload.get("sha")
+        if payload.get("type") == "file" and isinstance(sha, str) and sha:
+            return sha
+        return None
 
     async def list_markdown_files(self, owner: str, name: str, ref: str) -> list[str]:
         return sorted(await self.list_markdown_blobs(owner, name, ref))
@@ -435,6 +477,67 @@ class GitHubAppClient:
         if not isinstance(payload, dict):
             raise GitHubAppError("error", "GitHub returned an unexpected payload")
         return payload
+
+
+def folder_note_path(prefix: str) -> str | None:
+    text = unicodedata.normalize("NFC", prefix.replace("\\", "/").strip().strip("/"))
+    if not text:
+        return None
+    name = text.rsplit("/", 1)[-1]
+    if not name or name.startswith("."):
+        return None
+    return f"{text}/{name}.md"
+
+
+def split_tree_entries(
+    entries: object,
+    *,
+    prefix: str = "",
+) -> tuple[dict[str, str], list[tuple[str, str]]]:
+    blobs: dict[str, str] = {}
+    gitlinks: list[tuple[str, str]] = []
+    if not isinstance(entries, list):
+        return blobs, gitlinks
+    head = unicodedata.normalize("NFC", prefix.replace("\\", "/").strip().strip("/"))
+    for entry in entries:
+        if not isinstance(entry, dict):
+            continue
+        raw = str(entry.get("path") or "").replace("\\", "/")
+        path = f"{head}/{raw}" if head else raw
+        path = unicodedata.normalize("NFC", path)
+        sha = str(entry.get("sha") or "")
+        kind = str(entry.get("type") or "")
+        mode = str(entry.get("mode") or "")
+        if kind == "blob":
+            indexed = _indexable_markdown_path(path)
+            if indexed and sha:
+                blobs[indexed] = sha
+            continue
+        if (kind == "commit" or mode == "160000") and sha:
+            link = _indexable_gitlink_path(path)
+            if link:
+                gitlinks.append((link, sha))
+    return blobs, gitlinks
+
+
+def _indexable_markdown_path(path: str) -> str | None:
+    text = unicodedata.normalize("NFC", path.replace("\\", "/").strip().lstrip("/"))
+    if not text.lower().endswith(".md"):
+        return None
+    parts = text.split("/")
+    if any(part in {"", ".", ".."} or part.startswith(".") for part in parts):
+        return None
+    return text
+
+
+def _indexable_gitlink_path(path: str) -> str | None:
+    text = unicodedata.normalize("NFC", path.replace("\\", "/").strip().strip("/"))
+    if not text:
+        return None
+    parts = text.split("/")
+    if any(part in {"", ".", ".."} or part.startswith(".") for part in parts):
+        return None
+    return text
 
 
 def _blob_sha_for_path(blobs: dict[str, str], path: str) -> str | None:

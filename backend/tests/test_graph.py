@@ -238,6 +238,29 @@ async def test_unresolved_delete_rename_self_and_duplicate_links(
     )
 
 
+async def test_folder_note_graphnotes_is_not_unresolved(
+    auth_test_context: tuple[AsyncClient, async_sessionmaker[AsyncSession]],
+    monkeypatch: MonkeyPatch,
+) -> None:
+    client, session_factory = auth_test_context
+    github = _install_graph(monkeypatch, _github())
+    github.repos["vgdnet/rhizome"].files["GraphNotes/GraphNotes.md"] = (
+        "Это сайт для отображения вашей динами прироста грибницы.\n"
+    )
+    github.repos["vgdnet/rhizome"].files["Читай меня.md"] = "See [[GraphNotes]]\n"
+    await _admin_connect(client, session_factory)
+    body = (await client.get("/graph/shared")).json()
+    paths = {node["path"] for node in body["nodes"]}
+    assert "GraphNotes/GraphNotes.md" in paths
+    assert "unresolved:GraphNotes" not in paths
+    assert any(
+        edge["source"] == "Читай меня.md"
+        and edge["target"] == "GraphNotes/GraphNotes.md"
+        and not edge["unresolved"]
+        for edge in body["edges"]
+    )
+
+
 async def test_neighborhood_empty_error_proposal_isolation_and_public_read(
     auth_test_context: tuple[AsyncClient, async_sessionmaker[AsyncSession]],
     monkeypatch: MonkeyPatch,

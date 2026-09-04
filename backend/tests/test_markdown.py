@@ -57,6 +57,14 @@ def test_folder_name_does_not_hide_same_basename_note() -> None:
     assert unresolved_links(("GraphNotes",), {nested, "GraphNotes", "index.md"}) == ()
 
 
+def test_folder_note_wins_same_basename() -> None:
+    nested = "GraphNotes/GraphNotes.md"
+    lookup = notes_lookup_map({nested, "GraphNotes.md", "index.md"})
+    assert resolve_link_target("GraphNotes", lookup) == nested
+    assert resolve_link_target("GraphNotes.md", lookup) == nested
+    assert resolve_link_target("GraphNotes/GraphNotes", lookup) == nested
+
+
 def test_wikilink_matches_nfd_basename() -> None:
     composed = "GraphNotes/карточка.md"
     lookup = notes_lookup_map({composed})
