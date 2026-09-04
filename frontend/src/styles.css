@@ -106,8 +106,18 @@
 }
 
 * { box-sizing: border-box; }
-html { background: var(--gn-bg); }
-body { margin: 0; min-width: 320px; min-height: 100vh; background: var(--gn-bg); color: var(--gn-text); }
+html {
+  background-color: var(--gn-bg);
+  transition: background-color .28s ease, color .28s ease;
+}
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  background-color: var(--gn-bg);
+  color: var(--gn-text);
+  transition: background-color .28s ease, color .28s ease;
+}
 button, input, select { font: inherit; }
 button { color: inherit; }
 
@@ -124,7 +134,71 @@ button { color: inherit; }
 .topnav { display: flex; flex-wrap: wrap; gap: .4rem; }
 .topnav .button { margin: 0; padding: .5rem .8rem; font-size: .8rem; }
 .topbar__end { display: flex; align-items: center; gap: .75rem; }
-.theme-toggle { margin: 0; padding: .5rem .8rem; font-size: .8rem; }
+.theme-switcher {
+  --ts-gap: .14rem;
+  --ts-knob: 1.28rem;
+  --ts-pad: .15rem;
+  flex: 0 0 auto;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  border-radius: 999px;
+  line-height: 0;
+}
+.theme-switcher__track {
+  position: relative;
+  display: grid;
+  grid-template-columns: var(--ts-knob) var(--ts-knob);
+  align-items: center;
+  gap: var(--ts-gap);
+  padding: var(--ts-pad);
+  border: 1px solid var(--gn-border);
+  border-radius: 999px;
+  background: var(--gn-tab-bg);
+  box-shadow: inset 0 1px 2px rgb(0 0 0 / 16%);
+}
+.theme-switcher__thumb {
+  position: absolute;
+  top: var(--ts-pad);
+  left: var(--ts-pad);
+  width: var(--ts-knob);
+  height: var(--ts-knob);
+  border-radius: 50%;
+  background: var(--gn-accent);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 22%);
+  transition: left .28s cubic-bezier(.32, .72, 0, 1);
+  pointer-events: none;
+}
+.theme-switcher--dark .theme-switcher__thumb {
+  left: calc(100% - var(--ts-pad) - var(--ts-knob));
+}
+.theme-switcher__icon {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: var(--ts-knob);
+  height: var(--ts-knob);
+  color: var(--gn-text-faint);
+  opacity: .72;
+  transition: color .2s ease, opacity .2s ease;
+}
+.theme-switcher__icon--active {
+  color: var(--gn-accent-ink);
+  opacity: 1;
+}
+.theme-switcher:focus-visible {
+  outline: none;
+}
+.theme-switcher:focus-visible .theme-switcher__track {
+  border-color: var(--gn-accent);
+  box-shadow: 0 0 0 .2rem rgb(62 207 142 / 18%);
+}
+.theme-switcher:hover .theme-switcher__track {
+  border-color: var(--gn-accent-muted);
+}
 .auth-overlay { min-height: auto; margin-bottom: 2rem; }
 .brand { display: flex; align-items: center; gap: .75rem; color: var(--gn-text-strong); font-weight: 750; text-decoration: none; }
 .brand__mark { display: grid; width: 2.25rem; height: 2.25rem; place-items: center; border: 1px solid var(--gn-accent); border-radius: .7rem; color: var(--gn-accent); }
@@ -190,7 +264,7 @@ select { padding: .65rem .8rem; border: 1px solid var(--gn-input-border); border
 .settings-actions .button { margin-top: 0; }
 .appearance-row { display: flex; flex-wrap: wrap; gap: .75rem; align-items: center; margin: 0 0 1rem; }
 .appearance-row .admin-panel__hint { margin: 0; }
-.appearance-row .theme-toggle { margin: 0; }
+.appearance-row .theme-switcher { margin: 0; }
 .loading { display: grid; min-height: calc(100vh - 6rem); place-items: center; color: var(--gn-text-faint); }
 
 .admin-panel { width: min(100%, 72rem); margin: -5rem auto 3rem; padding: 1.5rem; border: 1px solid var(--gn-border); border-radius: 1.3rem; background: var(--gn-surface); }
@@ -280,6 +354,14 @@ select { padding: .65rem .8rem; border: 1px solid var(--gn-input-border); border
 .graph-selection small { color: var(--gn-text-dim); }
 .graph-actions { display: flex; flex-wrap: wrap; gap: 0.6rem; margin: 0 0 1rem; }
 .graph-actions .button { margin-top: 0; }
+
+@media (prefers-reduced-motion: reduce) {
+  html, body,
+  .theme-switcher__thumb,
+  .theme-switcher__icon {
+    transition: none;
+  }
+}
 
 @media (max-width: 780px) {
   .auth-layout, .workspace { grid-template-columns: 1fr; gap: 2.5rem; padding-top: 4rem; }

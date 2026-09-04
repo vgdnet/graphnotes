@@ -6,6 +6,7 @@ import { GraphDiffView } from "./GraphDiffView";
 import type { GraphDiffResponse } from "./GraphDiffView";
 import { MarkdownBody } from "./MarkdownBody";
 import { cardApiUrl, cardHash, pathFromCardHash } from "./cardRoute";
+import { ThemeSwitcher } from "./ThemeSwitcher";
 import {
   applyTheme,
   persistTheme,
@@ -298,21 +299,6 @@ async function readError(response: Response): Promise<string> {
     // Fall back to a user-safe message below.
   }
   return "Не удалось выполнить запрос. Попробуйте ещё раз.";
-}
-
-function ThemeToggle({ theme, onToggle }: { theme: ThemeName; onToggle: () => void }) {
-  const next = theme === "dark" ? "светлую" : "тёмную";
-  return (
-    <button
-      className="button button--quiet theme-toggle"
-      type="button"
-      onClick={onToggle}
-      aria-pressed={theme === "dark"}
-      aria-label={`Включить ${next} тему`}
-    >
-      {theme === "dark" ? "Светлая" : "Тёмная"}
-    </button>
-  );
 }
 
 export function App() {
@@ -1249,7 +1235,7 @@ export function App() {
           )}
         </nav>
         <div className="topbar__end">
-          <ThemeToggle theme={theme} onToggle={toggleTheme} />
+          <ThemeSwitcher theme={theme} onToggle={toggleTheme} />
           {user ? (
             <button className="button button--quiet" type="button" onClick={() => void logout()} disabled={submitting}>
               Выйти
@@ -1351,7 +1337,7 @@ export function App() {
             </div>
             <div className="appearance-row">
               <p className="admin-panel__hint">Оформление: {theme === "dark" ? "тёмная" : "светлая"} тема. Выбор хранится в этом браузере.</p>
-              <ThemeToggle theme={theme} onToggle={toggleTheme} />
+              <ThemeSwitcher theme={theme} onToggle={toggleTheme} />
             </div>
             {error && <p className="form-error" role="alert">{error}</p>}
             <div className="tabs tabs--three" role="tablist" aria-label="Блоки настроек">
