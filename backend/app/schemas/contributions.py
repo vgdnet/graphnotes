@@ -93,6 +93,9 @@ class UserCardPerson(BaseModel):
     display_name: str
     role: str
     is_author: bool
+    website: str | None = None
+    phone: str | None = None
+    telegram: str | None = None
 
 
 class UserCardNote(BaseModel):

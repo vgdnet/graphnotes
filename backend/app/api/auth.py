@@ -43,6 +43,12 @@ async def register(
     database: DatabaseSession,
 ) -> User:
     password_hash = await run_in_threadpool(hash_password, payload.password)
+    taken_email = await database.scalar(select(User.id).where(User.email == payload.email))
+    if taken_email is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="email is already registered",
+        )
     user = User(
         username=payload.username,
         password_hash=password_hash,
@@ -81,7 +87,7 @@ async def register(
             database,
             action="auth.registration_failed",
             subject_username=payload.username,
-            details={"reason": "username_conflict"},
+            details={"reason": "identity_conflict"},
         )
         await database.commit()
         raise HTTPException(

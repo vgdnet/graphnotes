@@ -4,11 +4,12 @@ from uuid import UUID
 from fastapi import APIRouter, HTTPException, Query
 from sqlalchemy import select
 
-from app.api.dependencies import CurrentAdmin, CurrentUser, DatabaseSession
+from app.api.dependencies import CurrentAdmin, CurrentUser, DatabaseSession, OptionalUser
 from app.core.config import settings
 from app.models.github import PersonalRepository, SharedRepository
 from app.models.graph import NoteLayer
 from app.schemas.graph import GraphDiffResponse, GraphResponse, RebuildRequest
+from app.schemas.search import SearchResponse
 from app.services.github import GitHubAppClient
 from app.services.graph_diff import proposal_graph_diff
 from app.services.index import (
@@ -23,6 +24,7 @@ from app.services.index import (
 )
 from app.services.proposal import ProposalError
 from app.services.repository import SHARED_SINGLETON_ID, refresh_personal, refresh_shared
+from app.services.search import search_visible_cards
 
 router = APIRouter(tags=["graph"])
 
@@ -37,6 +39,17 @@ def _raise(error: IndexerError) -> None:
 
 def _limit(limit: int) -> int:
     return max(1, min(limit, settings.graph_page_max))
+
+
+@router.get("/search", response_model=SearchResponse)
+async def search_cards(
+    database: DatabaseSession,
+    viewer: OptionalUser,
+    q: Annotated[str, Query(max_length=200)] = "",
+    limit: Annotated[int, Query(ge=1, le=80)] = 40,
+) -> SearchResponse:
+    payload = await search_visible_cards(database, q, user=viewer, limit=limit)
+    return SearchResponse.model_validate(payload)
 
 
 @router.get("/graph/shared", response_model=GraphResponse)

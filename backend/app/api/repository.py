@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException
 
-from app.api.dependencies import CurrentAdmin, CurrentAuthor, DatabaseSession, OptionalUser
+from app.api.dependencies import CurrentAdmin, CurrentAuthor, CurrentUser, DatabaseSession, OptionalUser
 from app.models.github import PersonalRepository, SharedRepository
 from app.schemas.repository import (
     PersonalConnectRequest,
@@ -18,6 +18,7 @@ from app.services.repository import (
     RepositoryBindError,
     connect_personal_repository,
     connect_shared_repository,
+    disconnect_personal_repository,
     public_status,
     refresh_personal,
     refresh_shared,
@@ -108,3 +109,16 @@ async def connect_personal(
         shared=_shared_payload(shared),
         personal=_personal_payload(personal),
     )
+
+
+@router.delete("/personal/connect", response_model=RepositoryStatusResponse)
+async def disconnect_personal(
+    user: CurrentUser,
+    database: DatabaseSession,
+) -> RepositoryStatusResponse:
+    try:
+        await disconnect_personal_repository(database, user=user)
+    except RepositoryBindError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+    shared = await database.get(SharedRepository, SHARED_SINGLETON_ID)
+    return RepositoryStatusResponse(shared=_shared_payload(shared), personal=None)

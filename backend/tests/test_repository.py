@@ -91,6 +91,7 @@ async def test_user_cannot_connect_shared_and_admin_can(
             "username": "plain-user",
             "password": "a sufficiently long password",
             "display_name": "Plain",
+            "email": "plain-user@example.com",
         },
     )
     assert (await client.post("/repository/connect")).status_code == 403
@@ -130,6 +131,7 @@ async def test_personal_connect_isolation_and_shared_rejection(
             "username": "efimov",
             "password": "a sufficiently long password",
             "display_name": "Efimov",
+            "email": "efimov@example.com",
             "accept_author_contract": True,
         },
     )
@@ -164,6 +166,7 @@ async def test_personal_connect_isolation_and_shared_rejection(
                 "username": "other-user",
                 "password": "a sufficiently long password",
                 "display_name": "Other",
+                "email": "other-user@example.com",
                 "accept_author_contract": True,
             },
         )
@@ -190,6 +193,7 @@ async def test_webhook_signature_and_idempotency(
             "username": "hook-admin",
             "password": "a sufficiently long password",
             "display_name": "Hook Admin",
+            "email": "hook-admin@example.com",
         },
     )
     async with session_factory() as database:

@@ -21,7 +21,7 @@ class RegisterRequest(BaseModel):
     username: str
     password: str = Field(min_length=12, max_length=128)
     display_name: str = Field(min_length=1, max_length=80)
-    email: EmailStr | None = None
+    email: EmailStr
     accept_author_contract: bool = False
 
     @field_validator("username")
@@ -39,9 +39,7 @@ class RegisterRequest(BaseModel):
 
     @field_validator("email")
     @classmethod
-    def normalize_email(cls, value: EmailStr | None) -> str | None:
-        if value is None:
-            return None
+    def normalize_email(cls, value: EmailStr) -> str:
         return str(value).casefold()
 
 
@@ -60,8 +58,13 @@ class UserResponse(BaseModel):
 
     id: uuid.UUID
     username: str
-    email: str | None
+    email: str
     display_name: str
+    phone: str | None = None
+    telegram: str | None = None
+    phone_public: bool = False
+    telegram_public: bool = False
+    website: str | None = None
     role: str
     is_active: bool
     is_author: bool
@@ -70,6 +73,41 @@ class UserResponse(BaseModel):
     author_contract_withdrawn_at: datetime | None
     created_at: datetime
     updated_at: datetime
+
+
+class ProfileUpdateRequest(BaseModel):
+    display_name: str | None = Field(default=None, min_length=1, max_length=80)
+    email: EmailStr | None = None
+    phone: str | None = Field(default=None, max_length=32)
+    telegram: str | None = Field(default=None, max_length=64)
+    phone_public: bool | None = None
+    telegram_public: bool | None = None
+    website: str | None = Field(default=None, max_length=300)
+
+    @field_validator("display_name")
+    @classmethod
+    def normalize_display_name_update(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        value = value.strip()
+        if not value:
+            raise ValueError("display name must not be blank")
+        return value
+
+    @field_validator("email")
+    @classmethod
+    def normalize_email_update(cls, value: EmailStr | None) -> str | None:
+        if value is None:
+            return None
+        return str(value).casefold()
+
+    @field_validator("phone", "telegram", "website")
+    @classmethod
+    def blank_to_none(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        value = value.strip()
+        return value or None
 
 
 class AuthorContractResponse(BaseModel):

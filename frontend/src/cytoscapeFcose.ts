@@ -145,6 +145,14 @@ export const GRAPH_STYLESHEET: StylesheetJson = [
       "border-opacity": 0.5,
     },
   },
+  {
+    selector: "node[searchHit = 1]",
+    style: {
+      "border-width": 5,
+      "border-color": "#fff4b8",
+      "border-opacity": 0.9,
+    },
+  },
 ];
 
 export const DIFF_STYLESHEET: StylesheetJson = [

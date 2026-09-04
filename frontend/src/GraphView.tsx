@@ -9,6 +9,7 @@ import {
   highlightNeighborhood,
   runFcoseLayout,
 } from "./cytoscapeFcose";
+import { cardHash } from "./MarkdownBody";
 
 export type GraphNode = {
   path: string;
@@ -57,7 +58,6 @@ export function GraphView({
   graph,
   loading,
   selectedPath,
-  onOpen,
   onExpand,
   canReadNotes = true,
   onNeedAuth,
@@ -65,7 +65,6 @@ export function GraphView({
   graph: GraphResponse | null;
   loading?: boolean;
   selectedPath?: string | null;
-  onOpen: (path: string, origin: string) => void;
   onExpand: (path: string) => void;
   canReadNotes?: boolean;
   onNeedAuth?: () => void;
@@ -79,26 +78,53 @@ export function GraphView({
 
   const visible = useMemo(() => {
     if (!graph) return { nodes: [] as GraphNode[], edges: [] as GraphEdge[] };
-    const q = query.trim().toLowerCase();
     const tagQ = tag.trim().toLowerCase();
     const nodes = graph.nodes.filter((node) => {
       if (kind === "unresolved" && !node.unresolved) return false;
       if (kind === "isolated" && !node.isolated) return false;
       if (kind === "overlay" && node.origin !== "personal" && node.origin !== "both") return false;
-      if (q && !node.title.toLowerCase().includes(q) && !node.path.toLowerCase().includes(q)) return false;
       if (tagQ && !node.tags.some((item) => item.toLowerCase().includes(tagQ))) return false;
       return true;
     });
     const allowed = new Set(nodes.map((node) => node.path));
     const edges = graph.edges.filter((edge) => allowed.has(edge.source) && allowed.has(edge.target));
     return { nodes, edges };
-  }, [graph, query, kind, tag]);
+  }, [graph, kind, tag]);
+
+  const matches = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return [] as GraphNode[];
+    return visible.nodes.filter(
+      (node) => node.title.toLowerCase().includes(q) || node.path.toLowerCase().includes(q),
+    );
+  }, [visible, query]);
+
+  const [remoteHits, setRemoteHits] = useState<{ path: string; title: string }[]>([]);
+  useEffect(() => {
+    const q = query.trim();
+    if (!q) {
+      setRemoteHits([]);
+      return;
+    }
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => {
+      void fetch(`/api/search?q=${encodeURIComponent(q)}`, { signal: controller.signal })
+        .then(async (response) => (response.ok ? (await response.json()) as { hits: { path: string; title: string }[] } : { hits: [] }))
+        .then((body) => setRemoteHits(body.hits))
+        .catch(() => undefined);
+    }, 180);
+    return () => {
+      window.clearTimeout(timer);
+      controller.abort();
+    };
+  }, [query]);
 
   const focusPathRef = useRef<string | null>(null);
   focusPathRef.current = focusPath || selectedPath || null;
 
-  const onOpenRef = useRef(onOpen);
-  onOpenRef.current = onOpen;
+  useEffect(() => {
+    if (matches[0]) setFocusPath(matches[0].path);
+  }, [query, matches]);
 
   useEffect(() => {
     const host = containerRef.current;
@@ -120,13 +146,7 @@ export function GraphView({
       }
       if (event.target.isNode()) setFocusPath(event.target.id());
     };
-    const onDouble = (event: EventObject) => {
-      if (typeof event.target.isNode !== "function" || !event.target.isNode()) return;
-      const node = event.target;
-      onOpenRef.current(String(node.id()), String(node.data("origin") || "shared"));
-    };
     cy.on("tap", onTap);
-    cy.on("dbltap", onDouble);
     return () => {
       cy.destroy();
       cyRef.current = null;
@@ -170,6 +190,15 @@ export function GraphView({
   useEffect(() => {
     const cy = cyRef.current;
     if (!cy) return;
+    const hit = new Set(matches.map((item) => item.path));
+    cy.nodes().forEach((node) => {
+      node.data("searchHit", hit.has(node.id()) ? 1 : 0);
+    });
+  }, [matches, visible]);
+
+  useEffect(() => {
+    const cy = cyRef.current;
+    if (!cy) return;
     cy.nodes().unselect();
     const path = selectedPath || focusPath;
     if (path && cy.getElementById(path).nonempty()) {
@@ -204,7 +233,10 @@ export function GraphView({
       moveFocus(-1);
     } else if (event.key === "Enter") {
       const node = currentNode();
-      if (node) onOpen(node.path, node.origin || "shared");
+      if (node && !node.unresolved) {
+        window.location.hash = cardHash(node.path);
+        if (!canReadNotes) onNeedAuth?.();
+      }
     } else if (event.key === "e" || event.key === "E") {
       const node = currentNode();
       if (node && !node.unresolved && !node.locked && !node.path.startsWith("personal:")) onExpand(node.path);
@@ -241,6 +273,8 @@ export function GraphView({
         Слой: {graph?.layer === "overlay" ? "общая ризома и связи вашего git" : "общая ризома"}. Состояние: {status}.
         {graph?.truncated ? " Показана часть узлов — выберите узел и нажмите «Соседи»." : ""}
         {loading ? " Обновляем граф…" : ""}
+        {query.trim() && matches.length > 0 ? ` Совпадений на графе: ${matches.length}.` : ""}
+        {query.trim() && matches.length === 0 ? " Совпадений нет — граф на месте." : ""}
       </p>
       {(!graph || graph.nodes.length === 0) && !loading ? (
         <p className="admin-panel__hint">Граф пока пуст.</p>
@@ -259,6 +293,22 @@ export function GraphView({
         <span><i className="swatch swatch--personal" /> ваш git</span>
         <span><i className="swatch swatch--missing" /> нет заметки</span>
       </div>
+      {query.trim() && remoteHits.length > 0 && (
+        <ul className="search-hits">
+          {remoteHits.slice(0, 8).map((hit) => (
+            <li key={hit.path}>
+              <a
+                href={cardHash(hit.path)}
+                onClick={() => {
+                  if (!canReadNotes) onNeedAuth?.();
+                }}
+              >
+                {hit.title}
+              </a>
+            </li>
+          ))}
+        </ul>
+      )}
       {selected && (
         <div className="graph-selection">
           <p>
@@ -266,20 +316,6 @@ export function GraphView({
             <small> {originLabel(selected.origin)} · {selected.locked ? "замок" : selected.unresolved ? "нет заметки" : selected.path}</small>
           </p>
           <div className="graph-actions">
-            <button
-              className="button button--primary"
-              type="button"
-              disabled={selected.unresolved}
-              onClick={() => {
-                if (!canReadNotes) {
-                  onNeedAuth?.();
-                  return;
-                }
-                onOpen(selected.path, selected.origin || "shared");
-              }}
-            >
-              {canReadNotes ? "Открыть карточку" : "Войдите, чтобы читать"}
-            </button>
             <button
               className="button button--quiet"
               type="button"
@@ -289,6 +325,18 @@ export function GraphView({
               Соседи
             </button>
           </div>
+          {!selected.unresolved && (
+            <p className="graph-selection__link">
+              <a
+                href={cardHash(selected.path)}
+                onClick={() => {
+                  if (!canReadNotes) onNeedAuth?.();
+                }}
+              >
+                {canReadNotes ? `Открыть карточку · ${selected.title}` : "Войдите, чтобы открыть карточку"}
+              </a>
+            </p>
+          )}
         </div>
       )}
     </div>

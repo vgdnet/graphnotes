@@ -194,6 +194,28 @@ async def connect_personal_repository(
     return row
 
 
+async def disconnect_personal_repository(
+    database: AsyncSession,
+    *,
+    user: User,
+) -> None:
+    row = await database.scalar(
+        select(PersonalRepository).where(PersonalRepository.user_id == user.id)
+    )
+    if row is None:
+        raise RepositoryBindError(409, "personal git is not connected")
+    record_audit_event(
+        database,
+        action="repository.personal_disconnected",
+        actor_user_id=user.id,
+        target_user_id=user.id,
+        subject_username=user.username,
+        details={"owner": row.owner, "name": row.name},
+    )
+    await database.delete(row)
+    await database.commit()
+
+
 async def refresh_shared(database: AsyncSession, client: GitHubAppClient) -> SharedRepository | None:
     row = await database.get(SharedRepository, SHARED_SINGLETON_ID)
     if row is None:

@@ -249,6 +249,7 @@ async def _register(
             "username": username,
             "password": "a sufficiently long password",
             "display_name": username.title(),
+            "email": f"{username.casefold()}@example.com",
             "accept_author_contract": accept_author,
         },
     )
@@ -462,6 +463,8 @@ async def test_shared_notes_are_public_and_take_requires_auth(
         assert {item["path"] for item in shared.json()["notes"]} == {"card.md", "source.md"}
         take = await anonymous.post("/personal/take-from-shared", json={"paths": ["card.md"]})
         assert take.status_code == 401
+        body = await anonymous.get("/shared/notes/card.md")
+        assert body.status_code == 401
         personal = await anonymous.get("/personal/notes")
         assert personal.status_code == 401
 

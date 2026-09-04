@@ -8,7 +8,6 @@ from app.api.dependencies import (
     CurrentEditor,
     CurrentUser,
     DatabaseSession,
-    OptionalUser,
 )
 from app.schemas.notes import (
     ClosePathRequest,
@@ -65,7 +64,11 @@ async def shared_notes(database: DatabaseSession) -> NoteListResponse:
 
 
 @router.get("/shared/notes/{note_path:path}/feed", response_model=NoteFeedResponse)
-async def shared_note_feed(note_path: str, database: DatabaseSession) -> NoteFeedResponse:
+async def shared_note_feed(
+    note_path: str,
+    database: DatabaseSession,
+    _user: CurrentUser,
+) -> NoteFeedResponse:
     payload = await list_note_feed(database, note_path)
     return NoteFeedResponse.model_validate(payload)
 
@@ -74,7 +77,7 @@ async def shared_note_feed(note_path: str, database: DatabaseSession) -> NoteFee
 async def shared_note_comments(
     note_path: str,
     database: DatabaseSession,
-    viewer: OptionalUser,
+    viewer: CurrentUser,
 ) -> CommentListResponse:
     try:
         payload = await list_comments(database, note_path, viewer)
@@ -123,7 +126,32 @@ async def moderate_shared_comment(
 
 
 @router.get("/shared/notes/{note_path:path}", response_model=NoteDetail)
-async def shared_note(note_path: str, database: DatabaseSession) -> NoteDetail:
+async def shared_note(
+    note_path: str,
+    database: DatabaseSession,
+    _user: CurrentUser,
+) -> NoteDetail:
+    try:
+        payload = await get_shared_note(database, note_path, _client())
+    except IngestError as exc:
+        _raise(exc)
+    return NoteDetail.model_validate(payload)
+
+
+@router.get("/cards/{note_path:path}", response_model=NoteDetail)
+async def rhizome_card(
+    note_path: str,
+    database: DatabaseSession,
+    user: CurrentUser,
+) -> NoteDetail:
+    if note_path.startswith("personal:"):
+        try:
+            payload = await get_personal_note(
+                database, user, note_path.removeprefix("personal:"), _client()
+            )
+        except IngestError as exc:
+            _raise(exc)
+        return NoteDetail.model_validate(payload)
     try:
         payload = await get_shared_note(database, note_path, _client())
     except IngestError as exc:

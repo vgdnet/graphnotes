@@ -4,15 +4,23 @@ import { GraphView } from "./GraphView";
 import type { GraphResponse } from "./GraphView";
 import { GraphDiffView } from "./GraphDiffView";
 import type { GraphDiffResponse } from "./GraphDiffView";
+import { MarkdownBody, cardHash } from "./MarkdownBody";
 
 type HealthState = "checking" | "online" | "offline";
 type AuthMode = "login" | "register";
+type ShellView = "graph" | "settings" | "differ" | "queue" | "admin" | "card";
+type SettingsBlock = "profile" | "git" | "contract";
 
 type User = {
   id: string;
   username: string;
-  email: string | null;
+  email: string;
   display_name: string;
+  phone: string | null;
+  telegram: string | null;
+  phone_public: boolean;
+  telegram_public: boolean;
+  website: string | null;
   role: "user" | "editor" | "admin";
   is_active: boolean;
   is_author: boolean;
@@ -163,7 +171,16 @@ type NoteCommentItem = {
   author: { id: string; username: string; display_name: string };
 };
 type UserCard = {
-  user: { id: string; username: string; display_name: string; role: string; is_author: boolean };
+  user: {
+    id: string;
+    username: string;
+    display_name: string;
+    role: string;
+    is_author: boolean;
+    website?: string | null;
+    phone?: string | null;
+    telegram?: string | null;
+  };
   self: boolean;
   stats: ContributionStats;
   notes: { path: string; title: string; state: ContributionState }[];
@@ -181,6 +198,15 @@ type AdminContributionsResponse = {
 };
 type UploadEventItem = { path: string; content_hash: string; created_at: string };
 type UploadHistoryResponse = { events: UploadEventItem[] };
+
+function pathFromCardHash(hash: string): string | null {
+  if (!hash.startsWith("#/card/")) return null;
+  try {
+    return decodeURIComponent(hash.slice("#/card/".length));
+  } catch {
+    return null;
+  }
+}
 
 function differKindLabel(kind: string): string {
   if (kind === "added") return "нет в общей";
@@ -278,6 +304,9 @@ export function App() {
   const [health, setHealth] = useState<HealthState>("checking");
   const [user, setUser] = useState<User | null>(null);
   const [authChecking, setAuthChecking] = useState(true);
+  const [view, setView] = useState<ShellView>("graph");
+  const [authOpen, setAuthOpen] = useState(false);
+  const [settingsBlock, setSettingsBlock] = useState<SettingsBlock>("profile");
   const [mode, setMode] = useState<AuthMode>("login");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
@@ -309,6 +338,14 @@ export function App() {
   const [noteFeed, setNoteFeed] = useState<NoteFeedEvent[]>([]);
   const [noteComments, setNoteComments] = useState<NoteCommentItem[]>([]);
   const [commentDraft, setCommentDraft] = useState("");
+  const [locationHash, setLocationHash] = useState(() => window.location.hash);
+  const [selectedCardPath, setSelectedCardPath] = useState<string | null>(null);
+
+  useEffect(() => {
+    const onHash = () => setLocationHash(window.location.hash);
+    window.addEventListener("hashchange", onHash);
+    return () => window.removeEventListener("hashchange", onHash);
+  }, []);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -593,9 +630,10 @@ export function App() {
       return;
     }
     const filePath = path.startsWith("personal:") ? path.slice("personal:".length) : path;
-    const endpoint = origin === "personal"
+    const originKind = origin === "personal" || path.startsWith("personal:") ? "personal" : "shared";
+    const endpoint = originKind === "personal"
       ? `/api/personal/notes/${encodeURI(filePath)}`
-      : `/api/shared/notes/${encodeURI(filePath)}`;
+      : `/api/cards/${encodeURI(filePath)}`;
     setSubmitting(true);
     setError("");
     try {
@@ -603,7 +641,8 @@ export function App() {
       if (!response.ok) throw new Error(await readError(response));
       const detail = (await response.json()) as NoteDetail;
       setOpenNote(detail);
-      if (origin !== "personal" && !detail.locked) {
+      setSelectedCardPath(detail.path);
+      if (originKind !== "personal" && !detail.locked) {
         const [feed, comments] = await Promise.all([
           fetch(`/api/shared/notes/${encodeURI(filePath)}/feed`),
           fetch(`/api/shared/notes/${encodeURI(filePath)}/comments`),
@@ -620,6 +659,35 @@ export function App() {
       setSubmitting(false);
     }
   }
+
+  const cardPath = pathFromCardHash(locationHash);
+  useEffect(() => {
+    if (authChecking) return;
+    if (!cardPath) {
+      setView((current) => (current === "card" ? "graph" : current));
+      return;
+    }
+    if (!user) {
+      setAuthOpen(true);
+      return;
+    }
+    setView("card");
+    void openGraphNote(cardPath, cardPath.startsWith("personal:") ? "personal" : "shared");
+  }, [authChecking, user, cardPath]);
+
+  function backToGraph() {
+    const path = openNote && !openNote.path.startsWith("locked:") ? openNote.path : selectedCardPath;
+    if (window.location.hash) {
+      window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}`);
+      setLocationHash("");
+    }
+    setView("graph");
+    if (path) {
+      setSelectedCardPath(path);
+      setGraphCenter(path.startsWith("personal:") ? graphCenter : path);
+    }
+  }
+
   async function rebuildSharedIndex() {
     setSubmitting(true);
     setError("");
@@ -669,10 +737,72 @@ export function App() {
       setRepository(await response.json() as RepositoryStatusResponse);
       formElement.reset();
     } catch (requestError) {
+      const message = requestError instanceof Error ? requestError.message : "Ошибка соединения";
+      setError(message);
+      if (message.toLowerCase().includes("author")) {
+        setView("settings");
+        setSettingsBlock("contract");
+      }
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function disconnectPersonal() {
+    setSubmitting(true);
+    setError("");
+    try {
+      const response = await fetch("/api/personal/connect", { method: "DELETE" });
+      if (!response.ok) throw new Error(await readError(response));
+      setRepository((await response.json()) as RepositoryStatusResponse);
+    } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "Ошибка соединения");
     } finally {
       setSubmitting(false);
     }
+  }
+
+  async function saveProfile(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    setSubmitting(true);
+    setError("");
+    try {
+      const response = await fetch("/api/users/me", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          display_name: form.get("displayName"),
+          email: form.get("email"),
+          phone: form.get("phone") || null,
+          telegram: form.get("telegram") || null,
+          website: form.get("website") || null,
+          phone_public: form.get("phonePublic") === "on",
+          telegram_public: form.get("telegramPublic") === "on",
+        }),
+      });
+      if (!response.ok) throw new Error(await readError(response));
+      setUser((await response.json()) as User);
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "Ошибка соединения");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  function openDiffer() {
+    if (!user) {
+      setAuthOpen(true);
+      return;
+    }
+    if (!user.is_author) {
+      setView("settings");
+      setSettingsBlock("contract");
+      setError("Чтобы предлагать в общую, примите договор автора в настройках.");
+      return;
+    }
+    setError("");
+    setView("differ");
   }
 
   async function proposeSelected() {
@@ -841,8 +971,7 @@ export function App() {
           username: form.get("username"),
           password: form.get("password"),
           display_name: form.get("displayName"),
-          email: form.get("email") || null,
-          accept_author_contract: form.get("acceptAuthorContract") === "on",
+          email: form.get("email"),
         }
       : {
           username: form.get("username"),
@@ -857,6 +986,8 @@ export function App() {
       });
       if (!response.ok) throw new Error(await readError(response));
       setUser((await response.json()) as User);
+      setAuthOpen(false);
+      setView("graph");
       formElement.reset();
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "Ошибка соединения");
@@ -873,6 +1004,8 @@ export function App() {
       if (!response.ok) throw new Error(await readError(response));
       setUser(null);
       setMode("login");
+      setView("graph");
+      setAuthOpen(false);
       setProposals([]);
       setOpenProposal(null);
       setProposalDiff(null);
@@ -920,7 +1053,7 @@ export function App() {
     setSubmitting(true);
     setError("");
     try {
-      const response = await fetch("/api/author/accept", {
+      const response = await fetch("/api/users/me/author-contract", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ accepted }),
@@ -961,7 +1094,7 @@ export function App() {
     setSubmitting(true);
     setError("");
     try {
-      const response = await fetch("/api/author/withdraw", { method: "POST" });
+      const response = await fetch("/api/users/me/author-contract/withdraw", { method: "POST" });
       if (!response.ok) throw new Error(await readError(response));
       setUser((await response.json()) as User);
       setDifferences([]);
@@ -1032,13 +1165,57 @@ export function App() {
   return (
     <main className="shell">
       <header className="topbar">
-        <a className="brand" href="/" aria-label="GraphNotes">
+        <a
+          className="brand"
+          href="/"
+          aria-label="GraphNotes"
+          onClick={(event) => {
+            event.preventDefault();
+            backToGraph();
+          }}
+        >
           <span className="brand__mark" aria-hidden="true">G</span>
           <span>GraphNotes</span>
         </a>
-        <div className={`status status--${health}`} role="status">
-          <span className="status__dot" aria-hidden="true" />
-          {health === "online" ? "Система доступна" : health === "checking" ? "Проверка" : "Нет связи"}
+        <nav className="topnav" aria-label="Разделы">
+          <button className={view === "graph" ? "button button--quiet tab--active" : "button button--quiet"} type="button" onClick={() => backToGraph()}>
+            Граф
+          </button>
+          {user && (
+            <button className={view === "settings" ? "button button--quiet tab--active" : "button button--quiet"} type="button" onClick={() => { backToGraph(); setView("settings"); setSettingsBlock("profile"); }}>
+              Настройки
+            </button>
+          )}
+          {user && (
+            <button className={view === "differ" ? "button button--quiet tab--active" : "button button--quiet"} type="button" onClick={() => { backToGraph(); openDiffer(); }}>
+              Differ
+            </button>
+          )}
+          {user && (
+            <button className={view === "queue" ? "button button--quiet tab--active" : "button button--quiet"} type="button" onClick={() => { backToGraph(); setView("queue"); }}>
+              {canReview ? "Очередь" : "Предложения"}
+            </button>
+          )}
+          {user?.role === "admin" && (
+            <button className={view === "admin" ? "button button--quiet tab--active" : "button button--quiet"} type="button" onClick={() => { backToGraph(); setView("admin"); }}>
+              Администрирование
+            </button>
+          )}
+        </nav>
+        <div className="topbar__end">
+          {user ? (
+            <button className="button button--quiet" type="button" onClick={() => void logout()} disabled={submitting}>
+              Выйти
+            </button>
+          ) : (
+            <button className="button button--primary" type="button" onClick={() => setAuthOpen(true)}>
+              Войти
+            </button>
+          )}
+          <div className={`status status--${health}`} role="status">
+            <span className="status__dot" aria-hidden="true" />
+            {health === "online" ? "Система доступна" : health === "checking" ? "Проверка" : "Нет связи"}
+          </div>
         </div>
       </header>
 
@@ -1046,78 +1223,170 @@ export function App() {
         <section className="loading" aria-live="polite">Загружаем вашу ризому…</section>
       ) : user ? (
         <>
-          <section className="workspace">
-            <div className="workspace__intro">
-              <p className="eyebrow">Две ризомы</p>
-              <h1>Здравствуйте, {user.display_name}</h1>
-              <p className="summary">{sharedLabel(repository?.shared ?? null)}</p>
-              <p className="summary">{personalLabel(repository?.personal ?? null)}</p>
-              {error && <p className="form-error" role="alert">{error}</p>}
-              {user.is_author ? (
-              <form className="connect-form" onSubmit={(event) => void connectPersonal(event)}>
+          {view === "card" && (
+          <section className="notes-panel notes-panel--card" aria-labelledby="card-heading">
+            <div>
+              <p className="eyebrow">Карточка</p>
+              <h2 id="card-heading">{openNote?.title || "Карточка ризомы"}</h2>
+              <p className="admin-panel__hint">
+                Отрисованный Markdown на чтение. Правки текста здесь нет — авторство в git.
+              </p>
+            </div>
+            <button className="button button--quiet" type="button" onClick={() => backToGraph()}>
+              К графу
+            </button>
+            {error && <p className="form-error" role="alert">{error}</p>}
+            {openNote?.locked ? (
+              <p className="admin-panel__hint">Закрытая заметка. Тело не показывается.</p>
+            ) : openNote ? (
+              <article className="note-read">
+                <MarkdownBody body={openNote.body} note={openNote} nodes={sharedGraph?.nodes ?? []} />
+                {noteFeed.length > 0 && (
+                  <div>
+                    <p className="admin-panel__hint">Кто трогал карточку (не git log и не тела в PostgreSQL).</p>
+                    <ul className="note-list">
+                      {noteFeed.map((item) => (
+                        <li key={item.id}>
+                          <span className="note-link">
+                            <strong>{item.actor?.display_name || "автор"}</strong>
+                            <small>{item.kind}{item.other_path ? ` · ${item.other_path}` : ""}</small>
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                <div>
+                  <p className="admin-panel__hint">Комментарии: любой вошедший; editor принимает.</p>
+                  <ul className="note-list">
+                    {noteComments.map((item) => (
+                      <li key={item.id}>
+                        <span className="note-link">
+                          <strong>{item.author.display_name}</strong>
+                          <small>{item.status} · {item.body}</small>
+                        </span>
+                        {canReview && item.status === "pending" && (
+                          <button className="button button--quiet" type="button" onClick={() => void moderateComment(item.id, "approved", openNote.path)}>
+                            Принять
+                          </button>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                  <form className="connect-form" onSubmit={(event) => { event.preventDefault(); void submitComment(openNote.path); }}>
+                    <label>
+                      Комментарий
+                      <input value={commentDraft} onChange={(event) => setCommentDraft(event.target.value)} maxLength={2000} required />
+                    </label>
+                    <button className="button button--quiet" type="submit" disabled={submitting}>Отправить</button>
+                  </form>
+                </div>
+              </article>
+            ) : (
+              <p className="admin-panel__hint">Загружаем карточку…</p>
+            )}
+          </section>
+          )}
+          {view === "settings" && (
+          <section className="notes-panel" aria-labelledby="settings-heading">
+            <div>
+              <p className="eyebrow">Аккаунт</p>
+              <h2 id="settings-heading">Настройки</h2>
+              <p className="admin-panel__hint">
+                Здесь имя, почта, контакты, свой git и договор автора. Это не граф и не очередь.
+              </p>
+            </div>
+            {error && <p className="form-error" role="alert">{error}</p>}
+            <div className="tabs tabs--three" role="tablist" aria-label="Блоки настроек">
+              <button className={settingsBlock === "profile" ? "tab tab--active" : "tab"} type="button" onClick={() => setSettingsBlock("profile")}>Личные данные</button>
+              <button className={settingsBlock === "git" ? "tab tab--active" : "tab"} type="button" onClick={() => setSettingsBlock("git")}>Свой git</button>
+              <button className={settingsBlock === "contract" ? "tab tab--active" : "tab"} type="button" onClick={() => setSettingsBlock("contract")}>Договор автора</button>
+            </div>
+            {settingsBlock === "profile" && (
+              <form className="connect-form" onSubmit={(event) => void saveProfile(event)}>
                 <label>
-                  Свой git
-                  <input
-                    name="repository"
-                    placeholder="владелец/имя"
-                    maxLength={200}
-                    required
-                  />
+                  Отображаемое имя
+                  <input name="displayName" defaultValue={user.display_name} maxLength={80} required />
                 </label>
-                <button className="button button--primary" type="submit" disabled={submitting}>
-                  Связать личный git
-                </button>
+                <label>
+                  Почта
+                  <input name="email" type="email" defaultValue={user.email} maxLength={320} required />
+                </label>
+                <label>
+                  Телефон <span className="optional">необязательно</span>
+                  <input name="phone" defaultValue={user.phone ?? ""} maxLength={32} />
+                </label>
+                <label className="contract-check">
+                  <input name="phonePublic" type="checkbox" defaultChecked={user.phone_public} />
+                  <span>Показать телефон на карточке</span>
+                </label>
+                <label>
+                  Telegram <span className="optional">контакт, не вход</span>
+                  <input name="telegram" defaultValue={user.telegram ?? ""} maxLength={64} />
+                </label>
+                <label className="contract-check">
+                  <input name="telegramPublic" type="checkbox" defaultChecked={user.telegram_public} />
+                  <span>Показать Telegram на карточке</span>
+                </label>
+                <label>
+                  Сайт <span className="optional">необязательно</span>
+                  <input name="website" defaultValue={user.website ?? ""} maxLength={300} />
+                </label>
+                <button className="button button--primary" type="submit" disabled={submitting}>Сохранить</button>
               </form>
+            )}
+            {settingsBlock === "git" && (
+              <div>
+                <p className="admin-panel__hint">{personalLabel(repository?.personal ?? null)}</p>
+                {user.is_author ? (
+                  <form className="connect-form" onSubmit={(event) => void connectPersonal(event)}>
+                    <label>
+                      Свой git
+                      <input name="repository" placeholder="владелец/имя" maxLength={200} required />
+                    </label>
+                    <button className="button button--primary" type="submit" disabled={submitting}>Связать личный git</button>
+                  </form>
+                ) : (
+                  <p className="admin-panel__hint">Подключение git как вклад требует договор автора.</p>
+                )}
+                {repository?.personal?.connected && (
+                  <button className="button button--danger" type="button" disabled={submitting} onClick={() => void disconnectPersonal()}>
+                    Отключить git
+                  </button>
+                )}
+                {user.role === "admin" && (
+                  <button className="button button--quiet" type="button" onClick={() => void connectShared()} disabled={submitting}>
+                    Подключить общую ризому
+                  </button>
+                )}
+              </div>
+            )}
+            {settingsBlock === "contract" && (
+              user.is_author ? (
+                <div>
+                  <p className="admin-panel__hint">
+                    Договор принят{user.author_contract_version ? `, версия ${user.author_contract_version}` : ""}
+                    {user.author_contract_accepted_at ? ` · ${new Date(user.author_contract_accepted_at).toLocaleString("ru")}` : ""}.
+                  </p>
+                  <AuthorContractCopy contract={authorContract} />
+                  <button className="button button--danger" type="button" onClick={() => void withdrawAuthorContract()} disabled={submitting}>
+                    Отозвать статус автора
+                  </button>
+                </div>
               ) : (
                 <form className="connect-form" onSubmit={(event) => void acceptAuthorContract(event)}>
-                  <p className="admin-panel__hint">
-                    Чтобы предлагать, загружать и связывать git как вклад, примите договор автора.
-                  </p>
                   <AuthorContractCopy contract={authorContract} />
                   <label className="contract-check">
                     <input name="acceptAuthorContract" type="checkbox" required />
                     <span>Принимаю договор автора</span>
                   </label>
-                  <button className="button button--primary" type="submit" disabled={submitting}>
-                    Стать автором
-                  </button>
+                  <button className="button button--primary" type="submit" disabled={submitting}>Стать автором</button>
                 </form>
-              )}
-              {user.role === "admin" && (
-                <button
-                  className="button button--quiet"
-                  type="button"
-                  onClick={() => void connectShared()}
-                  disabled={submitting}
-                >
-                  Подключить общую ризому
-                </button>
-              )}
-            </div>
-            <aside className="profile-card">
-              <div className="avatar" aria-hidden="true">
-                {user.display_name.slice(0, 1).toUpperCase()}
-              </div>
-              <div>
-                <strong>{user.display_name}</strong>
-                <span>@{user.username} · {user.role}{user.is_author ? " · автор" : ""}</span>
-              </div>
-              {user.is_author && (
-                <button
-                  className="button button--quiet"
-                  type="button"
-                  onClick={() => void withdrawAuthorContract()}
-                  disabled={submitting}
-                >
-                  Отозвать статус автора
-                </button>
-              )}
-              <button className="button button--quiet" onClick={() => void logout()} disabled={submitting}>
-                Выйти
-              </button>
-            </aside>
+              )
+            )}
           </section>
-          {repository?.shared.connected && user?.is_author && (
+          )}
+          {view === "differ" && repository?.shared.connected && user?.is_author && (
             <section className="notes-panel" aria-labelledby="differ-heading">
               <div>
                 <p className="eyebrow">Отличия</p>
@@ -1229,7 +1498,7 @@ export function App() {
                   {openNote.locked ? (
                     <p className="admin-panel__hint">Закрытая заметка. Тело в общей ризоме не показывается.</p>
                   ) : (
-                    <pre>{openNote.body}</pre>
+                    <MarkdownBody body={openNote.body} note={openNote} nodes={sharedGraph?.nodes ?? []} />
                   )}
                   {noteFeed.length > 0 && (
                     <div>
@@ -1277,7 +1546,7 @@ export function App() {
               )}
             </section>
           )}
-          {user && (
+          {user && view === "differ" && (
             <section className="notes-panel" aria-labelledby="contrib-heading">
               <div>
                 <p className="eyebrow">Автор</p>
@@ -1300,6 +1569,9 @@ export function App() {
                   </div>
                   <p className="admin-panel__hint">
                     Принято в общую: {userCard.stats.accepted} заметок, {userCard.stats.links_accepted} связей.
+                    {userCard.user.website ? ` · ${userCard.user.website}` : ""}
+                    {userCard.user.phone ? ` · ${userCard.user.phone}` : ""}
+                    {userCard.user.telegram ? ` · ${userCard.user.telegram}` : ""}
                     {userCard.self ? "" : " Чужой подробный журнал недоступен."}
                   </p>
                   {userCard.notes.length > 0 && (
@@ -1378,7 +1650,7 @@ export function App() {
                         className="note-link"
                         type="button"
                         onClick={() => {
-                          if (item.state === "accepted") void openGraphNote(item.path, "shared");
+                          if (item.state === "accepted") window.location.hash = cardHash(item.path);
                           else void openPersonalNote(item.path);
                         }}
                       >
@@ -1391,6 +1663,7 @@ export function App() {
               )}
             </section>
           )}
+          {view === "queue" && (
           <section className="notes-panel" aria-labelledby="proposals-heading">
             <div>
               <p className="eyebrow">Публикация</p>
@@ -1461,8 +1734,9 @@ export function App() {
               </article>
             )}
           </section>
-          {repository?.shared.connected && (
-            <section className="notes-panel" aria-labelledby="graph-heading">
+          )}
+          {view === "graph" && repository?.shared.connected && (
+            <section className="notes-panel notes-panel--graph" aria-labelledby="graph-heading">
               <div>
                 <p className="eyebrow">Граф</p>
                 <h2 id="graph-heading">Общая ризома</h2>
@@ -1486,18 +1760,13 @@ export function App() {
               <GraphView
                 graph={sharedGraph}
                 loading={graphLoading}
-                onOpen={(path, origin) => void openGraphNote(path, origin)}
+                selectedPath={selectedCardPath}
+                canReadNotes
                 onExpand={setGraphCenter}
               />
-              {openNote && (
-                <article className="note-read">
-                  <h3>{openNote.title}</h3>
-                  <pre>{openNote.body}</pre>
-                </article>
-              )}
             </section>
           )}
-          {user.role === "admin" && (
+          {view === "admin" && user.role === "admin" && (
             <section className="admin-panel" aria-labelledby="admin-heading">
               <div>
                 <p className="eyebrow">Администрирование</p>
@@ -1507,6 +1776,9 @@ export function App() {
                   Статистика вклада по всем учётным записям видна только здесь.
                 </p>
               </div>
+              <button className="button button--quiet" type="button" onClick={() => void connectShared()} disabled={submitting}>
+                Подключить общую ризому
+              </button>
               {error && <p className="form-error" role="alert">{error}</p>}
               {adminLoading ? (
                 <p className="admin-panel__hint">Загружаем пользователей…</p>
@@ -1518,7 +1790,7 @@ export function App() {
                     <article className="user-row" key={managedUser.id}>
                       <div className="user-row__identity">
                         <strong>{managedUser.display_name}</strong>
-                        <span>@{managedUser.username}</span>
+                        <span>@{managedUser.username} · {managedUser.email}{managedUser.phone ? ` · ${managedUser.phone}` : ""}{managedUser.telegram ? ` · ${managedUser.telegram}` : ""}</span>
                       </div>
                       <label>
                         Роль
@@ -1564,30 +1836,21 @@ export function App() {
         </>
       ) : (
         <>
-        <section className="auth-layout">
+        {authOpen && (
+          <section className="auth-layout auth-overlay">
           <div className="hero-copy">
-            <p className="eyebrow">Связанное знание</p>
-            <h1>Собирайте мысли в живую ризому.</h1>
+            <p className="eyebrow">Вход</p>
+            <h1>Войдите, чтобы читать карточки.</h1>
             <p className="summary">
-              {sharedLabel(repository?.shared ?? null)} Markdown остаётся в git
-              общей ризомы. GraphNotes показывает её в приложении и файлами не отдаёт.
-              Войдите, чтобы сравнить свой слой (git или загрузка .md) с общей.
+              Стартовая страница — граф общей ризомы. Гость видит узлы и связи, без карточек и Markdown.
+              Договор автора и свой git — в настройках после входа.
             </p>
-            {sharedGraph && sharedGraph.nodes.length > 0 && (
-              <p className="summary">
-                В общей ризоме {sharedGraph.nodes.filter((node) => !node.unresolved).length} заметок
-                и {sharedGraph.edges.filter((edge) => !edge.unresolved).length} связей на этой странице.
-              </p>
-            )}
-            <div className="connection-line" aria-hidden="true"><span /><span /><span /></div>
           </div>
-
           <div className="auth-card">
             <div className="tabs" role="tablist" aria-label="Авторизация">
               <button className={mode === "login" ? "tab tab--active" : "tab"} onClick={() => { setMode("login"); setError(""); }}>Вход</button>
               <button className={mode === "register" ? "tab tab--active" : "tab"} onClick={() => { setMode("register"); setError(""); }}>Регистрация</button>
             </div>
-
             <form onSubmit={(event) => void submitAuth(event)}>
               <label>
                 Логин
@@ -1600,8 +1863,8 @@ export function App() {
                     <input name="displayName" maxLength={80} autoComplete="name" required />
                   </label>
                   <label>
-                    Email <span className="optional">необязательно</span>
-                    <input name="email" type="email" maxLength={320} autoComplete="email" />
+                    Почта
+                    <input name="email" type="email" maxLength={320} autoComplete="email" required />
                   </label>
                 </>
               )}
@@ -1616,44 +1879,33 @@ export function App() {
                   required
                 />
               </label>
-              {mode === "register" && <p className="hint">Минимум 12 символов.</p>}
-              {mode === "register" && (
-                <>
-                  <AuthorContractCopy contract={authorContract} />
-                  <label className="contract-check">
-                    <input name="acceptAuthorContract" type="checkbox" />
-                    <span>Принимаю договор автора (нужен, чтобы предлагать вклад)</span>
-                  </label>
-                </>
-              )}
+              {mode === "register" && <p className="hint">Минимум 12 символов. Договор автора принимается в настройках.</p>}
               {error && <p className="form-error" role="alert">{error}</p>}
               <button className="button button--primary" type="submit" disabled={submitting}>
-                {submitting ? "Подождите…" : mode === "register" ? "Создать личную ризому" : "Войти"}
+                {submitting ? "Подождите…" : mode === "register" ? "Создать учётку" : "Войти"}
               </button>
+              <button className="button button--quiet" type="button" onClick={() => setAuthOpen(false)}>К графу</button>
             </form>
           </div>
-        </section>
+          </section>
+        )}
         {repository?.shared.connected && (
-          <section className="notes-panel" aria-labelledby="public-graph-heading">
+          <section className="notes-panel notes-panel--graph" aria-labelledby="public-graph-heading">
             <div>
               <p className="eyebrow">Граф</p>
               <h2 id="public-graph-heading">Общая ризома</h2>
               <p className="admin-panel__hint">
-                Читать общую ризому можно без входа. Чтобы видеть связи своего git, войдите и свяжите репозиторий.
+                Публичный граф без входа: узлы и связи. Карточки и Markdown — после входа.
               </p>
             </div>
             <GraphView
               graph={sharedGraph}
               loading={graphLoading}
-              onOpen={(path, origin) => void openGraphNote(path, origin)}
+              selectedPath={selectedCardPath}
+              canReadNotes={false}
+              onNeedAuth={() => setAuthOpen(true)}
               onExpand={setGraphCenter}
             />
-            {openNote && (
-              <article className="note-read">
-                <h3>{openNote.title}</h3>
-                <pre>{openNote.body}</pre>
-              </article>
-            )}
           </section>
         )}
         </>

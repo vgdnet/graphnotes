@@ -401,7 +401,7 @@ async def test_personal_overlay_isolation_shared_read_and_xss_inert(
         denied = await guest.get("/graph/personal-overlay")
         assert denied.status_code == 401
         public_note = await guest.get("/shared/notes/card.md")
-        assert public_note.status_code == 200
+        assert public_note.status_code == 401
         public_graph = await guest.get("/graph/shared")
         assert public_graph.status_code == 200
         assert all(node.get("origin") != "personal" for node in public_graph.json()["nodes"])

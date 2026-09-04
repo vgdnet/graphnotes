@@ -63,6 +63,7 @@ async def test_registration_session_refresh_and_logout(
             "username": "ALICE.EXAMPLE",
             "password": "another secure password",
             "display_name": "Another Alice",
+            "email": "other-alice@example.com",
         },
     )
     assert duplicate.status_code == 409
@@ -116,6 +117,7 @@ async def test_login_failures_and_inactive_account(
             "username": "bob",
             "password": "a sufficiently long password",
             "display_name": "Bob",
+            "email": "bob@example.com",
         },
     )
     await client.post("/auth/logout")
@@ -223,6 +225,7 @@ async def test_registration_validation(
             "username": "ordinary-user",
             "password": "a sufficiently long password",
             "display_name": "Ordinary User",
+            "email": "ordinary-user@example.com",
             "role": "admin",
         },
     )
@@ -243,6 +246,7 @@ async def test_admin_rbac_management_last_admin_and_audit(
             "username": "initial-admin",
             "password": "initial admin password",
             "display_name": "Initial Admin",
+            "email": "initial-admin@example.com",
         },
     )
     admin_id = admin_registration.json()["id"]
@@ -264,6 +268,7 @@ async def test_admin_rbac_management_last_admin_and_audit(
                 "username": "managed-user",
                 "password": "managed user password",
                 "display_name": "Managed User",
+                "email": "managed-user@example.com",
                 "role": "admin",
             },
         )
@@ -362,6 +367,7 @@ async def test_admin_bootstrap_refuses_escalation_and_supports_recovery(
                 "username": username,
                 "password": "a sufficiently long password",
                 "display_name": username,
+                "email": f"{username}@example.com",
             },
         )
 
