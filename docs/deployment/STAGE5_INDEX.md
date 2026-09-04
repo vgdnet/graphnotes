@@ -12,7 +12,10 @@ Stage 6.
 
 ## Rebuild
 
-- Full rebuild reads every Markdown file at the observed revision.
+- Full rebuild lists the recursive git tree and reads every Markdown blob
+  at the observed revision (blob SHA, not only the contents-by-path API).
+  A unique basename, full path, or unique title/alias resolves `[[wikilink]]`
+  after Unicode NFC.
 - Incremental rebuild, used after Markdown ingest into connected personal git,
   fetches only new and requested paths, reconstructs unchanged notes from the
   current index, then re-resolves links. Incremental result must equal a clean

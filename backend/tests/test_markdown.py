@@ -1,12 +1,13 @@
 import io
 import stat
+import unicodedata
 import zipfile
 
 import pytest
 
 from app.services.archive import ArchiveError, read_zip_markdown
 from app.services.git_paths import PathError, normalize_git_path
-from app.services.markdown import parse_markdown, unresolved_links
+from app.services.markdown import notes_lookup_map, parse_markdown, resolve_link_target, unresolved_links
 
 
 def test_paths_reject_traversal_and_absolute() -> None:
@@ -29,6 +30,28 @@ def test_parse_frontmatter_links_and_unresolved() -> None:
     assert parsed.aliases == ("Hi",)
     assert parsed.links == ("Other", "peer.md")
     assert unresolved_links(parsed.links, {"note.md", "peer.md"}) == ("Other",)
+
+
+def test_nested_unique_basename_resolves_wikilink() -> None:
+    nested = "GraphNotes/Карточка с длинным названием не входит в кружочек.md"
+    lookup = notes_lookup_map(
+        {nested, "index.md"},
+        {nested: ("Карточка с длинным названием не входит в кружочек",)},
+    )
+    assert resolve_link_target("Карточка с длинным названием не входит в кружочек", lookup) == nested
+    assert resolve_link_target("GraphNotes/Карточка с длинным названием не входит в кружочек", lookup) == nested
+    assert unresolved_links(
+        ("Карточка с длинным названием не входит в кружочек",),
+        {nested, "index.md"},
+    ) == ()
+
+
+def test_wikilink_matches_nfd_basename() -> None:
+    composed = "GraphNotes/карточка.md"
+    lookup = notes_lookup_map({composed})
+    decomposed = "карточка"
+    nfd = unicodedata.normalize("NFD", decomposed)
+    assert resolve_link_target(nfd, lookup) == composed
 
 
 def test_zip_skips_unsafe_entries(monkeypatch: pytest.MonkeyPatch) -> None:

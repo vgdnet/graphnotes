@@ -163,7 +163,8 @@ async def _rebuild(
     await database.flush()
 
     try:
-        listed = await client.list_markdown_files(owner, name, revision)
+        blobs = await client.list_markdown_blobs(owner, name, revision)
+        listed = sorted(blobs)
         if len(listed) > settings.index_max_notes:
             raise IndexerError(400, "too many notes to index")
         listed_set = set(listed)
@@ -182,12 +183,20 @@ async def _rebuild(
             fetch_paths = (listed_set & paths) | (listed_set - existing_paths)
         parsed: dict[str, ParsedNote] = {}
         for path in sorted(fetch_paths):
-            text = await client.get_file(owner, name, path, revision)
+            sha = blobs.get(path)
+            text = (
+                await client.get_blob(owner, name, sha)
+                if sha
+                else await client.get_file(owner, name, path, revision)
+            )
             parsed[path] = parse_markdown(path, text)
         unchanged = [note for note in existing if note.path in listed_set and note.path not in fetch_paths]
         parsed.update(await _parsed_from_existing(database, unchanged))
         await _delete_layer(database, layer, owner_id)
-        lookup = notes_lookup_map(set(parsed))
+        lookup = notes_lookup_map(
+            set(parsed),
+            {path: (note.title, *note.aliases) for path, note in parsed.items()},
+        )
         records: dict[str, NoteIndex] = {}
         for path, note in parsed.items():
             record = NoteIndex(
@@ -354,11 +363,13 @@ async def load_graph(
                 adjacency[target_path].add(source_path)
         chosen = _bounded_paths(list(path_ids), adjacency, center, depth, limit)
         truncated = len(rows) > len(chosen)
-        chosen_notes = (
-            await database.scalars(
-                select(NoteIndex).where(*layer_filter, NoteIndex.path.in_(chosen)).order_by(NoteIndex.path)
-            )
-        ).all()
+        chosen_notes = list(
+            (
+                await database.scalars(
+                    select(NoteIndex).where(*layer_filter, NoteIndex.path.in_(chosen)).order_by(NoteIndex.path)
+                )
+            ).all()
+        )
         chosen_ids = {note.id for note in chosen_notes}
         chosen_links = [link for link in links if link.source_id in chosen_ids]
         return await _graph_payload(database, layer, chosen_notes, chosen_links, truncated)
@@ -371,6 +382,16 @@ async def load_graph(
     if not chosen_notes:
         return empty
     chosen_ids = {note.id for note in chosen_notes}
+    links = (
+        await database.scalars(
+            select(NoteLink).where(
+                or_(NoteLink.source_id.in_(chosen_ids), NoteLink.target_id.in_(chosen_ids))
+            )
+        )
+    ).all()
+    chosen_notes, chosen_ids = await _include_resolved_targets(
+        database, layer_filter, list(chosen_notes), chosen_ids, links
+    )
     links = (
         await database.scalars(
             select(NoteLink).where(
@@ -586,6 +607,34 @@ async def load_overlay_from_uploads(
         "nodes": nodes,
         "edges": edges,
     }
+
+
+async def _include_resolved_targets(
+    database: AsyncSession,
+    layer_filter: tuple,
+    chosen_notes: list[NoteIndex],
+    chosen_ids: set,
+    links: list[NoteLink],
+) -> tuple[list[NoteIndex], set]:
+    extra_ids = {
+        link.target_id
+        for link in links
+        if link.source_id in chosen_ids and link.target_id and link.target_id not in chosen_ids
+    }
+    if not extra_ids:
+        return chosen_notes, chosen_ids
+    extras = list(
+        (
+            await database.scalars(
+                select(NoteIndex).where(*layer_filter, NoteIndex.id.in_(extra_ids)).order_by(NoteIndex.path)
+            )
+        ).all()
+    )
+    if not extras:
+        return chosen_notes, chosen_ids
+    chosen_notes = [*chosen_notes, *extras]
+    chosen_ids = {note.id for note in chosen_notes}
+    return chosen_notes, chosen_ids
 
 
 def _bounded_paths(

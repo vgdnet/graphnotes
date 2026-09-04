@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import re
+import unicodedata
 from dataclasses import dataclass, field
 
 import yaml
@@ -134,11 +135,29 @@ def resolve_link_target(target: str, notes_by_key: dict[str, str]) -> str | None
     return notes_by_key.get(_link_key(target))
 
 
-def notes_lookup_map(paths: set[str]) -> dict[str, str]:
+def notes_lookup_map(
+    paths: set[str],
+    labels: dict[str, tuple[str, ...]] | None = None,
+) -> dict[str, str]:
     mapping: dict[str, str] = {}
     for path in sorted(paths):
         for key in _lookup_keys(path):
             mapping.setdefault(key, path)
+    if labels:
+        claimed: dict[str, str] = {}
+        for path, names in labels.items():
+            for name in names:
+                key = _link_key(name)
+                if not key:
+                    continue
+                previous = claimed.get(key)
+                if previous is None:
+                    claimed[key] = path
+                elif previous != path:
+                    claimed[key] = ""
+        for key, path in claimed.items():
+            if path:
+                mapping.setdefault(key, path)
     return mapping
 
 
@@ -157,7 +176,7 @@ def _collect_typed_links(body: str) -> list[ParsedLink]:
 
 
 def _link_key(target: str) -> str:
-    text = target.replace("\\", "/").strip().lstrip("/")
+    text = unicodedata.normalize("NFC", target.replace("\\", "/").strip().lstrip("/"))
     if text.lower().endswith(".md"):
         text = text[:-3]
     return text.casefold()

@@ -99,6 +99,15 @@ class MemoryGitHub:
         self.file_reads += 1
         return files[path]
 
+    async def get_blob(self, owner: str, name: str, sha: str) -> str:
+        repo = self._repo(owner, name)
+        for snapshot in (repo.files, *repo.snapshots.values()):
+            for text in snapshot.values():
+                if hashlib.sha1(text.encode("utf-8")).hexdigest() == sha:
+                    self.file_reads += 1
+                    return text
+        raise GitHubAppError("not_found", "repository is not visible to GraphNotes")
+
     async def commit_markdown(
         self,
         owner: str,

@@ -291,10 +291,14 @@ async def test_neighborhood_empty_error_proposal_isolation_and_public_read(
         assert public.json()["layer"] == "shared"
         assert "secret.md" not in {node["path"] for node in public.json()["nodes"]}
 
-    async def boom(owner: str, name: str, path: str, ref: str) -> str:
+    async def boom_file(owner: str, name: str, path: str, ref: str) -> str:
         raise GitHubAppError("unavailable", "github down")
 
-    github.get_file = boom  # type: ignore[method-assign]
+    async def boom_blob(owner: str, name: str, sha: str) -> str:
+        raise GitHubAppError("unavailable", "github down")
+
+    github.get_file = boom_file  # type: ignore[method-assign]
+    github.get_blob = boom_blob  # type: ignore[method-assign]
     github.repos["vgdnet/rhizome"].sha = "broken-sha"
     failed = await client.get("/graph/shared")
     assert failed.status_code == 200

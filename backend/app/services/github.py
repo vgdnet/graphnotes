@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 import time
+import unicodedata
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -123,30 +124,37 @@ class GitHubAppClient:
     async def list_markdown_files(self, owner: str, name: str, ref: str) -> list[str]:
         return sorted(await self.list_markdown_blobs(owner, name, ref))
 
-    async def get_file(self, owner: str, name: str, path: str, ref: str) -> str:
+    async def get_blob(self, owner: str, name: str, sha: str) -> str:
         token = await self._installation_token()
-        encoded = quote(path, safe="/")
         async with httpx.AsyncClient(timeout=self._timeout) as client:
             payload = await self._get(
                 client,
-                f"/repos/{owner}/{name}/contents/{encoded}",
+                f"/repos/{owner}/{name}/git/blobs/{sha}",
                 token,
-                params={"ref": ref},
             )
-        if payload.get("type") != "file":
-            raise GitHubAppError("not_found", "file is not visible to GraphNotes")
-        encoding = payload.get("encoding")
-        content = payload.get("content")
-        if encoding != "base64" or not isinstance(content, str):
-            raise GitHubAppError("error", "GitHub returned an unexpected payload")
+        return _decode_git_blob(payload)
+
+    async def get_file(self, owner: str, name: str, path: str, ref: str) -> str:
+        token = await self._installation_token()
+        encoded = quote(path, safe="/")
         try:
-            raw = base64.b64decode(content)
-            text = raw.decode("utf-8-sig")
-        except (ValueError, UnicodeDecodeError) as exc:
-            raise GitHubAppError("error", "file is not UTF-8 Markdown") from exc
-        if b"\x00" in raw:
-            raise GitHubAppError("error", "file is not UTF-8 Markdown")
-        return text
+            async with httpx.AsyncClient(timeout=self._timeout) as client:
+                payload = await self._get(
+                    client,
+                    f"/repos/{owner}/{name}/contents/{encoded}",
+                    token,
+                    params={"ref": ref},
+                )
+            if payload.get("type") == "file":
+                return _decode_git_blob(payload)
+        except GitHubAppError as exc:
+            if exc.status not in {"not_found", "error"}:
+                raise
+        blobs = await self.list_markdown_blobs(owner, name, ref)
+        sha = _blob_sha_for_path(blobs, path)
+        if not sha:
+            raise GitHubAppError("not_found", "file is not visible to GraphNotes")
+        return await self.get_blob(owner, name, sha)
 
     async def commit_markdown(
         self,
@@ -425,3 +433,28 @@ class GitHubAppClient:
         if not isinstance(payload, dict):
             raise GitHubAppError("error", "GitHub returned an unexpected payload")
         return payload
+
+
+def _blob_sha_for_path(blobs: dict[str, str], path: str) -> str | None:
+    wanted = unicodedata.normalize("NFC", path.replace("\\", "/"))
+    if wanted in blobs:
+        return blobs[wanted]
+    for listed, sha in blobs.items():
+        if unicodedata.normalize("NFC", listed) == wanted:
+            return sha
+    return None
+
+
+def _decode_git_blob(payload: dict[str, object]) -> str:
+    encoding = payload.get("encoding")
+    content = payload.get("content")
+    if encoding != "base64" or not isinstance(content, str):
+        raise GitHubAppError("error", "GitHub returned an unexpected payload")
+    try:
+        raw = base64.b64decode(content)
+        text = raw.decode("utf-8-sig")
+    except (ValueError, UnicodeDecodeError) as exc:
+        raise GitHubAppError("error", "file is not UTF-8 Markdown") from exc
+    if b"\x00" in raw:
+        raise GitHubAppError("error", "file is not UTF-8 Markdown")
+    return text

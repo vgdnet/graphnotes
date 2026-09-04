@@ -40,6 +40,12 @@ class FakeGitHubClient:
     async def list_markdown_files(self, owner: str, name: str, ref: str) -> list[str]:
         return []
 
+    async def list_markdown_blobs(self, owner: str, name: str, ref: str) -> dict[str, str]:
+        return {}
+
+    async def get_blob(self, owner: str, name: str, sha: str) -> str:
+        raise GitHubAppError("not_found", "repository is not visible to GraphNotes")
+
     async def get_file(self, owner: str, name: str, path: str, ref: str) -> str:
         raise GitHubAppError("not_found", "repository is not visible to GraphNotes")
 
