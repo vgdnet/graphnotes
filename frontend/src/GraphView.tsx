@@ -9,7 +9,7 @@ import {
   highlightNeighborhood,
   runFcoseLayout,
 } from "./cytoscapeFcose";
-import { cardHash } from "./MarkdownBody";
+import { cardHash } from "./cardRoute";
 
 export type GraphNode = {
   path: string;
@@ -91,6 +91,8 @@ export function GraphView({
     return { nodes, edges };
   }, [graph, kind, tag]);
 
+  const visibleKey = `${visible.nodes.map((node) => node.path).join("\0")}|${visible.edges.map((edge) => `${edge.source}->${edge.target}:${edge.type}`).join("\0")}`;
+
   const matches = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return [] as GraphNode[];
@@ -148,6 +150,7 @@ export function GraphView({
     };
     cy.on("tap", onTap);
     return () => {
+      cy.stop();
       cy.destroy();
       cyRef.current = null;
     };
@@ -182,10 +185,12 @@ export function GraphView({
       })),
     ]);
     applyDegreeScores(cy);
-    if (visible.nodes.length > 0) {
-      runFcoseLayout(cy);
-    }
-  }, [visible]);
+    const layout = visible.nodes.length > 0 ? runFcoseLayout(cy) : undefined;
+    return () => {
+      layout?.stop();
+      cy.stop();
+    };
+  }, [visibleKey, visible.nodes, visible.edges]);
 
   useEffect(() => {
     const cy = cyRef.current;

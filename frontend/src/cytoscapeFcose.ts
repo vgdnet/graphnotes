@@ -266,11 +266,13 @@ export function applyDegreeScores(cy: Core): void {
   });
 }
 
-export function runFcoseLayout(cy: Core): void {
+export function runFcoseLayout(cy: Core) {
   cy.stop();
-  if (cy.nodes().empty()) return;
+  if (cy.nodes().empty()) return undefined;
   cy.layout({ name: "grid", animate: false, fit: false, padding: 24 }).run();
-  cy.layout(FCOSE_LAYOUT).run();
+  const layout = cy.layout(FCOSE_LAYOUT);
+  layout.run();
+  return layout;
 }
 
 export function highlightNeighborhood(cy: Core, nodeId: string | null | undefined): void {

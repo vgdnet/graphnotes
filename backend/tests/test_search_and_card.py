@@ -47,3 +47,42 @@ async def test_search_highlights_without_card_body_for_guest(
     assert card.json()["path"] == "card.md"
     assert "See [[missing]]" in card.json()["body"]
     _assert_no_git_sha_keys({k: v for k, v in card.json().items() if k != "content_hash"})
+
+
+async def test_encoded_personal_card_unicode_path(
+    auth_test_context: tuple[AsyncClient, async_sessionmaker[AsyncSession]],
+    monkeypatch: MonkeyPatch,
+) -> None:
+    from urllib.parse import quote
+
+    from tests.test_ingest import _connect_pair
+
+    admin, session_factory = auth_test_context
+    github = _install_graph(monkeypatch, _github())
+    await _admin(admin, session_factory, "unicode-card-admin")
+    note_path = "вариант Б — конспекты/Паранойя (Б).md"
+    github.repos["vgdnet/guide_psy"].files[note_path] = (
+        "# Паранойя (Б)\n\n#inline-tag\nSee [[already]].\n"
+    )
+    github.repos["vgdnet/guide_psy"].sha = "unicode-personal-card"
+    await _connect_pair(admin, "vgdnet/guide_psy")
+
+    prefixed = f"personal:{note_path}"
+    guest = AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver")
+    async with guest:
+        assert (await guest.get(f"/cards/{prefixed}")).status_code == 401
+
+    card = await admin.get(f"/cards/{prefixed}")
+    assert card.status_code == 200
+    assert card.json()["path"] == note_path
+    assert "#inline-tag" in card.json()["body"]
+    _assert_no_git_sha_keys({k: v for k, v in card.json().items() if k != "content_hash"})
+
+    encoded_keep_slash = quote(prefixed, safe="/:")
+    via_encode_uri = await admin.get(f"/cards/{encoded_keep_slash}")
+    assert via_encode_uri.status_code == 200
+    assert via_encode_uri.json()["path"] == note_path
+
+    personal = await admin.get(f"/personal/notes/{note_path}")
+    assert personal.status_code == 200
+    assert personal.json()["path"] == note_path

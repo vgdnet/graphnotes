@@ -1,10 +1,11 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { GraphView } from "./GraphView";
 import type { GraphResponse } from "./GraphView";
 import { GraphDiffView } from "./GraphDiffView";
 import type { GraphDiffResponse } from "./GraphDiffView";
-import { MarkdownBody, cardHash } from "./MarkdownBody";
+import { MarkdownBody } from "./MarkdownBody";
+import { cardApiUrl, cardHash, pathFromCardHash } from "./cardRoute";
 
 type HealthState = "checking" | "online" | "offline";
 type AuthMode = "login" | "register";
@@ -199,15 +200,6 @@ type AdminContributionsResponse = {
 type UploadEventItem = { path: string; content_hash: string; created_at: string };
 type UploadHistoryResponse = { events: UploadEventItem[] };
 
-function pathFromCardHash(hash: string): string | null {
-  if (!hash.startsWith("#/card/")) return null;
-  try {
-    return decodeURIComponent(hash.slice("#/card/".length));
-  } catch {
-    return null;
-  }
-}
-
 function differKindLabel(kind: string): string {
   if (kind === "added") return "нет в общей";
   if (kind === "changed") return "отличается";
@@ -304,7 +296,9 @@ export function App() {
   const [health, setHealth] = useState<HealthState>("checking");
   const [user, setUser] = useState<User | null>(null);
   const [authChecking, setAuthChecking] = useState(true);
-  const [view, setView] = useState<ShellView>("graph");
+  const [view, setView] = useState<ShellView>(() => (
+    pathFromCardHash(window.location.hash) ? "card" : "graph"
+  ));
   const [authOpen, setAuthOpen] = useState(false);
   const [settingsBlock, setSettingsBlock] = useState<SettingsBlock>("profile");
   const [mode, setMode] = useState<AuthMode>("login");
@@ -631,17 +625,16 @@ export function App() {
     }
     const filePath = path.startsWith("personal:") ? path.slice("personal:".length) : path;
     const originKind = origin === "personal" || path.startsWith("personal:") ? "personal" : "shared";
-    const endpoint = originKind === "personal"
-      ? `/api/personal/notes/${encodeURI(filePath)}`
-      : `/api/cards/${encodeURI(filePath)}`;
+    const endpoint = cardApiUrl(path);
     setSubmitting(true);
     setError("");
+    setOpenNote(null);
     try {
       const response = await fetch(endpoint);
       if (!response.ok) throw new Error(await readError(response));
       const detail = (await response.json()) as NoteDetail;
       setOpenNote(detail);
-      setSelectedCardPath(detail.path);
+      setSelectedCardPath(path.startsWith("personal:") ? path : detail.path);
       if (originKind !== "personal" && !detail.locked) {
         const [feed, comments] = await Promise.all([
           fetch(`/api/shared/notes/${encodeURI(filePath)}/feed`),
@@ -661,17 +654,24 @@ export function App() {
   }
 
   const cardPath = pathFromCardHash(locationHash);
+  const loadedCardRef = useRef<string | null>(null);
   useEffect(() => {
     if (authChecking) return;
     if (!cardPath) {
+      loadedCardRef.current = null;
       setView((current) => (current === "card" ? "graph" : current));
       return;
     }
+    setView("card");
     if (!user) {
+      loadedCardRef.current = null;
       setAuthOpen(true);
+      setOpenNote(null);
+      setError("");
       return;
     }
-    setView("card");
+    if (loadedCardRef.current === cardPath) return;
+    loadedCardRef.current = cardPath;
     void openGraphNote(cardPath, cardPath.startsWith("personal:") ? "personal" : "shared");
   }, [authChecking, user, cardPath]);
 
@@ -987,7 +987,9 @@ export function App() {
       if (!response.ok) throw new Error(await readError(response));
       setUser((await response.json()) as User);
       setAuthOpen(false);
-      setView("graph");
+      if (!pathFromCardHash(window.location.hash)) {
+        setView("graph");
+      }
       formElement.reset();
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "Ошибка соединения");
@@ -1282,8 +1284,10 @@ export function App() {
                   </form>
                 </div>
               </article>
+            ) : error ? (
+              <p className="admin-panel__hint" role="status">Карточка не загрузилась.</p>
             ) : (
-              <p className="admin-panel__hint">Загружаем карточку…</p>
+              <p className="admin-panel__hint" role="status">Загружаем карточку…</p>
             )}
           </section>
           )}
@@ -1889,7 +1893,16 @@ export function App() {
           </div>
           </section>
         )}
-        {repository?.shared.connected && (
+        {view === "card" && (
+          <section className="notes-panel notes-panel--card" aria-labelledby="guest-card-heading">
+            <div>
+              <p className="eyebrow">Карточка</p>
+              <h2 id="guest-card-heading">Карточка ризомы</h2>
+              <p className="admin-panel__hint" role="status">Войдите, чтобы открыть эту карточку.</p>
+            </div>
+          </section>
+        )}
+        {view !== "card" && repository?.shared.connected && (
           <section className="notes-panel notes-panel--graph" aria-labelledby="public-graph-heading">
             <div>
               <p className="eyebrow">Граф</p>
