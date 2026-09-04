@@ -49,6 +49,16 @@ type AuthorContract = {
 };
 
 type AdminUsersResponse = { users: User[] };
+type AuditEventItem = {
+  id: string;
+  action: string;
+  actor_user_id: string | null;
+  target_user_id: string | null;
+  subject_username: string | null;
+  details: Record<string, unknown>;
+  created_at: string;
+};
+type AuditEventListResponse = { events: AuditEventItem[] };
 
 type RepositoryStatus = {
   connected: boolean;
@@ -210,6 +220,22 @@ type AdminContributionsResponse = {
 type UploadEventItem = { path: string; content_hash: string; created_at: string };
 type UploadHistoryResponse = { events: UploadEventItem[] };
 
+function auditActionLabel(action: string): string {
+  const labels: Record<string, string> = {
+    "admin.user_role_changed": "смена роли",
+    "admin.user_active_changed": "блокировка / активация",
+    "admin.user_password_set": "смена пароля",
+    "admin.bootstrap_succeeded": "назначение admin",
+    "auth.registration_succeeded": "регистрация",
+    "auth.registration_failed": "отказ в регистрации",
+    "auth.login_succeeded": "вход",
+    "auth.login_failed": "отказ во входе",
+    "auth.logout": "выход",
+    "index.rebuild": "пересборка индекса",
+  };
+  return labels[action] || action;
+}
+
 function differKindLabel(kind: string): string {
   if (kind === "added") return "нет в общей";
   if (kind === "changed") return "отличается";
@@ -343,7 +369,9 @@ export function App() {
   const [error, setError] = useState("");
   const [adminUsers, setAdminUsers] = useState<User[]>([]);
   const [adminContributions, setAdminContributions] = useState<AdminContributionsResponse | null>(null);
+  const [adminAudit, setAdminAudit] = useState<AuditEventItem[]>([]);
   const [adminLoading, setAdminLoading] = useState(false);
+  const [passwordDrafts, setPasswordDrafts] = useState<Record<string, string>>({});
   const [repository, setRepository] = useState<RepositoryStatusResponse | null>(null);
   const [sharedNotes, setSharedNotes] = useState<NoteProjection[]>([]);
   const [personalNotes, setPersonalNotes] = useState<NoteProjection[]>([]);
@@ -454,6 +482,7 @@ export function App() {
     if (user?.role !== "admin") {
       setAdminUsers([]);
       setAdminContributions(null);
+      setAdminAudit([]);
       return;
     }
 
@@ -468,10 +497,15 @@ export function App() {
         if (!response.ok) throw new Error(await readError(response));
         return (await response.json()) as AdminContributionsResponse;
       }),
+      fetch("/api/admin/audit", { signal: controller.signal }).then(async (response) => {
+        if (!response.ok) throw new Error(await readError(response));
+        return (await response.json()) as AuditEventListResponse;
+      }),
     ])
-      .then(([usersBody, contribBody]) => {
+      .then(([usersBody, contribBody, auditBody]) => {
         setAdminUsers(usersBody.users);
         setAdminContributions(contribBody);
+        setAdminAudit(auditBody.events);
       })
       .catch((requestError: unknown) => {
         if (!(requestError instanceof DOMException && requestError.name === "AbortError")) {
@@ -693,13 +727,17 @@ export function App() {
       const detail = (await response.json()) as NoteDetail;
       setOpenNote(detail);
       setSelectedCardPath(path.startsWith("personal:") ? path : detail.path);
-      if (originKind !== "personal" && !detail.locked) {
+      if (!detail.locked) {
         const [feed, comments] = await Promise.all([
-          fetch(`/api/shared/notes/${encodeURI(filePath)}/feed`),
+          originKind === "personal"
+            ? Promise.resolve(null)
+            : fetch(`/api/shared/notes/${encodeURI(filePath)}/feed`),
           fetch(`/api/shared/notes/${encodeURI(filePath)}/comments`),
         ]);
-        if (feed.ok) setNoteFeed(((await feed.json()) as { events: NoteFeedEvent[] }).events);
+        if (feed && feed.ok) setNoteFeed(((await feed.json()) as { events: NoteFeedEvent[] }).events);
+        else setNoteFeed([]);
         if (comments.ok) setNoteComments(((await comments.json()) as { comments: NoteCommentItem[] }).comments);
+        else setNoteComments([]);
       } else {
         setNoteFeed([]);
         setNoteComments([]);
@@ -1113,6 +1151,36 @@ export function App() {
       if (contrib.ok) {
         setAdminContributions((await contrib.json()) as AdminContributionsResponse);
       }
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "Ошибка соединения");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function setManagedPassword(managedUser: User) {
+    const password = (passwordDrafts[managedUser.id] || "").trim();
+    if (password.length < 12) {
+      setError("Новый пароль — минимум 12 символов.");
+      return;
+    }
+    setSubmitting(true);
+    setError("");
+    try {
+      const response = await fetch(`/api/admin/users/${managedUser.id}/password`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password }),
+      });
+      if (!response.ok) throw new Error(await readError(response));
+      setPasswordDrafts((drafts) => ({ ...drafts, [managedUser.id]: "" }));
+      if (managedUser.id === user?.id) {
+        setUser(null);
+        setAuthOpen(true);
+        return;
+      }
+      const audit = await fetch("/api/admin/audit");
+      if (audit.ok) setAdminAudit(((await audit.json()) as AuditEventListResponse).events);
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "Ошибка соединения");
     } finally {
@@ -1912,7 +1980,8 @@ export function App() {
                 <h2 id="admin-heading">Пользователи</h2>
                 <p className="admin-panel__hint">
                   Роли глобальны: editor включает права user, admin — все права.
-                  Статистика вклада по всем учётным записям видна только здесь.
+                  Статистика вклада, смена пароля и журнал действий — только здесь.
+                  После смены пароля старые сессии этой учётки заканчиваются.
                 </p>
               </div>
               <button className="button button--quiet" type="button" onClick={() => void connectShared()} disabled={submitting}>
@@ -1965,11 +2034,65 @@ export function App() {
                             : ""}
                         </p>
                       )}
+                      <form
+                        className="user-row__password"
+                        onSubmit={(event) => {
+                          event.preventDefault();
+                          void setManagedPassword(managedUser);
+                        }}
+                      >
+                        <label>
+                          Новый пароль
+                          <input
+                            type="password"
+                            minLength={12}
+                            maxLength={128}
+                            autoComplete="new-password"
+                            value={passwordDrafts[managedUser.id] || ""}
+                            disabled={submitting}
+                            onChange={(event) => setPasswordDrafts((drafts) => ({
+                              ...drafts,
+                              [managedUser.id]: event.target.value,
+                            }))}
+                          />
+                        </label>
+                        <button className="button button--quiet" type="submit" disabled={submitting}>
+                          Сменить пароль
+                        </button>
+                      </form>
                     </article>
                     );
                   })}
                 </div>
               )}
+              <div className="audit-log">
+                <h3>Журнал действий</h3>
+                <p className="admin-panel__hint">
+                  События из базы GraphNotes. Пароль и токен в записи не попадают.
+                </p>
+                {adminAudit.length === 0 ? (
+                  <p className="admin-panel__hint">Пока нет записей.</p>
+                ) : (
+                  <table className="audit-table">
+                    <thead>
+                      <tr>
+                        <th>Когда</th>
+                        <th>Действие</th>
+                        <th>Кого</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {adminAudit.map((event) => (
+                        <tr key={event.id}>
+                          <td>{new Date(event.created_at).toLocaleString("ru")}</td>
+                          <td>{auditActionLabel(event.action)}</td>
+                          <td>{event.subject_username ? `@${event.subject_username}` : "—"}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
             </section>
           )}
         </>

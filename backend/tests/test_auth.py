@@ -395,6 +395,89 @@ async def test_admin_bootstrap_refuses_escalation_and_supports_recovery(
         assert recovered.role == "admin"
 
 
+async def test_admin_sets_password_and_reads_audit_log(
+    auth_test_context: tuple[
+        AsyncClient,
+        async_sessionmaker[AsyncSession],
+    ],
+) -> None:
+    admin_client, session_factory = auth_test_context
+    await admin_client.post(
+        "/auth/register",
+        json={
+            "username": "pw-admin",
+            "password": "a sufficiently long password",
+            "display_name": "Password Admin",
+            "email": "pw-admin@example.com",
+        },
+    )
+    async with session_factory() as database:
+        await bootstrap_admin(database, "pw-admin")
+
+    async with AsyncClient(
+        transport=ASGITransport(app=app),
+        base_url="http://testserver",
+    ) as managed_client:
+        created = await managed_client.post(
+            "/auth/register",
+            json={
+                "username": "pw-user",
+                "password": "old managed password",
+                "display_name": "Password User",
+                "email": "pw-user@example.com",
+            },
+        )
+        managed_id = created.json()["id"]
+        assert (await managed_client.get("/users/me")).status_code == 200
+        assert (await managed_client.get("/admin/audit")).status_code == 403
+        assert (
+            await managed_client.post(
+                f"/admin/users/{managed_id}/password",
+                json={"password": "brand new long password"},
+            )
+        ).status_code == 403
+
+        changed = await admin_client.post(
+            f"/admin/users/{managed_id}/password",
+            json={"password": "brand new long password"},
+        )
+        assert changed.status_code == 200
+        assert "password" not in changed.text
+        assert "brand new long password" not in changed.text
+        assert (await managed_client.get("/users/me")).status_code == 401
+
+        async with session_factory() as database:
+            user = await database.scalar(select(User).where(User.username == "pw-user"))
+            assert user is not None
+            assert verify_password(user.password_hash, "brand new long password")
+            leftover = (
+                await database.scalars(
+                    select(AuthSession).where(AuthSession.user_id == user.id)
+                )
+            ).all()
+            assert leftover == []
+
+        login = await managed_client.post(
+            "/auth/login",
+            json={"username": "pw-user", "password": "brand new long password"},
+        )
+        assert login.status_code == 200
+
+        too_short = await admin_client.post(
+            f"/admin/users/{managed_id}/password",
+            json={"password": "short"},
+        )
+        assert too_short.status_code == 422
+
+        audit = await admin_client.get("/admin/audit")
+        assert audit.status_code == 200
+        actions = {item["action"] for item in audit.json()["events"]}
+        assert "admin.user_password_set" in actions
+        assert "password_hash" not in audit.text
+        assert "brand new long password" not in audit.text
+        assert "old managed password" not in audit.text
+
+
 def test_cookie_secure_policy(monkeypatch: MonkeyPatch) -> None:
     monkeypatch.setattr(settings, "cookie_secure", True)
     secure_response = Response()

@@ -1,15 +1,24 @@
 import uuid
+from typing import Annotated
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, Query, status
 from sqlalchemy import delete, select
+from starlette.concurrency import run_in_threadpool
 
 from app.api.dependencies import CurrentAdmin, DatabaseSession
+from app.models.audit_event import AuditEvent
 from app.models.auth_session import AuthSession
 from app.models.user import User, UserRole
-from app.schemas.admin import AdminUserListResponse, AdminUserUpdate
+from app.schemas.admin import (
+    AdminPasswordSet,
+    AdminUserListResponse,
+    AdminUserUpdate,
+    AuditEventListResponse,
+)
 from app.schemas.auth import UserResponse
 from app.schemas.contributions import AdminContributionsResponse
 from app.services.audit import record_audit_event
+from app.services.auth import hash_password
 from app.services.contributions import list_admin_contributions
 
 router = APIRouter(prefix="/admin", tags=["administration"])
@@ -111,3 +120,69 @@ async def update_user(
     await database.commit()
     await database.refresh(target)
     return target
+
+
+@router.post("/users/{user_id}/password", response_model=UserResponse)
+async def set_user_password(
+    user_id: uuid.UUID,
+    payload: AdminPasswordSet,
+    admin: CurrentAdmin,
+    database: DatabaseSession,
+) -> User:
+    target = await database.get(User, user_id)
+    if target is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="user not found",
+        )
+    target.password_hash = await run_in_threadpool(hash_password, payload.password)
+    await database.execute(delete(AuthSession).where(AuthSession.user_id == target.id))
+    record_audit_event(
+        database,
+        action="admin.user_password_set",
+        actor_user_id=admin.id,
+        target_user_id=target.id,
+        subject_username=target.username,
+        details={},
+    )
+    await database.commit()
+    await database.refresh(target)
+    return target
+
+
+@router.get("/audit", response_model=AuditEventListResponse)
+async def list_audit_events(
+    _: CurrentAdmin,
+    database: DatabaseSession,
+    limit: Annotated[int, Query(ge=1, le=200)] = 80,
+) -> AuditEventListResponse:
+    rows = (
+        await database.scalars(
+            select(AuditEvent).order_by(AuditEvent.created_at.desc()).limit(limit)
+        )
+    ).all()
+    return AuditEventListResponse(
+        events=[
+            {
+                "id": row.id,
+                "action": row.action,
+                "actor_user_id": row.actor_user_id,
+                "target_user_id": row.target_user_id,
+                "subject_username": row.subject_username,
+                "details": _public_audit_details(row.details),
+                "created_at": row.created_at,
+            }
+            for row in rows
+        ]
+    )
+
+
+def _public_audit_details(details: dict | None) -> dict:
+    hidden = {"password", "password_hash", "token", "token_hash", "cookie", "secret"}
+    clean: dict = {}
+    for key, value in (details or {}).items():
+        lowered = str(key).lower()
+        if lowered in hidden or "password" in lowered or "token" in lowered:
+            continue
+        clean[key] = value
+    return clean

@@ -5,8 +5,10 @@ from app.models.github import PersonalRepository, SharedRepository
 from app.models.graph import NoteIndex, NoteLayer, NoteTag, Tag
 from app.models.personal_upload import PersonalUpload
 from app.models.user import User
+from app.services.github import GitHubAppClient
+from app.services.index import IndexerError, ensure_personal_current, ensure_shared_current
 from app.services.markdown import parse_markdown
-from app.services.repository import SHARED_SINGLETON_ID
+from app.services.repository import SHARED_SINGLETON_ID, refresh_personal, refresh_shared
 
 
 async def search_visible_cards(
@@ -16,6 +18,7 @@ async def search_visible_cards(
     user: User | None,
     tag: str = "",
     limit: int = 40,
+    client: GitHubAppClient | None = None,
 ) -> dict[str, object]:
     trimmed = query.strip()
     tag_name = tag.strip()
@@ -23,6 +26,19 @@ async def search_visible_cards(
     hits: list[dict[str, object]] = []
     seen: set[str] = set()
     note_ids: list[object] = []
+
+    if client is not None:
+        await refresh_shared(database, client)
+        try:
+            await ensure_shared_current(database, client)
+        except IndexerError:
+            pass
+        if user is not None:
+            await refresh_personal(database, user.id, client)
+            try:
+                await ensure_personal_current(database, user.id, client)
+            except IndexerError:
+                pass
 
     shared = await database.get(SharedRepository, SHARED_SINGLETON_ID)
     if shared is not None and shared.indexed_sha:

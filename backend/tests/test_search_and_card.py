@@ -92,3 +92,92 @@ async def test_encoded_personal_card_unicode_path(
     personal = await admin.get(f"/personal/notes/{note_path}")
     assert personal.status_code == 200
     assert personal.json()["path"] == note_path
+
+
+async def test_rebuild_drops_deleted_personal_from_search_cards_and_comments(
+    auth_test_context: tuple[AsyncClient, async_sessionmaker[AsyncSession]],
+    monkeypatch: MonkeyPatch,
+) -> None:
+    from sqlalchemy import select
+
+    from app.models.comment import NoteComment
+    from tests.test_ingest import _connect_pair
+    from tests.test_proposals import _second
+
+    admin, session_factory = auth_test_context
+    github = _install_graph(monkeypatch, _github())
+    gone = "аддик и адреналин.md"
+    github.repos["vgdnet/guide_psy"].files[gone] = "# аддик и адреналин\nSee [[card]].\n"
+    github.repos["vgdnet/guide_psy"].files["keep-personal.md"] = "# Keep\nSee [[card]].\n"
+    github.repos["vgdnet/guide_psy"].sha = "personal-before-delete"
+    await _admin(admin, session_factory, "rebuild-search-admin")
+
+    author = await _second("vault-owner")
+    await _connect_pair(author, "vgdnet/guide_psy")
+
+    found = await author.get("/search", params={"q": "аддик"})
+    assert found.status_code == 200
+    assert f"personal:{gone}" in {item["path"] for item in found.json()["hits"]}
+
+    commented = await author.post(
+        f"/shared/notes/{gone}/comments",
+        json={"body": "still here"},
+    )
+    assert commented.status_code == 200
+
+    del github.repos["vgdnet/guide_psy"].files[gone]
+    github.repos["vgdnet/guide_psy"].sha = "personal-after-delete"
+
+    rebuilt = await admin.post("/index/rebuild", json={"target": "shared"})
+    assert rebuilt.status_code == 200
+
+    after = await author.get("/search", params={"q": "аддик"})
+    assert after.status_code == 200
+    assert f"personal:{gone}" not in {item["path"] for item in after.json()["hits"]}
+    keep = await author.get("/search", params={"q": "Keep"})
+    assert f"personal:keep-personal.md" in {item["path"] for item in keep.json()["hits"]}
+
+    assert (await author.get(f"/cards/personal:{gone}")).status_code == 404
+    missing = await author.post(
+        f"/shared/notes/{gone}/comments",
+        json={"body": "ghost"},
+    )
+    assert missing.status_code == 404
+    assert missing.json()["detail"] == "note was not found"
+
+    async with session_factory() as database:
+        leftover = (
+            await database.scalars(select(NoteComment).where(NoteComment.path == gone))
+        ).all()
+        assert leftover == []
+    await author.aclose()
+
+
+async def test_search_rebuilds_personal_when_git_sha_moves(
+    auth_test_context: tuple[AsyncClient, async_sessionmaker[AsyncSession]],
+    monkeypatch: MonkeyPatch,
+) -> None:
+    from tests.test_ingest import _connect_pair
+    from tests.test_proposals import _second
+
+    admin, session_factory = auth_test_context
+    github = _install_graph(monkeypatch, _github())
+    gone = "ghost-search.md"
+    github.repos["vgdnet/guide_psy"].files[gone] = "# Ghost search\n"
+    github.repos["vgdnet/guide_psy"].sha = "search-before"
+    await _admin(admin, session_factory, "search-sha-admin")
+    author = await _second("search-sha-owner")
+    await _connect_pair(author, "vgdnet/guide_psy")
+
+    assert f"personal:{gone}" in {
+        item["path"] for item in (await author.get("/search", params={"q": "Ghost"})).json()["hits"]
+    }
+
+    del github.repos["vgdnet/guide_psy"].files[gone]
+    github.repos["vgdnet/guide_psy"].sha = "search-after"
+
+    assert (await author.get(f"/cards/personal:{gone}")).status_code == 404
+    after = await author.get("/search", params={"q": "Ghost"})
+    assert after.status_code == 200
+    assert f"personal:{gone}" not in {item["path"] for item in after.json()["hits"]}
+    await author.aclose()

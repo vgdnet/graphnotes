@@ -7,6 +7,7 @@ from sqlalchemy import delete, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
+from app.models.comment import NoteComment
 from app.models.github import PersonalRepository, SharedRepository
 from app.models.graph import NoteIndex, NoteLayer, NoteLink, NoteTag, SyncJob, SyncJobStatus, Tag
 from app.models.personal_upload import PersonalUpload
@@ -128,6 +129,79 @@ async def ensure_personal_current(
     await rebuild_personal(database, user_id, client)
 
 
+async def rebuild_derived_indexes(
+    database: AsyncSession,
+    client: GitHubAppClient,
+    *,
+    actor_user_id: uuid.UUID | None = None,
+) -> None:
+    """Rebuild every git-backed derived store from current HEAD trees.
+
+    Search, graph, card lookup and comment targets all read ``note_index``
+    (plus ``personal_uploads`` when git is off). One rebuild must replace
+    shared and every personal layer so deleted git paths disappear together.
+    """
+    from app.services.repository import refresh_personal, refresh_shared
+
+    await refresh_shared(database, client)
+    shared = await database.get(SharedRepository, SHARED_SINGLETON_ID)
+    if shared is not None and shared.observed_sha:
+        await rebuild_shared(database, client, actor_user_id=actor_user_id)
+    user_ids = list(await database.scalars(select(PersonalRepository.user_id)))
+    for user_id in user_ids:
+        await refresh_personal(database, user_id, client)
+        personal = await database.scalar(
+            select(PersonalRepository).where(PersonalRepository.user_id == user_id)
+        )
+        if personal is None or not personal.observed_sha:
+            continue
+        await rebuild_personal(
+            database, user_id, client, actor_user_id=actor_user_id or user_id
+        )
+    await purge_comments_for_missing_notes(database)
+    await database.commit()
+
+
+async def purge_comments_for_missing_notes(database: AsyncSession) -> int:
+    """Drop comments whose path is gone from every current derived store."""
+    live: set[str] = set()
+    shared = await database.get(SharedRepository, SHARED_SINGLETON_ID)
+    if shared is not None and shared.indexed_sha:
+        live.update(
+            (
+                await database.scalars(
+                    select(NoteIndex.path).where(
+                        NoteIndex.layer == NoteLayer.SHARED.value,
+                        NoteIndex.owner_user_id.is_(None),
+                        NoteIndex.revision_sha == shared.indexed_sha,
+                    )
+                )
+            ).all()
+        )
+    bindings = (await database.scalars(select(PersonalRepository))).all()
+    for row in bindings:
+        if not row.indexed_sha:
+            continue
+        live.update(
+            (
+                await database.scalars(
+                    select(NoteIndex.path).where(
+                        NoteIndex.layer == NoteLayer.PERSONAL.value,
+                        NoteIndex.owner_user_id == row.user_id,
+                        NoteIndex.revision_sha == row.indexed_sha,
+                    )
+                )
+            ).all()
+        )
+    live.update((await database.scalars(select(PersonalUpload.path))).all())
+    if not live:
+        return 0
+    result = await database.execute(
+        delete(NoteComment).where(NoteComment.path.notin_(live))
+    )
+    return int(result.rowcount or 0)
+
+
 async def _rebuild(
     database: AsyncSession,
     client: GitHubAppClient,
@@ -243,6 +317,7 @@ async def _rebuild(
         binding.index_status = "current"
         job.status = SyncJobStatus.READY.value
         job.finished_at = datetime.now(UTC)
+        await purge_comments_for_missing_notes(database)
         record_audit_event(
             database,
             action="index.rebuild",

@@ -16,8 +16,11 @@ Opening a node for a signed-in viewer with access goes to the **card page**
 
 Card URLs: `#/card/` opens rhizome search (words and tags from the derived
 index). `#/card/{path}` opens the card page. The chrome tab is «Карточки».
-MVP search is PostgreSQL (`GET /api/search`). Elasticsearch is the next
-iteration (ADR-015), not this Stage 6 stack.
+MVP search is PostgreSQL (`GET /api/search`) on the same `note_index`
+revision as the graph. A rebuild or SHA change updates graph and search
+together; a hash to a path that is not in the current git tree does not
+invent a card (API 404). Elasticsearch is the next iteration (ADR-015),
+not this Stage 6 stack.
 
 Light and dark themes are browser-local (`localStorage` `graphnotes-theme`,
 else `prefers-color-scheme`). The UI control is a Theme Switcher (sliding

@@ -24,7 +24,11 @@ or expose a password or session token.
 
 After bootstrap, role and active-state changes are performed through the
 protected admin interface. The backend prevents demotion or blocking of the
-last active admin.
+last active admin. An admin may set a new password for any account
+(`POST /api/admin/users/{id}/password`); that account's sessions end.
+The Administration tab also lists recent `audit_events` from PostgreSQL
+(`GET /api/admin/audit`). Passwords and tokens are never written into
+audit details or JSON responses.
 
 ## Recovery
 

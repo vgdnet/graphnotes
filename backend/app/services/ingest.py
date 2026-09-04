@@ -17,8 +17,15 @@ from app.services.closed_corpus import (
 )
 from app.services.git_paths import PathError, normalize_git_path
 from app.services.github import GitHubAppClient, GitHubAppError
+from app.services.index import IndexerError, ensure_personal_current, ensure_shared_current
 from app.services.markdown import parse_markdown, unresolved_links
-from app.services.repository import SHARED_SINGLETON_ID, apply_error, apply_snapshot
+from app.services.repository import (
+    SHARED_SINGLETON_ID,
+    apply_error,
+    apply_snapshot,
+    refresh_personal,
+    refresh_shared,
+)
 
 
 class IngestError(Exception):
@@ -173,6 +180,13 @@ async def get_personal_note(
     except PathError as exc:
         raise IngestError(400, str(exc)) from exc
     row = await _personal_or_none(database, user.id)
+    if row is not None:
+        await refresh_personal(database, user.id, client)
+        try:
+            await ensure_personal_current(database, user.id, client)
+        except IndexerError:
+            pass
+        row = await _personal_or_none(database, user.id)
     if row is None or not row.observed_sha:
         upload = await database.scalar(
             select(PersonalUpload).where(
@@ -199,8 +213,13 @@ async def get_personal_note(
             "closed": normalized in await closed_paths_for_user(database, user.id),
         }
     try:
-        text = await client.get_file(row.owner, row.name, normalized, row.observed_sha)
         paths = set(await client.list_markdown_files(row.owner, row.name, row.observed_sha))
+    except GitHubAppError as exc:
+        raise _github_to_ingest(exc) from exc
+    if normalized not in paths:
+        raise IngestError(404, "note was not found")
+    try:
+        text = await client.get_file(row.owner, row.name, normalized, row.observed_sha)
     except GitHubAppError as exc:
         raise _github_to_ingest(exc) from exc
     parsed = parse_markdown(normalized, text)
@@ -229,6 +248,11 @@ async def get_shared_note(
         normalized = normalize_git_path(path)
     except PathError as exc:
         raise IngestError(400, str(exc)) from exc
+    await refresh_shared(database, client)
+    try:
+        await ensure_shared_current(database, client)
+    except IndexerError:
+        pass
     row = await database.get(SharedRepository, SHARED_SINGLETON_ID)
     if row is None or not row.observed_sha:
         if await is_globally_closed(database, normalized):

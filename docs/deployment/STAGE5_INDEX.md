@@ -6,6 +6,14 @@ GraphNotes; `/api/repository/status` and `/api/graph/*` compare the observed
 Git SHA with the indexed SHA and rebuild when they differ.
 
 LAN webhook remains unused. Admin can force `POST /api/index/rebuild`.
+That call rebuilds **every** git-backed layer (shared and all connected
+personal remotes) from the current HEAD trees. Search (`GET /api/search`)
+reads the same `note_index` rows as the graph; there is no second FTS
+table. After rebuild, paths missing from the current trees are gone from
+search and card routes. Comments whose path is in no current shared,
+personal or upload store are deleted. Search itself refreshes HEADs and
+rebuilds a stale personal/shared layer when the SHA moved, so a deleted
+file does not linger in `#/card/` after the git tree changed.
 
 Graph API is bounded (`limit`, optional `center` and `depth`). Cytoscape UI is
 Stage 6.

@@ -20,8 +20,7 @@ from app.services.index import (
     load_graph,
     load_overlay,
     load_overlay_from_uploads,
-    rebuild_personal,
-    rebuild_shared,
+    rebuild_derived_indexes,
 )
 from app.services.proposal import ProposalError
 from app.services.repository import SHARED_SINGLETON_ID, refresh_personal, refresh_shared
@@ -50,7 +49,9 @@ async def search_cards(
     tag: Annotated[str, Query(max_length=80)] = "",
     limit: Annotated[int, Query(ge=1, le=80)] = 40,
 ) -> SearchResponse:
-    payload = await search_visible_cards(database, q, user=viewer, tag=tag, limit=limit)
+    payload = await search_visible_cards(
+        database, q, user=viewer, tag=tag, limit=limit, client=_client()
+    )
     return SearchResponse.model_validate(payload)
 
 
@@ -201,12 +202,9 @@ async def rebuild_index(
 ) -> GraphResponse:
     client = _client()
     try:
+        await rebuild_derived_indexes(database, client, actor_user_id=admin.id)
         if payload.target == "shared":
-            await refresh_shared(database, client)
-            await rebuild_shared(database, client, actor_user_id=admin.id)
             return await shared_graph(database)
-        await refresh_personal(database, admin.id, client)
-        await rebuild_personal(database, admin.id, client, actor_user_id=admin.id)
         return await personal_graph(admin, database)
     except IndexerError as exc:
         _raise(exc)
