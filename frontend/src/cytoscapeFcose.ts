@@ -1,10 +1,37 @@
 import cytoscape from "cytoscape";
 import type { Core, EventObject, LayoutOptions, StylesheetJson } from "cytoscape";
 import fcose from "cytoscape-fcose";
+import { cssToken } from "./theme";
 
 cytoscape.use(fcose);
 
-const HALO = "#AAD8FF";
+function graphTokens() {
+  return {
+    label: cssToken("--gn-graph-label", "#f4f7fa"),
+    outline: cssToken("--gn-graph-label-outline", "#070b10"),
+    shared: cssToken("--gn-shared", "#3ecf8e"),
+    personal: cssToken("--gn-personal", "#6b8cff"),
+    both: cssToken("--gn-both", "#c9a227"),
+    missing: cssToken("--gn-missing", "#ff6b6b"),
+    removed: cssToken("--gn-removed-node", "#5d6b78"),
+    lockedBorder: cssToken("--gn-locked-border", "#4d3e12"),
+    edge: cssToken("--gn-edge", "#8b98a6"),
+    halo: cssToken("--gn-halo", "#aad8ff"),
+    searchHit: cssToken("--gn-search-hit", "#fff4b8"),
+  };
+}
+
+function labelStyle(tokens: ReturnType<typeof graphTokens>) {
+  return {
+    color: tokens.label,
+    "font-size": 13,
+    "font-weight": 600,
+    "text-outline-color": tokens.outline,
+    "text-outline-width": 3,
+    "text-outline-opacity": 1,
+    "min-zoomed-font-size": 8,
+  };
+}
 
 export const FCOSE_LAYOUT = {
   name: "fcose",
@@ -24,241 +51,222 @@ export const FCOSE_LAYOUT = {
   numIter: 2500,
 } as LayoutOptions;
 
-export const GRAPH_STYLESHEET: StylesheetJson = [
-  {
-    selector: "node",
-    style: {
-      width: "mapData(score, 0, 8, 22, 56)",
-      height: "mapData(score, 0, 8, 22, 56)",
-      label: "data(label)",
-      "font-size": 12,
-      "text-valign": "center",
-      "text-halign": "center",
-      "text-wrap": "wrap",
-      "text-max-width": "72px",
-      "background-color": "#3ecf8e",
-      "text-outline-color": "#3ecf8e",
-      "text-outline-width": 2,
-      color: "#fff",
-      "overlay-padding": 6,
-      "z-index": 10,
-      "border-width": 0,
+export function graphStylesheet(): StylesheetJson {
+  const tokens = graphTokens();
+  return [
+    {
+      selector: "node",
+      style: {
+        width: "mapData(score, 0, 8, 22, 56)",
+        height: "mapData(score, 0, 8, 22, 56)",
+        label: "data(label)",
+        "text-valign": "center",
+        "text-halign": "center",
+        "text-wrap": "wrap",
+        "text-max-width": "80px",
+        "background-color": tokens.shared,
+        ...labelStyle(tokens),
+        "overlay-padding": 6,
+        "z-index": 10,
+        "border-width": 0,
+      },
     },
-  },
-  {
-    selector: "node[origin = 'personal']",
-    style: {
-      "background-color": "#6b8cff",
-      "text-outline-color": "#6b8cff",
+    {
+      selector: "node[origin = 'personal']",
+      style: { "background-color": tokens.personal },
     },
-  },
-  {
-    selector: "node[origin = 'both']",
-    style: {
-      "background-color": "#c9a227",
-      "text-outline-color": "#c9a227",
+    {
+      selector: "node[origin = 'both']",
+      style: { "background-color": tokens.both },
     },
-  },
-  {
-    selector: "node[unresolved = 1]",
-    style: {
-      "background-color": "#ff6b6b",
-      "text-outline-color": "#ff6b6b",
+    {
+      selector: "node[unresolved = 1]",
+      style: { "background-color": tokens.missing },
     },
-  },
-  {
-    selector: "node[locked = 1]",
-    style: {
-      "background-color": "#c9a227",
-      "text-outline-color": "#c9a227",
-      "border-width": 3,
-      "border-style": "double",
-      "border-color": "#4d3e12",
+    {
+      selector: "node[locked = 1]",
+      style: {
+        "background-color": tokens.both,
+        "border-width": 3,
+        "border-style": "double",
+        "border-color": tokens.lockedBorder,
+      },
     },
-  },
-  {
-    selector: "node:selected",
-    style: {
-      "border-width": 6,
-      "border-color": HALO,
-      "border-opacity": 0.5,
+    {
+      selector: "node:selected",
+      style: {
+        "border-width": 6,
+        "border-color": tokens.halo,
+        "border-opacity": 0.5,
+      },
     },
-  },
-  {
-    selector: "edge",
-    style: {
-      "curve-style": "haystack",
-      "haystack-radius": 0.5,
-      opacity: 0.4,
-      "line-color": "#bbb",
-      width: 1.6,
-      "overlay-padding": 3,
+    {
+      selector: "edge",
+      style: {
+        "curve-style": "haystack",
+        "haystack-radius": 0.5,
+        opacity: 0.45,
+        "line-color": tokens.edge,
+        width: 1.6,
+        "overlay-padding": 3,
+      },
     },
-  },
-  {
-    selector: "edge[origin = 'overlay']",
-    style: {
-      "curve-style": "bezier",
-      "line-style": "dashed",
-      "line-color": "#6b8cff",
-      "target-arrow-shape": "triangle",
-      "target-arrow-color": "#6b8cff",
+    {
+      selector: "edge[origin = 'overlay']",
+      style: {
+        "curve-style": "bezier",
+        "line-style": "dashed",
+        "line-color": tokens.personal,
+        "target-arrow-shape": "triangle",
+        "target-arrow-color": tokens.personal,
+      },
     },
-  },
-  {
-    selector: "edge[unresolved = 1]",
-    style: {
-      "curve-style": "bezier",
-      "line-style": "dotted",
-      "line-color": "#ff6b6b",
-      "target-arrow-shape": "triangle",
-      "target-arrow-color": "#ff6b6b",
+    {
+      selector: "edge[unresolved = 1]",
+      style: {
+        "curve-style": "bezier",
+        "line-style": "dotted",
+        "line-color": tokens.missing,
+        "target-arrow-shape": "triangle",
+        "target-arrow-color": tokens.missing,
+      },
     },
-  },
-  {
-    selector: "edge[locked = 1]",
-    style: {
-      "curve-style": "bezier",
-      "line-style": "dotted",
-      "line-color": "#c9a227",
-      "target-arrow-shape": "triangle",
-      "target-arrow-color": "#c9a227",
+    {
+      selector: "edge[locked = 1]",
+      style: {
+        "curve-style": "bezier",
+        "line-style": "dotted",
+        "line-color": tokens.both,
+        "target-arrow-shape": "triangle",
+        "target-arrow-color": tokens.both,
+      },
     },
-  },
-  {
-    selector: "node.unhighlighted",
-    style: { opacity: 0.2 },
-  },
-  {
-    selector: "edge.unhighlighted",
-    style: { opacity: 0.05 },
-  },
-  {
-    selector: ".highlighted",
-    style: { "z-index": 999999 },
-  },
-  {
-    selector: "node.highlighted",
-    style: {
-      "border-width": 6,
-      "border-color": HALO,
-      "border-opacity": 0.5,
+    { selector: "node.unhighlighted", style: { opacity: 0.2 } },
+    { selector: "edge.unhighlighted", style: { opacity: 0.05 } },
+    { selector: ".highlighted", style: { "z-index": 999999 } },
+    {
+      selector: "node.highlighted",
+      style: {
+        "border-width": 6,
+        "border-color": tokens.halo,
+        "border-opacity": 0.5,
+      },
     },
-  },
-  {
-    selector: "node[searchHit = 1]",
-    style: {
-      "border-width": 5,
-      "border-color": "#fff4b8",
-      "border-opacity": 0.9,
+    {
+      selector: "node[searchHit = 1]",
+      style: {
+        "border-width": 5,
+        "border-color": tokens.searchHit,
+        "border-opacity": 0.9,
+      },
     },
-  },
-];
+  ];
+}
 
-export const DIFF_STYLESHEET: StylesheetJson = [
-  {
-    selector: "node",
-    style: {
-      width: "mapData(score, 0, 8, 22, 52)",
-      height: "mapData(score, 0, 8, 22, 52)",
-      label: "data(label)",
-      color: "#fff",
-      "font-size": 12,
-      "text-valign": "center",
-      "text-halign": "center",
-      "text-wrap": "wrap",
-      "text-max-width": "72px",
-      "text-outline-width": 2,
-      "text-outline-color": "#85919d",
-      "background-color": "#85919d",
-      "overlay-padding": 6,
-      "border-width": 0,
-      shape: "ellipse",
+export function diffStylesheet(): StylesheetJson {
+  const tokens = graphTokens();
+  return [
+    {
+      selector: "node",
+      style: {
+        width: "mapData(score, 0, 8, 22, 52)",
+        height: "mapData(score, 0, 8, 22, 52)",
+        label: "data(label)",
+        "text-valign": "center",
+        "text-halign": "center",
+        "text-wrap": "wrap",
+        "text-max-width": "80px",
+        ...labelStyle(tokens),
+        "background-color": tokens.removed,
+        "overlay-padding": 6,
+        "border-width": 0,
+        shape: "ellipse",
+      },
     },
-  },
-  {
-    selector: "node[marker = 'triangle']",
-    style: { shape: "triangle", "background-color": "#3ecf8e", "text-outline-color": "#3ecf8e" },
-  },
-  {
-    selector: "node[marker = 'octagon']",
-    style: { shape: "octagon", "background-color": "#5d6b78", "text-outline-color": "#5d6b78" },
-  },
-  {
-    selector: "node[marker = 'rectangle']",
-    style: { shape: "rectangle", "background-color": "#c9a227", "text-outline-color": "#c9a227" },
-  },
-  {
-    selector: "node[marker = 'diamond']",
-    style: { shape: "diamond", "background-color": "#6b8cff", "text-outline-color": "#6b8cff" },
-  },
-  {
-    selector: "node[marker = 'star']",
-    style: { shape: "star", "background-color": "#ff6b6b", "text-outline-color": "#ff6b6b" },
-  },
-  {
-    selector: "node:selected, node.highlighted",
-    style: {
-      "border-width": 6,
-      "border-color": HALO,
-      "border-opacity": 0.5,
+    {
+      selector: "node[marker = 'triangle']",
+      style: { shape: "triangle", "background-color": tokens.shared },
     },
-  },
-  {
-    selector: "edge",
-    style: {
-      width: 1.6,
-      "curve-style": "haystack",
-      "haystack-radius": 0.5,
-      opacity: 0.4,
-      "line-color": "#bbb",
+    {
+      selector: "node[marker = 'octagon']",
+      style: { shape: "octagon", "background-color": tokens.removed },
     },
-  },
-  {
-    selector: "edge[change = 'added']",
-    style: {
-      "curve-style": "bezier",
-      width: 2.4,
-      "line-color": "#3ecf8e",
-      "target-arrow-shape": "triangle",
-      "target-arrow-color": "#3ecf8e",
+    {
+      selector: "node[marker = 'rectangle']",
+      style: { shape: "rectangle", "background-color": tokens.both },
     },
-  },
-  {
-    selector: "edge[change = 'removed']",
-    style: {
-      "curve-style": "bezier",
-      "line-style": "dashed",
-      "line-color": "#85919d",
-      "target-arrow-shape": "triangle",
-      "target-arrow-color": "#85919d",
+    {
+      selector: "node[marker = 'diamond']",
+      style: { shape: "diamond", "background-color": tokens.personal },
     },
-  },
-  {
-    selector: "edge[change = 'type_changed']",
-    style: {
-      "curve-style": "bezier",
-      "line-style": "dotted",
-      width: 2,
-      "line-color": "#c9a227",
-      "target-arrow-shape": "triangle",
-      "target-arrow-color": "#c9a227",
+    {
+      selector: "node[marker = 'star']",
+      style: { shape: "star", "background-color": tokens.missing },
     },
-  },
-  {
-    selector: "edge[change = 'unresolved_changed']",
-    style: {
-      "curve-style": "bezier",
-      "line-style": "dotted",
-      "line-color": "#ff6b6b",
-      "target-arrow-shape": "triangle",
-      "target-arrow-color": "#ff6b6b",
+    {
+      selector: "node:selected, node.highlighted",
+      style: {
+        "border-width": 6,
+        "border-color": tokens.halo,
+        "border-opacity": 0.5,
+      },
     },
-  },
-  { selector: "node.unhighlighted", style: { opacity: 0.2 } },
-  { selector: "edge.unhighlighted", style: { opacity: 0.05 } },
-  { selector: ".highlighted", style: { "z-index": 999999 } },
-];
+    {
+      selector: "edge",
+      style: {
+        width: 1.6,
+        "curve-style": "haystack",
+        "haystack-radius": 0.5,
+        opacity: 0.45,
+        "line-color": tokens.edge,
+      },
+    },
+    {
+      selector: "edge[change = 'added']",
+      style: {
+        "curve-style": "bezier",
+        width: 2.4,
+        "line-color": tokens.shared,
+        "target-arrow-shape": "triangle",
+        "target-arrow-color": tokens.shared,
+      },
+    },
+    {
+      selector: "edge[change = 'removed']",
+      style: {
+        "curve-style": "bezier",
+        "line-style": "dashed",
+        "line-color": tokens.removed,
+        "target-arrow-shape": "triangle",
+        "target-arrow-color": tokens.removed,
+      },
+    },
+    {
+      selector: "edge[change = 'type_changed']",
+      style: {
+        "curve-style": "bezier",
+        "line-style": "dotted",
+        width: 2,
+        "line-color": tokens.both,
+        "target-arrow-shape": "triangle",
+        "target-arrow-color": tokens.both,
+      },
+    },
+    {
+      selector: "edge[change = 'unresolved_changed']",
+      style: {
+        "curve-style": "bezier",
+        "line-style": "dotted",
+        "line-color": tokens.missing,
+        "target-arrow-shape": "triangle",
+        "target-arrow-color": tokens.missing,
+      },
+    },
+    { selector: "node.unhighlighted", style: { opacity: 0.2 } },
+    { selector: "edge.unhighlighted", style: { opacity: 0.05 } },
+    { selector: ".highlighted", style: { "z-index": 999999 } },
+  ];
+}
 
 export function applyDegreeScores(cy: Core): void {
   cy.nodes().forEach((node) => {

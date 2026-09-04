@@ -11,6 +11,10 @@ cannot be selected by query.
 Opening a node reads source Markdown (`GET /api/shared/notes/{path}` or the
 caller's personal note). Titles and bodies are shown as text, not HTML.
 
+Light and dark themes are browser-local (`localStorage` `graphnotes-theme`,
+else `prefers-color-scheme`). Cytoscape label color and outline follow CSS
+theme tokens so graph text stays readable on both canvases. No server config.
+
 ## Bounds
 
 Same as Stage 5: default page 50, max 200, neighborhood `center` + `depth` 0–4.

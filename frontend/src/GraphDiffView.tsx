@@ -3,11 +3,12 @@ import type { KeyboardEvent } from "react";
 import cytoscape from "cytoscape";
 import type { Core, EventObject } from "cytoscape";
 import {
-  DIFF_STYLESHEET,
   applyDegreeScores,
   bindNeighborhoodHighlight,
+  diffStylesheet,
   runFcoseLayout,
 } from "./cytoscapeFcose";
+import type { ThemeName } from "./theme";
 
 export type GraphDiffNode = {
   path: string;
@@ -131,9 +132,11 @@ function summaryLine(summary: GraphDiffSummary): string {
 export function GraphDiffView({
   diff,
   loading,
+  theme,
 }: {
   diff: GraphDiffResponse | null;
   loading?: boolean;
+  theme: ThemeName;
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const cyRef = useRef<Core | null>(null);
@@ -150,7 +153,7 @@ export function GraphDiffView({
       minZoom: 0.15,
       maxZoom: 3,
       wheelSensitivity: 0.25,
-      style: DIFF_STYLESHEET,
+      style: diffStylesheet(),
     });
     cyRef.current = cy;
     bindNeighborhoodHighlight(cy, () => focusPathRef.current);
@@ -167,6 +170,12 @@ export function GraphDiffView({
       cyRef.current = null;
     };
   }, []);
+
+  useEffect(() => {
+    const cy = cyRef.current;
+    if (!cy) return;
+    cy.style().fromJson(diffStylesheet()).update();
+  }, [theme]);
 
   useEffect(() => {
     const cy = cyRef.current;

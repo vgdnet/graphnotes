@@ -3,13 +3,14 @@ import type { KeyboardEvent } from "react";
 import cytoscape from "cytoscape";
 import type { Core, EventObject } from "cytoscape";
 import {
-  GRAPH_STYLESHEET,
   applyDegreeScores,
   bindNeighborhoodHighlight,
+  graphStylesheet,
   highlightNeighborhood,
   runFcoseLayout,
 } from "./cytoscapeFcose";
 import { cardHash } from "./cardRoute";
+import type { ThemeName } from "./theme";
 
 export type GraphNode = {
   path: string;
@@ -61,6 +62,7 @@ export function GraphView({
   onExpand,
   canReadNotes = true,
   onNeedAuth,
+  theme,
 }: {
   graph: GraphResponse | null;
   loading?: boolean;
@@ -68,6 +70,7 @@ export function GraphView({
   onExpand: (path: string) => void;
   canReadNotes?: boolean;
   onNeedAuth?: () => void;
+  theme: ThemeName;
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const cyRef = useRef<Core | null>(null);
@@ -137,7 +140,7 @@ export function GraphView({
       minZoom: 0.15,
       maxZoom: 3,
       wheelSensitivity: 0.25,
-      style: GRAPH_STYLESHEET,
+      style: graphStylesheet(),
     });
     cyRef.current = cy;
     bindNeighborhoodHighlight(cy, () => focusPathRef.current);
@@ -155,6 +158,12 @@ export function GraphView({
       cyRef.current = null;
     };
   }, []);
+
+  useEffect(() => {
+    const cy = cyRef.current;
+    if (!cy) return;
+    cy.style().fromJson(graphStylesheet()).update();
+  }, [theme]);
 
   useEffect(() => {
     const cy = cyRef.current;

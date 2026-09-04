@@ -6,6 +6,14 @@ import { GraphDiffView } from "./GraphDiffView";
 import type { GraphDiffResponse } from "./GraphDiffView";
 import { MarkdownBody } from "./MarkdownBody";
 import { cardApiUrl, cardHash, pathFromCardHash } from "./cardRoute";
+import {
+  applyTheme,
+  persistTheme,
+  resolveTheme,
+  storedTheme,
+  systemTheme,
+  type ThemeName,
+} from "./theme";
 
 type HealthState = "checking" | "online" | "offline";
 type AuthMode = "login" | "register";
@@ -292,6 +300,21 @@ async function readError(response: Response): Promise<string> {
   return "Не удалось выполнить запрос. Попробуйте ещё раз.";
 }
 
+function ThemeToggle({ theme, onToggle }: { theme: ThemeName; onToggle: () => void }) {
+  const next = theme === "dark" ? "светлую" : "тёмную";
+  return (
+    <button
+      className="button button--quiet theme-toggle"
+      type="button"
+      onClick={onToggle}
+      aria-pressed={theme === "dark"}
+      aria-label={`Включить ${next} тему`}
+    >
+      {theme === "dark" ? "Светлая" : "Тёмная"}
+    </button>
+  );
+}
+
 export function App() {
   const [health, setHealth] = useState<HealthState>("checking");
   const [user, setUser] = useState<User | null>(null);
@@ -334,6 +357,26 @@ export function App() {
   const [commentDraft, setCommentDraft] = useState("");
   const [locationHash, setLocationHash] = useState(() => window.location.hash);
   const [selectedCardPath, setSelectedCardPath] = useState<string | null>(null);
+  const [theme, setTheme] = useState<ThemeName>(() => resolveTheme());
+
+  useEffect(() => {
+    applyTheme(theme);
+  }, [theme]);
+
+  useEffect(() => {
+    const media = window.matchMedia("(prefers-color-scheme: light)");
+    const onChange = () => {
+      if (storedTheme() == null) setTheme(systemTheme());
+    };
+    media.addEventListener("change", onChange);
+    return () => media.removeEventListener("change", onChange);
+  }, []);
+
+  function toggleTheme() {
+    const next: ThemeName = theme === "dark" ? "light" : "dark";
+    persistTheme(next);
+    setTheme(next);
+  }
 
   useEffect(() => {
     const onHash = () => setLocationHash(window.location.hash);
@@ -437,7 +480,7 @@ export function App() {
       .then(setRepository)
       .catch(() => undefined);
     return () => controller.abort();
-  }, [authChecking, user?.id]);
+  }, [authChecking, user?.id, view === "differ"]);
 
   useEffect(() => {
     if (!repository?.shared.connected) {
@@ -476,8 +519,8 @@ export function App() {
   }, [user, repository?.personal?.connected, repository?.personal?.updated_at, uploadStamp]);
 
   useEffect(() => {
-    if (!user?.is_author || !repository?.shared.connected) {
-      setDifferences([]);
+    if (!user?.is_author || !repository?.shared.connected || view !== "differ") {
+      if (!user?.is_author || !repository?.shared.connected) setDifferences([]);
       setDifferLoading(false);
       return;
     }
@@ -506,6 +549,7 @@ export function App() {
     repository?.personal?.connected,
     repository?.personal?.updated_at,
     uploadStamp,
+    view,
   ]);
 
   useEffect(() => {
@@ -1205,6 +1249,7 @@ export function App() {
           )}
         </nav>
         <div className="topbar__end">
+          <ThemeToggle theme={theme} onToggle={toggleTheme} />
           {user ? (
             <button className="button button--quiet" type="button" onClick={() => void logout()} disabled={submitting}>
               Выйти
@@ -1303,6 +1348,10 @@ export function App() {
               <p className="admin-panel__hint">
                 Здесь имя, почта, контакты, свой git и договор автора. Это не граф и не очередь.
               </p>
+            </div>
+            <div className="appearance-row">
+              <p className="admin-panel__hint">Оформление: {theme === "dark" ? "тёмная" : "светлая"} тема. Выбор хранится в этом браузере.</p>
+              <ThemeToggle theme={theme} onToggle={toggleTheme} />
             </div>
             {error && <p className="form-error" role="alert">{error}</p>}
             <div className="tabs tabs--three" role="tablist" aria-label="Блоки настроек">
@@ -1722,7 +1771,7 @@ export function App() {
                   {" · "}{proposalStatusLabel(openProposal.status)}
                   {openProposal.reason ? ` · ${openProposal.reason}` : ""}
                 </p>
-                <GraphDiffView diff={proposalDiff} loading={proposalDiffLoading} />
+                <GraphDiffView diff={proposalDiff} loading={proposalDiffLoading} theme={theme} />
                 {openProposal.diff.map((item) => (
                   <pre key={item.path} className="proposal-diff">{item.diff || item.path}</pre>
                 ))}
@@ -1788,6 +1837,7 @@ export function App() {
                 selectedPath={selectedCardPath}
                 canReadNotes
                 onExpand={setGraphCenter}
+                theme={theme}
               />
             </section>
           )}
@@ -1939,6 +1989,7 @@ export function App() {
               canReadNotes={false}
               onNeedAuth={() => setAuthOpen(true)}
               onExpand={setGraphCenter}
+              theme={theme}
             />
           </section>
         )}
