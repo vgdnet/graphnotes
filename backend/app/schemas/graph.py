@@ -41,6 +41,7 @@ class GraphDiffSummary(BaseModel):
     edges_added: int = 0
     edges_removed: int = 0
     edges_type_changed: int = 0
+    edges_direction_changed: int = 0
     unresolved_resolved: int = 0
     resolved_unresolved: int = 0
     tags_added: int = 0

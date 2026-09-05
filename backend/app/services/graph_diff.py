@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import asyncio
+from collections import OrderedDict
 from dataclasses import dataclass
 import uuid
 
@@ -119,6 +121,7 @@ def _empty_summary() -> dict[str, int]:
         "edges_added": 0,
         "edges_removed": 0,
         "edges_type_changed": 0,
+        "edges_direction_changed": 0,
         "unresolved_resolved": 0,
         "resolved_unresolved": 0,
         "tags_added": 0,
@@ -260,6 +263,19 @@ def compare_snapshots(
                 }
             )
             continue
+        reversed_edge = _matching_reverse(base.edges, edge)
+        if reversed_edge is not None:
+            summary["edges_direction_changed"] += 1
+            edge_change[_edge_tuple(edge)] = "direction_changed"
+            edge_change[_edge_tuple(reversed_edge)] = "direction_changed"
+            changes.append(
+                {
+                    "kind": "direction_changed",
+                    "path": edge.source,
+                    "detail": f"{reversed_edge.source} → {reversed_edge.target} стал {edge.source} → {edge.target}",
+                }
+            )
+            continue
         summary["edges_added"] += 1
         edge_change[_edge_tuple(edge)] = "added"
         changes.append(
@@ -276,6 +292,10 @@ def compare_snapshots(
         typed = _matching_type(head.edges, edge)
         if typed is not None:
             continue
+        if _matching_reverse(head.edges, edge) is not None:
+            continue
+        if _edge_tuple(edge) in edge_change:
+            continue
         summary["edges_removed"] += 1
         edge_change[_edge_tuple(edge)] = "removed"
         changes.append(
@@ -289,6 +309,7 @@ def compare_snapshots(
         + summary["edges_added"]
         + summary["edges_removed"]
         + summary["edges_type_changed"]
+        + summary["edges_direction_changed"]
         + summary["unresolved_resolved"]
         + summary["resolved_unresolved"]
         + summary["tags_added"]
@@ -417,6 +438,22 @@ def _matching_resolution(edges: frozenset[SnapshotEdge], pair: tuple[str, str]) 
     return None
 
 
+def _matching_reverse(edges: frozenset[SnapshotEdge], edge: SnapshotEdge) -> SnapshotEdge | None:
+    if edge.unresolved:
+        return None
+    matches = [
+        item
+        for item in edges
+        if not item.unresolved
+        and item.type == edge.type
+        and item.source == edge.target
+        and item.target == edge.source
+    ]
+    if len(matches) == 1:
+        return matches[0]
+    return None
+
+
 def _matching_type(edges: frozenset[SnapshotEdge], edge: SnapshotEdge) -> SnapshotEdge | None:
     matches = [
         item
@@ -455,6 +492,24 @@ def _incomplete(
     }
 
 
+_DIFF_CACHE: OrderedDict[tuple[object, ...], dict[str, object]] = OrderedDict()
+
+
+def _cache_get(key: tuple[object, ...]) -> dict[str, object] | None:
+    cached = _DIFF_CACHE.get(key)
+    if cached is None:
+        return None
+    _DIFF_CACHE.move_to_end(key)
+    return cached
+
+
+def _cache_put(key: tuple[object, ...], payload: dict[str, object]) -> None:
+    _DIFF_CACHE[key] = payload
+    _DIFF_CACHE.move_to_end(key)
+    while len(_DIFF_CACHE) > settings.graph_diff_cache_max:
+        _DIFF_CACHE.popitem(last=False)
+
+
 async def _tree(client: GitHubAppClient, owner: str, name: str, ref: str) -> dict[str, str]:
     paths = await client.list_markdown_files(owner, name, ref)
     if len(paths) > settings.index_max_notes:
@@ -486,11 +541,36 @@ async def proposal_graph_diff(
             conflicted=conflicted,
             detail="the shared rhizome is not connected",
         )
+    cache_key = (
+        str(row.id),
+        row.base_sha,
+        row.head_sha,
+        row.status,
+        stale,
+        conflicted,
+        limit,
+    )
+    cached = _cache_get(cache_key)
+    if cached is not None:
+        return cached
     try:
-        base_files = await _tree(client, shared.owner, shared.name, row.base_sha)
-        head_files = await _tree(client, shared.owner, shared.name, row.head_sha)
+        base_files, head_files = await asyncio.wait_for(
+            asyncio.gather(
+                _tree(client, shared.owner, shared.name, row.base_sha),
+                _tree(client, shared.owner, shared.name, row.head_sha),
+            ),
+            timeout=settings.graph_diff_timeout_seconds,
+        )
         base = build_snapshot(base_files)
         head = build_snapshot(head_files)
+    except TimeoutError:
+        return _incomplete(
+            proposal_id=str(row.id),
+            status=row.status,
+            stale=stale,
+            conflicted=conflicted,
+            detail="graph diff exceeded the time bound",
+        )
     except GitHubAppError as exc:
         mapped = _github(exc)
         return _incomplete(
@@ -509,13 +589,26 @@ async def proposal_graph_diff(
             conflicted=conflicted,
             detail=detail,
         )
-    return compare_snapshots(
+    complete = base.parse_warnings == 0 and head.parse_warnings == 0
+    payload = compare_snapshots(
         base,
         head,
         proposal_id=str(row.id),
         status=row.status,
         stale=stale,
         conflicted=conflicted,
-        complete=True,
+        complete=complete,
         limit=limit,
     )
+    if not complete:
+        payload["changes"] = [
+            {
+                "kind": "incomplete",
+                "path": "",
+                "detail": "markdown parse warnings; do not treat this graph as complete",
+            },
+            *list(payload["changes"]),
+        ]
+    if complete:
+        _cache_put(cache_key, payload)
+    return payload

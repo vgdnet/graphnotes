@@ -32,6 +32,8 @@ class Settings(BaseSettings):
     index_max_notes: int = 5000
     graph_page_limit: int = 50
     graph_page_max: int = 200
+    graph_diff_timeout_seconds: float = 30.0
+    graph_diff_cache_max: int = 20
     personal_sync_interval_seconds: int = 300
 
     model_config = SettingsConfigDict(

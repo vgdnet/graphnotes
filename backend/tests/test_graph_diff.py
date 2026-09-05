@@ -1,3 +1,5 @@
+from uuid import UUID
+
 from httpx import ASGITransport, AsyncClient
 from pytest import MonkeyPatch
 from sqlalchemy import select
@@ -7,6 +9,7 @@ from app.main import app
 from app.models.github import SharedRepository
 from app.models.user import User
 from app.services.github import GitHubAppError
+from app.models.proposal import Proposal, ProposalStatus
 from app.services.graph_diff import build_snapshot, compare_snapshots
 from app.services.repository import SHARED_SINGLETON_ID
 from tests.test_ingest import _connect_pair, _github, _install
@@ -148,6 +151,14 @@ async def test_graph_diff_author_editor_and_hidden_fields(
     assert reviewed.status_code == 200
     assert reviewed.json()["proposal_id"] == proposal_id
 
+    reads_after_editor = github.file_reads
+    cached = await editor.get("/graph/diff", params={"proposal_id": proposal_id})
+    assert cached.status_code == 200
+    assert github.file_reads == reads_after_editor
+
+    admin_view = await admin.get("/graph/diff", params={"proposal_id": proposal_id})
+    assert admin_view.status_code == 200
+
     tiny = await author.get("/graph/diff", params={"proposal_id": proposal_id, "limit": 1})
     assert tiny.status_code == 200
     assert tiny.json()["truncated"] is True
@@ -195,7 +206,7 @@ async def test_graph_diff_stale_incomplete_and_type_change(
         return await original_get(owner, name, path, ref)
 
     monkeypatch.setattr(github, "get_file", boom)
-    incomplete = await author.get("/graph/diff", params={"proposal_id": proposal_id})
+    incomplete = await author.get("/graph/diff", params={"proposal_id": proposal_id, "limit": 3})
     assert incomplete.status_code == 200
     body = incomplete.json()
     assert body["complete"] is False
@@ -203,3 +214,66 @@ async def test_graph_diff_stale_incomplete_and_type_change(
     assert body["nodes"] == []
     assert body["changes"][0]["kind"] == "incomplete"
     _assert_hidden(incomplete.text)
+
+    async with session_factory() as database:
+        proposal = await database.get(Proposal, UUID(proposal_id))
+        assert proposal is not None
+        proposal.status = ProposalStatus.CONFLICTED.value
+        await database.commit()
+    monkeypatch.setattr(github, "get_file", original_get)
+    conflicted = await author.get("/graph/diff", params={"proposal_id": proposal_id})
+    assert conflicted.status_code == 200
+    assert conflicted.json()["conflicted"] is True
+
+
+def test_edge_removal_direction_properties_and_parse_warnings() -> None:
+    base = build_snapshot(
+        {
+            "a.md": "---\naliases: [old]\n---\n# A\nSee [[b]].\nSee [[c]].\n",
+            "b.md": "# B\nSee [[gone]].\n",
+            "c.md": "# C\n",
+            "gone.md": "# Gone\n",
+        }
+    )
+    head = build_snapshot(
+        {
+            "a.md": "---\naliases: [new]\n---\n# A\n",
+            "b.md": "# B\nSee [[a]].\nSee [[gone]].\n",
+            "c.md": "# C\n",
+        }
+    )
+    payload = compare_snapshots(
+        base,
+        head,
+        proposal_id="p2",
+        status="open",
+        stale=False,
+        conflicted=False,
+        complete=True,
+        limit=50,
+    )
+    summary = payload["summary"]
+    assert summary["edges_removed"] >= 1
+    assert summary["edges_direction_changed"] >= 1
+    assert summary["resolved_unresolved"] >= 1
+    kinds = {item["kind"] for item in payload["changes"]}
+    assert "edge_removed" in kinds
+    assert "direction_changed" in kinds
+    assert "resolved_unresolved" in kinds
+    assert any("properties" in item["detail"] for item in payload["changes"] if item["kind"] == "modified")
+
+    bloated = "---\n" + ("k: " + ("x" * 90) + "\n") * 120 + "---\n# Broken\n"
+    warned = build_snapshot({"broken.md": bloated})
+    assert warned.parse_warnings >= 1
+    rebuilt = build_snapshot({"broken.md": bloated})
+    again = compare_snapshots(
+        warned,
+        rebuilt,
+        proposal_id="p3",
+        status="open",
+        stale=False,
+        conflicted=False,
+        complete=warned.parse_warnings == 0,
+        limit=50,
+    )
+    assert again["empty"] is True

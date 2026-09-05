@@ -952,11 +952,13 @@ export function App() {
       const response = await fetch(`/api/graph/diff?proposal_id=${encodeURIComponent(id)}`);
       if (!response.ok) {
         setProposalDiff(null);
+        setError(await readError(response));
         return;
       }
       setProposalDiff((await response.json()) as GraphDiffResponse);
     } catch {
       setProposalDiff(null);
+      setError("Не удалось посчитать Graph Diff. Текстовый diff предложения ниже — не считайте граф пустым.");
     } finally {
       setProposalDiffLoading(false);
     }

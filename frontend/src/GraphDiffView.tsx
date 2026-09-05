@@ -44,6 +44,7 @@ export type GraphDiffSummary = {
   edges_added: number;
   edges_removed: number;
   edges_type_changed: number;
+  edges_direction_changed: number;
   unresolved_resolved: number;
   resolved_unresolved: number;
   tags_added: number;
@@ -100,6 +101,8 @@ function kindLabel(kind: string): string {
       return "связь исчезнет";
     case "type_changed":
       return "тип связи";
+    case "direction_changed":
+      return "направление связи";
     case "unresolved_resolved":
       return "ссылка найдёт заметку";
     case "resolved_unresolved":
@@ -120,7 +123,9 @@ function summaryLine(summary: GraphDiffSummary): string {
     summary.edges_added ? `+${summary.edges_added} связей` : "",
     summary.edges_removed ? `−${summary.edges_removed} связей` : "",
     summary.edges_type_changed ? `${summary.edges_type_changed} тип связи` : "",
+    summary.edges_direction_changed ? `${summary.edges_direction_changed} направление` : "",
     summary.unresolved_resolved ? `${summary.unresolved_resolved} ссылок найдут заметку` : "",
+    summary.resolved_unresolved ? `${summary.resolved_unresolved} ссылок потеряют заметку` : "",
     summary.tags_added || summary.tags_removed
       ? `теги +${summary.tags_added}/−${summary.tags_removed}`
       : "",
@@ -255,13 +260,14 @@ export function GraphDiffView({
         aria-label="Graph Diff предложения"
         onKeyDown={handleKey}
       />
-      <div className="graph-legend" aria-hidden="true">
-        <span><i className="marker marker--triangle" /> появится</span>
-        <span><i className="marker marker--octagon" /> исчезнет</span>
-        <span><i className="marker marker--rectangle" /> изменится</span>
-        <span><i className="marker marker--diamond" /> переименование</span>
-        <span><i className="marker marker--star" /> нет заметки</span>
-        <span><i className="marker marker--ellipse" /> сосед</span>
+      <div className="graph-legend" role="list" aria-label="Обозначения Graph Diff">
+        <span role="listitem"><i className="marker marker--triangle" aria-hidden="true" /> появится</span>
+        <span role="listitem"><i className="marker marker--octagon" aria-hidden="true" /> исчезнет</span>
+        <span role="listitem"><i className="marker marker--rectangle" aria-hidden="true" /> изменится</span>
+        <span role="listitem"><i className="marker marker--diamond" aria-hidden="true" /> переименование</span>
+        <span role="listitem"><i className="marker marker--star" aria-hidden="true" /> нет заметки</span>
+        <span role="listitem"><i className="marker marker--ellipse" aria-hidden="true" /> сосед</span>
+        <span role="listitem">сплошная линия — текущая связь, пунктир — исчезнет, точка — тип или направление</span>
       </div>
       {selected && (
         <p>
