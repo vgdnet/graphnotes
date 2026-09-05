@@ -20,7 +20,7 @@ import {
 
 type HealthState = "checking" | "online" | "offline";
 type AuthMode = "login" | "register" | "email" | "reset";
-type ShellView = "graph" | "settings" | "differ" | "queue" | "admin" | "card" | "search";
+type ShellView = "graph" | "settings" | "differ" | "queue" | "admin" | "card" | "search" | "about";
 type QueueTab = "new" | "in_progress" | "rejected";
 type SettingsBlock = "profile" | "git" | "contract";
 
@@ -50,8 +50,22 @@ type AuthorContract = {
   version: string;
   title: string;
   responsibility: string;
-  deposit: string;
   withdraw: string;
+  content_license: string;
+  software_license: string;
+  developer: string;
+};
+
+const AUTHOR_CONTRACT_FALLBACK: Omit<AuthorContract, "version" | "title"> = {
+  responsibility:
+    "Принимая договор, вы несёте ответственность за содержание своих заметок и связанных с ними связей, которые предлагаете в общую ризому.",
+  withdraw:
+    "Вы можете отозвать статус автора. GraphNotes запишет время отзыва; новые предложения, загрузки как вклад и подключение git как вклад будут недоступны, пока вы не примете договор снова. Заметки, уже принятые в общую ризому, остаются в её git.",
+  content_license:
+    "(Все карточки распространяются по лицензии WTFPL https://ru.wikipedia.org/wiki/WTFPL, вы имеете право делать с этим текстом что хотите.",
+  software_license:
+    "Программное обеспечение распространяется под лицензией GNU Affero General Public License v3.0",
+  developer: "разработчик программного обеспечения Юрий Ефимов  y@psychoanalyst.pro",
 };
 
 type RepositoryStatus = {
@@ -289,21 +303,17 @@ function personalLabel(status: RepositoryStatus | null): string {
 }
 
 function AuthorContractCopy({ contract }: { contract: AuthorContract | null }) {
-  if (!contract) {
-    return (
-      <div className="contract-copy">
-        <p>Автор отвечает за содержание своих заметок и связанных связей.</p>
-        <p>Принятие фиксирует авторство вклада: кто и когда принял договор.</p>
-        <p>Статус автора можно отозвать; новые вклады блокируются до повторного принятия.</p>
-      </div>
-    );
-  }
+  const copy = contract ?? AUTHOR_CONTRACT_FALLBACK;
   return (
     <div className="contract-copy">
-      <p><strong>{contract.title}</strong> · версия {contract.version}</p>
-      <p>{contract.responsibility}</p>
-      <p>{contract.deposit}</p>
-      <p>{contract.withdraw}</p>
+      {contract ? (
+        <p><strong>{contract.title}</strong> · версия {contract.version}</p>
+      ) : null}
+      <p>{copy.responsibility}</p>
+      <p>{copy.withdraw}</p>
+      <p>{copy.content_license}</p>
+      <p>{copy.software_license}</p>
+      <p>{copy.developer}</p>
     </div>
   );
 }
@@ -1333,6 +1343,32 @@ export function App() {
     setSettingsBlock(block);
   }
 
+  function openAbout() {
+    backToGraph();
+    setAuthOpen(false);
+    setView("about");
+  }
+
+  const legalAboutPanel = (
+    <section className="notes-panel" aria-labelledby="about-heading">
+      <div>
+        <p className="eyebrow">Правовое</p>
+        <h2 id="about-heading">О программе</h2>
+        <p className="admin-panel__hint">
+          Лицензии карточек и программы. Договор автора принимается в настройках.
+        </p>
+      </div>
+      <AuthorContractCopy contract={authorContract} />
+      {user ? (
+        <div className="settings-actions">
+          <button className="button button--quiet" type="button" onClick={() => openSettings("contract")}>
+            Договор автора
+          </button>
+        </div>
+      ) : null}
+    </section>
+  );
+
   return (
     <main className="shell">
       <header className="topbar">
@@ -2135,6 +2171,7 @@ export function App() {
               onConnectShared={connectShared}
             />
           )}
+          {view === "about" && legalAboutPanel}
         </>
       ) : (
         <>
@@ -2254,7 +2291,8 @@ export function App() {
             </div>
           </section>
         )}
-        {view !== "card" && view !== "search" && repository?.shared.connected && (
+        {view === "about" && legalAboutPanel}
+        {view !== "card" && view !== "search" && view !== "about" && repository?.shared.connected && (
           <section className="notes-panel notes-panel--graph" aria-labelledby="public-graph-heading">
             <div>
               <p className="eyebrow">Граф</p>
@@ -2275,6 +2313,18 @@ export function App() {
           </section>
         )}
         </>
+      )}
+      {!authChecking && (
+        <footer className="legal-footer">
+          <button
+            className={view === "about" ? "button button--quiet tab--active" : "button button--quiet"}
+            type="button"
+            onClick={() => openAbout()}
+          >
+            О программе
+          </button>
+          <span>Карточки — WTFPL. Программа — AGPL-3.0.</span>
+        </footer>
       )}
     </main>
   );

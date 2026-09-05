@@ -183,8 +183,10 @@ class AuthorContractResponse(BaseModel):
     version: str
     title: str
     responsibility: str
-    deposit: str
     withdraw: str
+    content_license: str
+    software_license: str
+    developer: str
 
 
 class AuthorAcceptRequest(BaseModel):

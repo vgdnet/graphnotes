@@ -63,6 +63,10 @@ async def test_contribute_requires_author_contract(
     assert contract.status_code == 200
     assert contract.json()["version"] == AUTHOR_CONTRACT_VERSION
     assert "ответственность" in contract.json()["responsibility"].casefold()
+    assert "wtfpl" in contract.json()["content_license"].casefold()
+    assert "affero" in contract.json()["software_license"].casefold()
+    assert "ефимов" in contract.json()["developer"].casefold()
+    assert "deposit" not in contract.json()
     _assert_no_secrets_or_shas(contract.text)
 
     refused = await guest.post("/author/accept", json={"accepted": False})
