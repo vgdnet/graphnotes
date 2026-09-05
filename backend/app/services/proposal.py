@@ -18,7 +18,14 @@ from app.services.closed_corpus import closed_paths_for_user
 from app.services.git_paths import PathError, normalize_git_path
 from app.services.sync import refresh_caller_git
 from app.services.github import GitHubAppClient, GitHubAppError
-from app.services.index import IndexerError, rebuild_shared
+from app.services.index import (
+    IndexerError,
+    drop_proposal_notes,
+    index_proposal_notes,
+    rebuild_shared,
+)
+from app.services.markdown import parse_markdown
+from app.services.notify import notify_new_proposal
 from app.services.repository import SHARED_SINGLETON_ID, apply_snapshot, published_sha
 
 
@@ -209,6 +216,14 @@ async def create_proposal(
         head_sha=head,
     )
     database.add(row)
+    await database.flush()
+    await index_proposal_notes(
+        database,
+        proposal_id=proposal_id,
+        owner_id=user.id,
+        revision=head,
+        files=to_commit,
+    )
     record_audit_event(
         database,
         action="proposal.created",
@@ -218,6 +233,16 @@ async def create_proposal(
     )
     await database.commit()
     await database.refresh(row)
+    try:
+        await notify_new_proposal(
+            database,
+            author=user,
+            summary=label,
+            proposal_id=str(proposal_id),
+        )
+        await database.commit()
+    except Exception:
+        await database.rollback()
     return _public(row, user, added=added, changed=changed)
 
 
@@ -255,6 +280,43 @@ async def proposal_for_viewer(
     return row
 
 
+async def get_proposal_card(
+    database: AsyncSession,
+    user: User,
+    proposal_id: uuid.UUID,
+    path: str,
+    client: GitHubAppClient,
+) -> dict[str, object]:
+    try:
+        normalized = normalize_git_path(path)
+    except PathError as exc:
+        raise ProposalError(400, str(exc)) from exc
+    row = await proposal_for_viewer(database, user, proposal_id)
+    if normalized not in _paths(row.scope_paths):
+        raise ProposalError(404, "note was not found")
+    shared = await database.get(SharedRepository, SHARED_SINGLETON_ID)
+    if shared is None:
+        raise ProposalError(404, "note was not found")
+    text = await _file(client, shared.owner, shared.name, normalized, row.head_sha)
+    if text is None:
+        raise ProposalError(404, "note was not found")
+    parsed = parse_markdown(normalized, text)
+    return {
+        "path": normalized,
+        "title": parsed.title,
+        "tags": list(parsed.tags),
+        "aliases": list(parsed.aliases),
+        "links": list(parsed.links),
+        "unresolved_links": [],
+        "locked_links": [],
+        "warnings": list(parsed.warnings),
+        "body": parsed.body,
+        "content_hash": parsed.content_hash,
+        "locked": False,
+        "closed": False,
+    }
+
+
 async def get_proposal(
     database: AsyncSession,
     user: User,
@@ -278,7 +340,13 @@ async def get_proposal(
                 added.append(path)
             elif before != after:
                 changed.append(path)
-            diffs.append({"path": path, "diff": _diff(path, before or "", after or "")})
+            diffs.append(
+                {
+                    "path": path,
+                    "diff": _diff(path, before or "", after or ""),
+                    "body": after or "",
+                }
+            )
     return _public(row, author, added=added, changed=changed, diffs=diffs)
 
 
@@ -372,6 +440,7 @@ async def reconcile_proposals(database: AsyncSession, client: GitHubAppClient) -
                     row.status = ProposalStatus.PUBLISHED.value
                     row.published_at = datetime.now(UTC)
                     row.error = None
+                    await drop_proposal_notes(database, row.id)
             except (GitHubAppError, IndexerError) as exc:
                 row.status = ProposalStatus.FAILED.value
                 row.error = str(getattr(exc, "detail", exc))[:255]
@@ -436,6 +505,7 @@ async def _approve(
             row.status = ProposalStatus.PUBLISHED.value
             row.published_at = datetime.now(UTC)
             row.error = None
+            await drop_proposal_notes(database, row.id)
             await record_publication_events(
                 database, row, before_paths=before_paths, before_edges=before_edges
             )

@@ -44,6 +44,7 @@ class Settings(BaseSettings):
     smtp_timeout_seconds: float = 15.0
     public_base_url: str = ""
     mail_code_ttl_minutes: int = 30
+    telegram_bot_token: str = ""
 
     model_config = SettingsConfigDict(
         env_file=PROJECT_ROOT / ".env",

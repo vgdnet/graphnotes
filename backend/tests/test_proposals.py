@@ -92,6 +92,7 @@ async def test_user_proposal_editor_review_and_publication(
     assert detail.status_code == 200
     assert detail.json()["diff"][0]["path"] in {"already.md", "card.md"}
     assert any(item["diff"] for item in detail.json()["diff"])
+    assert any(item.get("body") for item in detail.json()["diff"])
     _assert_hidden(detail.text)
 
     rejected = await editor.post(
@@ -99,6 +100,10 @@ async def test_user_proposal_editor_review_and_publication(
     )
     assert rejected.status_code == 200
     assert rejected.json()["status"] == "rejected"
+    assert rejected.json()["reason"] == "needs a clearer title"
+    author_rejected = await author.get(f"/proposals/{proposal['id']}")
+    assert author_rejected.status_code == 200
+    assert author_rejected.json()["reason"] == "needs a clearer title"
     assert "already.md" not in github.repos["vgdnet/rhizome"].files
 
     second = await author.post(
@@ -112,6 +117,9 @@ async def test_user_proposal_editor_review_and_publication(
     )
     assert changes.status_code == 200
     assert changes.json()["status"] == "changes_requested"
+    assert changes.json()["reason"] == "add a link"
+    author_returned = await author.get(f"/proposals/{second.json()['id']}")
+    assert author_returned.json()["reason"] == "add a link"
     assert "already.md" not in github.repos["vgdnet/rhizome"].files
 
     third = await author.post(
@@ -350,5 +358,37 @@ async def test_differ_pulls_latest_personal_git_after_obsidian_push(
     assert body["obsidian.md"] == "added"
     _assert_hidden(after.text)
 
+    await author.aclose()
+
+
+async def test_new_proposal_notifies_opted_in_editors(
+    auth_test_context: tuple[AsyncClient, async_sessionmaker[AsyncSession]],
+    monkeypatch: MonkeyPatch,
+) -> None:
+    from tests.test_smtp_and_admin import _enable_smtp
+
+    admin, session_factory = auth_test_context
+    github = _install(monkeypatch, _github())
+    github.repos["vgdnet/guide_psy"].files["card.md"] = "# Personal card\n"
+    await _admin(admin, session_factory, "notify-admin")
+    quiet = await _second("quiet-ed")
+    users = await admin.get("/admin/users")
+    quiet_id = next(item["id"] for item in users.json()["users"] if item["username"] == "quiet-ed")
+    assert (await admin.patch(f"/admin/users/{quiet_id}", json={"role": "editor"})).status_code == 200
+    author = await _second("author-ed")
+    await _connect_pair(author, "vgdnet/guide_psy")
+    sent = _enable_smtp(monkeypatch)
+    await admin.patch("/users/me", json={"notify_queue_email": True})
+    created = await author.post(
+        "/proposals",
+        json={"paths": ["card.md"], "summary": "Share card", "expected_sha": github.repos["vgdnet/guide_psy"].sha},
+    )
+    assert created.status_code == 200
+    queue_mail = [item for item in sent if "Новые правки" in item["subject"]]
+    assert len(queue_mail) == 1
+    assert queue_mail[0]["to"] == "notify-admin@example.com"
+    assert "Share card" in queue_mail[0]["body"]
+    assert "quiet-ed@example.com" not in {item["to"] for item in queue_mail}
+    await quiet.aclose()
     await author.aclose()
 

@@ -48,15 +48,29 @@ GRAPHNOTES_SMTP_USE_TLS=true
 GRAPHNOTES_PUBLIC_BASE_URL
 ```
 
-`GRAPHNOTES_PUBLIC_BASE_URL` is the public origin used in confirmation and
-login links (for example `http://172.16.13.14:8080` on rhizome-test). If it
-is empty, mail still carries the one-time code.
+`GRAPHNOTES_PUBLIC_BASE_URL` is the public origin used in confirmation,
+login and password-reset links (for example `http://172.16.13.14:8080` on
+rhizome-test). If it is empty, mail still carries the one-time code.
+
+The working send path is **SMTP port 587 with STARTTLS**
+(`GRAPHNOTES_SMTP_USE_TLS=true`). Do not set 993 (IMAP). Do not write the
+mailbox password into git, docs, or `compose.yaml`.
+
+Optional queue Telegram (notify channel, not login):
+
+```text
+GRAPHNOTES_TELEGRAM_BOT_TOKEN
+```
+
+Leave empty when there is no bot. Preferences still persist.
 
 When SMTP is configured, registration waits for confirmation (code or
 link) before a session is opened. Password login then accepts username or
-email. An admin may send a test message with `POST /api/admin/mail/test`.
-When SMTP is not configured, those mail endpoints return 503 and the
-existing password session-on-register path remains.
+email. A user may reset a forgotten password with the same code/link
+(`POST /api/auth/password/reset`). An admin may send a test message with
+`POST /api/admin/mail/test`. When SMTP is not configured, those mail
+endpoints return 503 and the existing password session-on-register path
+remains.
 
 ## Recovery
 

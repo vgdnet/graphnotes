@@ -36,6 +36,12 @@ class User(Base):
     telegram: Mapped[str | None] = mapped_column(String(64), nullable=True)
     phone_public: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
     telegram_public: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
+    notify_queue_email: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default=false()
+    )
+    notify_queue_telegram: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default=false()
+    )
     website: Mapped[str | None] = mapped_column(String(300), nullable=True)
     role: Mapped[str] = mapped_column(String(16), default=UserRole.USER.value)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)

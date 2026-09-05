@@ -13,6 +13,7 @@ from app.models.user import User
 
 CONFIRM_PURPOSE = "confirm"
 LOGIN_PURPOSE = "login"
+RESET_PURPOSE = "reset"
 
 
 class MailNotConfiguredError(RuntimeError):
@@ -39,8 +40,20 @@ def smtp_public_status() -> dict[str, object]:
     }
 
 
-def hash_mail_secret(value: str) -> str:
-    return hashlib.sha256(value.encode("utf-8")).hexdigest()
+def telegram_configured() -> bool:
+    return bool(settings.telegram_bot_token.strip())
+
+
+def telegram_public_status() -> dict[str, object]:
+    return {"configured": telegram_configured()}
+
+
+def _smtp_error_text(exc: BaseException) -> str:
+    text = str(exc).strip() or exc.__class__.__name__
+    secret = settings.smtp_password.strip()
+    if secret and secret in text:
+        text = text.replace(secret, "[redacted]")
+    return text[:300]
 
 
 def send_plaintext_mail(*, to_address: str, subject: str, body: str) -> None:
@@ -51,19 +64,29 @@ def send_plaintext_mail(*, to_address: str, subject: str, body: str) -> None:
     message["To"] = to_address
     message["Subject"] = subject
     message.set_content(body)
+    host = settings.smtp_host.strip()
+    port = settings.smtp_port
     try:
-        with smtplib.SMTP(
-            settings.smtp_host.strip(),
-            settings.smtp_port,
-            timeout=settings.smtp_timeout_seconds,
-        ) as client:
-            if settings.smtp_use_tls:
+        if port == 465:
+            client_cm = smtplib.SMTP_SSL(
+                host, port, timeout=settings.smtp_timeout_seconds
+            )
+        else:
+            client_cm = smtplib.SMTP(
+                host, port, timeout=settings.smtp_timeout_seconds
+            )
+        with client_cm as client:
+            if port != 465 and settings.smtp_use_tls:
                 client.starttls()
             if settings.smtp_username.strip():
                 client.login(settings.smtp_username, settings.smtp_password)
             client.send_message(message)
-    except OSError as exc:
-        raise MailDeliveryError("SMTP delivery failed") from exc
+    except (OSError, smtplib.SMTPException) as exc:
+        raise MailDeliveryError(_smtp_error_text(exc)) from exc
+
+
+def hash_mail_secret(value: str) -> str:
+    return hashlib.sha256(value.encode("utf-8")).hexdigest()
 
 
 def _public_base() -> str:
@@ -98,6 +121,41 @@ def login_mail(user: User, token: str, code: str) -> tuple[str, str]:
         lines.extend(["", f"Или откройте ссылку: {link}"])
     lines.extend(["", "Если вы не запрашивали вход, письмо можно игнорировать."])
     return "Вход в GraphNotes", "\n".join(lines)
+
+
+def reset_mail(user: User, token: str, code: str) -> tuple[str, str]:
+    base = _public_base()
+    link = f"{base}/#/auth/reset?token={token}" if base else ""
+    lines = [
+        f"Здравствуйте, {user.display_name}.",
+        "",
+        "Сброс пароля GraphNotes.",
+        f"Код: {code}",
+    ]
+    if link:
+        lines.extend(["", f"Или откройте ссылку: {link}"])
+    lines.extend(["", "Если вы не запрашивали сброс, письмо можно игнорировать."])
+    return "Сброс пароля GraphNotes", "\n".join(lines)
+
+
+def queue_notify_mail(
+    recipient: User,
+    *,
+    author_name: str,
+    summary: str,
+) -> tuple[str, str]:
+    base = _public_base()
+    link = f"{base}/#/" if base else ""
+    lines = [
+        f"Здравствуйте, {recipient.display_name}.",
+        "",
+        "Новые правки пришли по ризоме.",
+        f"Автор: {author_name}",
+        f"Предложение: {summary}",
+    ]
+    if link:
+        lines.extend(["", f"Очередь: {link}"])
+    return "Новые правки по ризоме", "\n".join(lines)
 
 
 def test_mail(to_address: str) -> tuple[str, str]:

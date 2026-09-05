@@ -11,11 +11,18 @@ from app.schemas.auth import UserResponse, normalize_username
 class AdminUserUpdate(BaseModel):
     role: UserRole | None = None
     is_active: bool | None = None
+    notify_queue_email: bool | None = None
+    notify_queue_telegram: bool | None = None
 
     @model_validator(mode="after")
     def require_change(self) -> "AdminUserUpdate":
-        if self.role is None and self.is_active is None:
-            raise ValueError("role or is_active must be provided")
+        if (
+            self.role is None
+            and self.is_active is None
+            and self.notify_queue_email is None
+            and self.notify_queue_telegram is None
+        ):
+            raise ValueError("a user field to update must be provided")
         return self
 
 
@@ -93,6 +100,7 @@ class AdminMailTestResponse(BaseModel):
 
 class AdminOperatorResponse(BaseModel):
     smtp: dict[str, object]
+    telegram: dict[str, object] = {"configured": False}
     health: dict[str, str]
     shared_repository: dict[str, object] | None = None
     public_base_url: str | None = None

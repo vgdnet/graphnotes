@@ -3,7 +3,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Annotated
 
 from fastapi import APIRouter, Cookie, HTTPException, Response, status
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import joinedload
 from starlette.concurrency import run_in_threadpool
@@ -17,6 +17,7 @@ from app.schemas.auth import (
     EmailVerifyRequest,
     LoginRequest,
     MailStatusResponse,
+    PasswordResetRequest,
     RegisterRequest,
     UserResponse,
 )
@@ -33,12 +34,14 @@ from app.services.auth import (
 from app.services.mail import (
     CONFIRM_PURPOSE,
     LOGIN_PURPOSE,
+    RESET_PURPOSE,
     MailDeliveryError,
     MailNotConfiguredError,
     confirmation_mail,
     consume_email_token,
     issue_email_token,
     login_mail,
+    reset_mail,
     send_plaintext_mail,
     smtp_configured,
 )
@@ -65,6 +68,8 @@ async def _open_session(database, user: User) -> str:
 async def _send_user_mail(user: User, purpose: str, token: str, code: str) -> None:
     if purpose == LOGIN_PURPOSE:
         subject, body = login_mail(user, token, code)
+    elif purpose == RESET_PURPOSE:
+        subject, body = reset_mail(user, token, code)
     else:
         subject, body = confirmation_mail(user, token, code)
     await run_in_threadpool(
@@ -277,6 +282,55 @@ async def request_email_code(
         details={"purpose": payload.purpose},
     )
     await database.commit()
+
+
+@router.post("/password/reset", response_model=UserResponse)
+async def reset_password(
+    payload: PasswordResetRequest,
+    response: Response,
+    database: DatabaseSession,
+) -> User:
+    if not smtp_configured():
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="SMTP is not configured",
+        )
+    user = await consume_email_token(
+        database,
+        purpose=RESET_PURPOSE,
+        token=payload.token,
+        code=payload.code,
+        email=payload.email,
+    )
+    if user is None:
+        record_audit_event(
+            database,
+            action="auth.password_reset_failed",
+            subject_username=(payload.email or "")[:32] or None,
+            details={"reason": "invalid_email_code"},
+        )
+        await database.commit()
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="invalid or expired email code",
+        )
+    user.password_hash = await run_in_threadpool(hash_password, payload.password)
+    if user.email_verified_at is None:
+        user.email_verified_at = datetime.now(UTC)
+    await database.execute(delete(AuthSession).where(AuthSession.user_id == user.id))
+    token = await _open_session(database, user)
+    record_audit_event(
+        database,
+        action="auth.password_reset",
+        actor_user_id=user.id,
+        target_user_id=user.id,
+        subject_username=user.username,
+        details={},
+    )
+    await database.commit()
+    await database.refresh(user)
+    set_session_cookie(response, token)
+    return user
 
 
 @router.post("/email/verify", response_model=UserResponse)

@@ -51,6 +51,7 @@ def _enable_smtp(monkeypatch: MonkeyPatch) -> list[dict]:
     monkeypatch.setattr("app.services.mail.send_plaintext_mail", fake_send)
     monkeypatch.setattr("app.api.auth.send_plaintext_mail", fake_send)
     monkeypatch.setattr("app.api.admin.send_plaintext_mail", fake_send)
+    monkeypatch.setattr("app.services.notify.send_plaintext_mail", fake_send)
     return sent
 
 
@@ -228,3 +229,113 @@ async def test_admin_create_search_revoke_audit_filters_and_mail_test(
         user = await database.scalar(select(User).where(User.username == "invited"))
         assert user is not None
         assert user.role == "editor"
+
+
+async def test_password_reset_by_email_code_and_link(
+    auth_test_context: tuple[AsyncClient, async_sessionmaker[AsyncSession]],
+    monkeypatch: MonkeyPatch,
+) -> None:
+    client, session_factory = auth_test_context
+    sent = _enable_smtp(monkeypatch)
+    await _register(client, "reset-me", email="reset-me@example.com")
+    await client.post("/auth/logout")
+
+    missing = await client.post(
+        "/auth/password/reset",
+        json={"email": "reset-me@example.com", "code": "000000", "password": "brand new long password"},
+    )
+    assert missing.status_code == 401
+
+    asked = await client.post(
+        "/auth/email/request",
+        json={"email": "reset-me@example.com", "purpose": "reset"},
+    )
+    assert asked.status_code == 204
+    assert "Сброс пароля" in sent[-1]["subject"]
+    assert "http://rhizome.test/#/auth/reset" in sent[-1]["body"]
+    code = sent[-1]["body"].split("Код: ", 1)[1].splitlines()[0].strip()
+    assert "brand new long password" not in sent[-1]["body"]
+
+    changed = await client.post(
+        "/auth/password/reset",
+        json={
+            "email": "reset-me@example.com",
+            "code": code,
+            "password": "brand new long password",
+        },
+    )
+    assert changed.status_code == 200
+    assert changed.json()["username"] == "reset-me"
+    assert client.cookies.get("graphnotes_session")
+    await client.post("/auth/logout")
+
+    old = await client.post(
+        "/auth/login",
+        json={"username": "reset-me", "password": "a sufficiently long password"},
+    )
+    assert old.status_code == 401
+    fresh = await client.post(
+        "/auth/login",
+        json={"username": "reset-me@example.com", "password": "brand new long password"},
+    )
+    assert fresh.status_code == 200
+    await client.post("/auth/logout")
+
+    asked_again = await client.post(
+        "/auth/email/request",
+        json={"email": "reset-me@example.com", "purpose": "reset"},
+    )
+    assert asked_again.status_code == 204
+    token = sent[-1]["body"].split("token=", 1)[1].split()[0]
+    via_link = await client.post(
+        "/auth/password/reset",
+        json={"token": token, "password": "another long password"},
+    )
+    assert via_link.status_code == 200
+    async with session_factory() as database:
+        actions = set((await database.scalars(select(AuditEvent.action))).all())
+        assert "auth.password_reset" in actions
+        serialized = " ".join(
+            str(item.details) for item in (await database.scalars(select(AuditEvent))).all()
+        )
+        assert "brand new long password" not in serialized
+        assert "another long password" not in serialized
+
+
+async def test_notify_prefs_default_off_and_admin_toggle(
+    auth_test_context: tuple[AsyncClient, async_sessionmaker[AsyncSession]],
+) -> None:
+    admin, session_factory = auth_test_context
+    await _admin(admin, session_factory, "notify-admin")
+    me = await admin.get("/users/me")
+    assert me.json()["notify_queue_email"] is False
+    assert me.json()["notify_queue_telegram"] is False
+    patched = await admin.patch(
+        "/users/me",
+        json={"notify_queue_email": True, "notify_queue_telegram": True},
+    )
+    assert patched.status_code == 200
+    assert patched.json()["notify_queue_email"] is True
+    assert patched.json()["notify_queue_telegram"] is True
+
+    created = await admin.post(
+        "/admin/users",
+        json={
+            "username": "queue-ed",
+            "password": "editor long password",
+            "display_name": "Queue Ed",
+            "email": "queue-ed@example.com",
+            "role": "editor",
+        },
+    )
+    editor_id = created.json()["id"]
+    assert created.json()["notify_queue_email"] is False
+    toggled = await admin.patch(
+        f"/admin/users/{editor_id}",
+        json={"notify_queue_email": True},
+    )
+    assert toggled.status_code == 200
+    assert toggled.json()["notify_queue_email"] is True
+    assert toggled.json()["notify_queue_telegram"] is False
+    operator = await admin.get("/admin/operator")
+    assert operator.json()["telegram"]["configured"] is False

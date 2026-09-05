@@ -34,6 +34,7 @@ from app.services.mail import (
     send_plaintext_mail,
     smtp_configured,
     smtp_public_status,
+    telegram_public_status,
     test_mail,
 )
 
@@ -242,6 +243,29 @@ async def update_user(
                 delete(AuthSession).where(AuthSession.user_id == target.id)
             )
 
+    notify_changed: dict[str, bool] = {}
+    if (
+        payload.notify_queue_email is not None
+        and payload.notify_queue_email != target.notify_queue_email
+    ):
+        target.notify_queue_email = payload.notify_queue_email
+        notify_changed["email"] = payload.notify_queue_email
+    if (
+        payload.notify_queue_telegram is not None
+        and payload.notify_queue_telegram != target.notify_queue_telegram
+    ):
+        target.notify_queue_telegram = payload.notify_queue_telegram
+        notify_changed["telegram"] = payload.notify_queue_telegram
+    if notify_changed:
+        record_audit_event(
+            database,
+            action="admin.user_notify_changed",
+            actor_user_id=admin.id,
+            target_user_id=target.id,
+            subject_username=target.username,
+            details=notify_changed,
+        )
+
     await database.commit()
     await database.refresh(target)
     return target
@@ -409,6 +433,7 @@ async def operator_status(
     smtp = smtp_public_status()
     return AdminOperatorResponse(
         smtp=smtp,
+        telegram=telegram_public_status(),
         health=health,
         shared_repository=shared_body,
         public_base_url=smtp.get("public_base_url") if isinstance(smtp, dict) else None,
@@ -445,7 +470,7 @@ async def send_test_mail(
         await database.commit()
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="SMTP delivery failed",
+            detail=str(exc) or "SMTP delivery failed",
         ) from exc
     record_audit_event(
         database,

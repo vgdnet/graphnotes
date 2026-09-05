@@ -10,6 +10,8 @@ export type AdminUser = {
   display_name: string;
   phone: string | null;
   telegram: string | null;
+  notify_queue_email: boolean;
+  notify_queue_telegram: boolean;
   role: AdminRole;
   is_active: boolean;
   is_author: boolean;
@@ -47,6 +49,7 @@ type OperatorStatus = {
     use_tls?: boolean | null;
     public_base_url?: string | null;
   };
+  telegram?: { configured?: boolean };
   health: { status: string; database: string };
   shared_repository: { connected: boolean; owner?: string; name?: string; status?: string; index_status?: string } | null;
   public_base_url: string | null;
@@ -71,6 +74,10 @@ const ACTION_LABELS: Record<string, string> = {
   "mail.code_sent": "письмо со кодом",
   "mail.test_sent": "проверочное письмо",
   "mail.test_failed": "ошибка проверочного письма",
+  "auth.password_reset": "сброс пароля по почте",
+  "admin.user_notify_changed": "уведомления очереди",
+  "notify.queue_sent": "письмо о новых правках",
+  "notify.queue_failed": "ошибка уведомления очереди",
   "index.rebuild": "пересборка индекса",
 };
 
@@ -191,7 +198,7 @@ export function AdminPanel({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  async function updateManagedUser(managedUser: AdminUser, change: { role?: AdminRole; is_active?: boolean }) {
+  async function updateManagedUser(managedUser: AdminUser, change: { role?: AdminRole; is_active?: boolean; notify_queue_email?: boolean; notify_queue_telegram?: boolean }) {
     onSubmitting(true);
     onError("");
     try {
@@ -480,6 +487,28 @@ export function AdminPanel({
                         : ""}
                     </p>
                   )}
+                  {(managedUser.role === "editor" || managedUser.role === "admin") && (
+                    <div className="settings-actions">
+                      <label className="contract-check">
+                        <input
+                          type="checkbox"
+                          checked={managedUser.notify_queue_email}
+                          disabled={submitting}
+                          onChange={(event) => void updateManagedUser(managedUser, { notify_queue_email: event.target.checked })}
+                        />
+                        <span>Письмо о новых правках</span>
+                      </label>
+                      <label className="contract-check">
+                        <input
+                          type="checkbox"
+                          checked={managedUser.notify_queue_telegram}
+                          disabled={submitting}
+                          onChange={(event) => void updateManagedUser(managedUser, { notify_queue_telegram: event.target.checked })}
+                        />
+                        <span>Telegram о новых правках</span>
+                      </label>
+                    </div>
+                  )}
                   <form
                     className="user-row__password"
                     onSubmit={(event) => {
@@ -593,6 +622,7 @@ export function AdminPanel({
               ? `${operator.smtp.from_address} через ${operator.smtp.host}:${operator.smtp.port}`
               : "не настроен; вход паролем работает, письма подтверждения и кода нет."}
             {operator.public_base_url ? ` Публичный URL: ${operator.public_base_url}.` : " GRAPHNOTES_PUBLIC_BASE_URL не задан — в письме будет только код."}
+            {" "}Telegram-уведомления: {operator.telegram?.configured ? "бот задан" : "GRAPHNOTES_TELEGRAM_BOT_TOKEN нет — предпочтение сохраняется, письма в Telegram не уходят. Это не вход."}
           </p>
           <div className="settings-actions">
             <button className="button button--quiet" type="button" onClick={() => void onConnectShared()} disabled={submitting}>

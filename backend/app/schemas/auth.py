@@ -64,7 +64,7 @@ class LoginRequest(BaseModel):
 
 class EmailRequest(BaseModel):
     email: EmailStr
-    purpose: str = Field(pattern="^(confirm|login)$")
+    purpose: str = Field(pattern="^(confirm|login|reset)$")
 
     @field_validator("email")
     @classmethod
@@ -92,6 +92,26 @@ class EmailVerifyRequest(BaseModel):
         return self
 
 
+class PasswordResetRequest(BaseModel):
+    password: str = Field(min_length=12, max_length=128)
+    email: EmailStr | None = None
+    token: str | None = Field(default=None, min_length=8, max_length=128)
+    code: str | None = Field(default=None, min_length=6, max_length=6)
+
+    @field_validator("email")
+    @classmethod
+    def normalize_email(cls, value: EmailStr | None) -> str | None:
+        if value is None:
+            return None
+        return str(value).casefold()
+
+    @model_validator(mode="after")
+    def require_secret(self) -> "PasswordResetRequest":
+        if not self.token and not self.code:
+            raise ValueError("token or code must be provided")
+        return self
+
+
 class MailStatusResponse(BaseModel):
     configured: bool
 
@@ -107,6 +127,8 @@ class UserResponse(BaseModel):
     telegram: str | None = None
     phone_public: bool = False
     telegram_public: bool = False
+    notify_queue_email: bool = False
+    notify_queue_telegram: bool = False
     website: str | None = None
     role: str
     is_active: bool
@@ -127,6 +149,8 @@ class ProfileUpdateRequest(BaseModel):
     telegram: str | None = Field(default=None, max_length=64)
     phone_public: bool | None = None
     telegram_public: bool | None = None
+    notify_queue_email: bool | None = None
+    notify_queue_telegram: bool | None = None
     website: str | None = Field(default=None, max_length=300)
 
     @field_validator("display_name")

@@ -19,7 +19,7 @@ import {
 } from "./theme";
 
 type HealthState = "checking" | "online" | "offline";
-type AuthMode = "login" | "register" | "email";
+type AuthMode = "login" | "register" | "email" | "reset";
 type ShellView = "graph" | "settings" | "differ" | "queue" | "admin" | "card" | "search";
 type QueueTab = "new" | "in_progress" | "rejected";
 type SettingsBlock = "profile" | "git" | "contract";
@@ -33,6 +33,8 @@ type User = {
   telegram: string | null;
   phone_public: boolean;
   telegram_public: boolean;
+  notify_queue_email: boolean;
+  notify_queue_telegram: boolean;
   website: string | null;
   role: "user" | "editor" | "admin";
   is_active: boolean;
@@ -203,11 +205,12 @@ type UserCard = {
 type UploadEventItem = { path: string; content_hash: string; created_at: string };
 type UploadHistoryResponse = { events: UploadEventItem[] };
 
-function parseAuthHash(hash: string): { purpose: "confirm" | "login"; token: string } | null {
+function parseAuthHash(hash: string): { purpose: "confirm" | "login" | "reset"; token: string } | null {
   const value = hash.startsWith("#") ? hash.slice(1) : hash;
-  const match = value.match(/^\/auth\/(confirm|login-code)\?token=([^&]+)$/);
+  const match = value.match(/^\/auth\/(confirm|login-code|reset)\?token=([^&]+)$/);
   if (!match) return null;
-  return { purpose: match[1] === "confirm" ? "confirm" : "login", token: decodeURIComponent(match[2]) };
+  const purpose = match[1] === "confirm" ? "confirm" : match[1] === "reset" ? "reset" : "login";
+  return { purpose, token: decodeURIComponent(match[2]) };
 }
 
 function differKindLabel(kind: string): string {
@@ -219,8 +222,8 @@ function differKindLabel(kind: string): string {
 function proposalQueueTab(status: string): QueueTab | null {
   if (status === "rejected") return "rejected";
   if (status === "changes_requested") return "in_progress";
-  if (status === "published") return null;
-  return "new";
+  if (status === "open" || status === "conflicted" || status === "failed") return "new";
+  return null;
 }
 
 function proposalCardTitle(path: string, body: string): string {
@@ -356,6 +359,7 @@ export function App() {
   const [error, setError] = useState("");
   const [mailConfigured, setMailConfigured] = useState(false);
   const [authNote, setAuthNote] = useState("");
+  const [resetToken, setResetToken] = useState("");
   const [repository, setRepository] = useState<RepositoryStatusResponse | null>(null);
   const [sharedNotes, setSharedNotes] = useState<NoteProjection[]>([]);
   const [personalNotes, setPersonalNotes] = useState<NoteProjection[]>([]);
@@ -679,8 +683,10 @@ export function App() {
       });
       return;
     }
-    const filePath = path.startsWith("personal:") ? path.slice("personal:".length) : path;
-    const originKind = origin === "personal" || path.startsWith("personal:") ? "personal" : "shared";
+    const isPersonal = path.startsWith("personal:");
+    const isProposal = path.startsWith("proposal:");
+    const filePath = isPersonal ? path.slice("personal:".length).replace(/^[0-9a-f-]{36}:/i, "") : path;
+    const originKind = origin === "personal" || isPersonal ? "personal" : "shared";
     const endpoint = cardApiUrl(path);
     setSubmitting(true);
     setError("");
@@ -691,7 +697,7 @@ export function App() {
       const detail = (await response.json()) as NoteDetail;
       setOpenNote(detail);
       setSelectedCardPath(path.startsWith("personal:") ? path : detail.path);
-      if (!detail.locked) {
+      if (!detail.locked && !isPersonal && !isProposal) {
         const [feed, comments] = await Promise.all([
           originKind === "personal"
             ? Promise.resolve(null)
@@ -842,18 +848,23 @@ export function App() {
     setSubmitting(true);
     setError("");
     try {
+      const profileBody: Record<string, unknown> = {
+        display_name: form.get("displayName"),
+        email: form.get("email"),
+        phone: form.get("phone") || null,
+        telegram: form.get("telegram") || null,
+        website: form.get("website") || null,
+        phone_public: form.get("phonePublic") === "on",
+        telegram_public: form.get("telegramPublic") === "on",
+      };
+      if (user?.role === "editor" || user?.role === "admin") {
+        profileBody.notify_queue_email = form.get("notifyQueueEmail") === "on";
+        profileBody.notify_queue_telegram = form.get("notifyQueueTelegram") === "on";
+      }
       const response = await fetch("/api/users/me", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          display_name: form.get("displayName"),
-          email: form.get("email"),
-          phone: form.get("phone") || null,
-          telegram: form.get("telegram") || null,
-          website: form.get("website") || null,
-          phone_public: form.get("phonePublic") === "on",
-          telegram_public: form.get("telegramPublic") === "on",
-        }),
+        body: JSON.stringify(profileBody),
       });
       if (!response.ok) throw new Error(await readError(response));
       setUser((await response.json()) as User);
@@ -1063,6 +1074,13 @@ export function App() {
   useEffect(() => {
     const parsed = parseAuthHash(window.location.hash);
     if (!parsed) return;
+    if (parsed.purpose === "reset") {
+      setAuthOpen(true);
+      setMode("reset");
+      setResetToken(parsed.token);
+      setAuthNote("Введите новый пароль, чтобы завершить сброс.");
+      return;
+    }
     void verifyEmailToken(parsed.purpose, parsed.token);
     // hash consume once on load / hash change
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1077,9 +1095,39 @@ export function App() {
 
     const form = new FormData(formElement);
     try {
-      if (mode === "email") {
+      if (mode === "email" || mode === "reset") {
         const email = String(form.get("email") || "");
         const code = String(form.get("code") || "").trim();
+        if (mode === "reset") {
+          const password = String(form.get("password") || "");
+          if (!code && !resetToken) {
+            const requested = await fetch("/api/auth/email/request", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ email, purpose: "reset" }),
+            });
+            if (!requested.ok) throw new Error(await readError(requested));
+            setAuthNote("Если такая почта есть, код для сброса уже в письме.");
+            return;
+          }
+          const reset = await fetch("/api/auth/password/reset", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              email: email || undefined,
+              purpose: "reset",
+              code: code || undefined,
+              token: resetToken || undefined,
+              password,
+            }),
+          });
+          if (!reset.ok) throw new Error(await readError(reset));
+          setResetToken("");
+          if (window.location.hash.startsWith("#/auth/")) window.location.hash = "";
+          await finishSignedIn((await reset.json()) as User);
+          formElement.reset();
+          return;
+        }
         if (!code) {
           const requested = await fetch("/api/auth/email/request", {
             method: "POST",
@@ -1360,7 +1408,8 @@ export function App() {
           {view === "search" && (
             <CardSearch
               canReadNotes
-              layer={graphLayer === "personal" ? "personal" : "overlay"}
+              role={user.role}
+              hasPersonal={Boolean(repository?.personal?.connected || repository?.personal?.has_content)}
               onNeedAuth={() => setAuthOpen(true)}
             />
           )}
@@ -1371,6 +1420,9 @@ export function App() {
               <h2 id="card-heading">{openNote?.title || "Карточка ризомы"}</h2>
               <p className="admin-panel__hint">
                 Отрисованный Markdown на чтение. Правки текста здесь нет — авторство в git.
+                {cardPath?.startsWith("personal:") ? " Слой: ваша ризома." : ""}
+                {cardPath?.startsWith("proposal:") ? " Слой: правка из очереди." : ""}
+                {cardPath && !cardPath.startsWith("personal:") && !cardPath.startsWith("proposal:") ? " Слой: общая ризома." : ""}
               </p>
             </div>
             <div className="graph-actions">
@@ -1488,6 +1540,19 @@ export function App() {
                   <input name="telegramPublic" type="checkbox" defaultChecked={user.telegram_public} />
                   <span>Показать Telegram на карточке</span>
                 </label>
+                {(user.role === "editor" || user.role === "admin") && (
+                  <>
+                    <p className="admin-panel__hint">Новые правки по ризоме: по умолчанию выключено, чтобы не слать лишние письма.</p>
+                    <label className="contract-check">
+                      <input name="notifyQueueEmail" type="checkbox" defaultChecked={user.notify_queue_email} />
+                      <span>Письмо, когда в очереди новые правки</span>
+                    </label>
+                    <label className="contract-check">
+                      <input name="notifyQueueTelegram" type="checkbox" defaultChecked={user.notify_queue_telegram} />
+                      <span>Telegram, когда в очереди новые правки (не вход)</span>
+                    </label>
+                  </>
+                )}
                 <label>
                   Сайт <span className="optional">необязательно</span>
                   <input name="website" defaultValue={user.website ?? ""} maxLength={300} />
@@ -1512,16 +1577,26 @@ export function App() {
                         </button>
                       )}
                     </div>
+                    {repository?.personal?.connected && (
+                      <p className="admin-panel__hint">
+                        Git подключён — загрузка файлов выключена. Отключите git, чтобы снова грузить .md.
+                      </p>
+                    )}
                   </form>
                 ) : (
                   <p className="admin-panel__hint">Подключение git как вклад требует договор автора.</p>
                 )}
                 {!user.is_author && repository?.personal?.connected && (
-                  <div className="settings-actions">
-                    <button className="button button--danger" type="button" disabled={submitting} onClick={() => void disconnectPersonal()}>
-                      Отключить git
-                    </button>
-                  </div>
+                  <>
+                    <div className="settings-actions">
+                      <button className="button button--danger" type="button" disabled={submitting} onClick={() => void disconnectPersonal()}>
+                        Отключить git
+                      </button>
+                    </div>
+                    <p className="admin-panel__hint">
+                      Git подключён — загрузка файлов выключена. Отключите git, чтобы снова грузить .md.
+                    </p>
+                  </>
                 )}
                 {user.role === "admin" && (
                   <div className="settings-actions">
@@ -1625,11 +1700,6 @@ export function App() {
                   Загрузить в личный слой
                 </button>
               </form>
-              )}
-              {repository?.personal?.connected && (
-                <p className="admin-panel__hint">
-                  Git подключён — загрузка файлов выключена. Отключите git в настройках, чтобы снова грузить .md.
-                </p>
               )}
               {report && (
                 <p className="ingest-report" role="status">
@@ -1903,6 +1973,9 @@ export function App() {
                     <button className="proposal-row" type="button" onClick={() => void openProposalDetail(item.id)}>
                       <strong>{item.summary}</strong>
                       <span>{item.author.display_name} · {proposalStatusLabel(item.status)}</span>
+                      {item.reason && (queueTab === "in_progress" || queueTab === "rejected") && (
+                        <small>Комментарий редактора: {item.reason}</small>
+                      )}
                     </button>
                   </li>
                 ))}
@@ -2070,24 +2143,37 @@ export function App() {
           </div>
           <div className="auth-card">
             <div className="tabs" role="tablist" aria-label="Авторизация">
-              <button className={mode === "login" ? "tab tab--active" : "tab"} onClick={() => { setMode("login"); setError(""); setAuthNote(""); }}>Вход</button>
-              <button className={mode === "register" ? "tab tab--active" : "tab"} onClick={() => { setMode("register"); setError(""); setAuthNote(""); }}>Регистрация</button>
+              <button className={mode === "login" ? "tab tab--active" : "tab"} onClick={() => { setMode("login"); setError(""); setAuthNote(""); setResetToken(""); }}>Вход</button>
+              <button className={mode === "register" ? "tab tab--active" : "tab"} onClick={() => { setMode("register"); setError(""); setAuthNote(""); setResetToken(""); }}>Регистрация</button>
               {mailConfigured && (
-                <button className={mode === "email" ? "tab tab--active" : "tab"} onClick={() => { setMode("email"); setError(""); setAuthNote(""); }}>Почта</button>
+                <button className={mode === "email" ? "tab tab--active" : "tab"} onClick={() => { setMode("email"); setError(""); setAuthNote(""); setResetToken(""); }}>Почта</button>
+              )}
+              {mailConfigured && (
+                <button className={mode === "reset" ? "tab tab--active" : "tab"} onClick={() => { setMode("reset"); setError(""); setAuthNote(""); }}>Сброс</button>
               )}
             </div>
             <form onSubmit={(event) => void submitAuth(event)}>
-              {mode === "email" ? (
+              {mode === "email" || mode === "reset" ? (
                 <>
                   <label>
                     Почта
-                    <input name="email" type="email" maxLength={320} autoComplete="email" required />
+                    <input name="email" type="email" maxLength={320} autoComplete="email" required={!resetToken || mode === "email"} />
                   </label>
                   <label>
                     Код из письма
                     <input name="code" inputMode="numeric" maxLength={6} autoComplete="one-time-code" />
                   </label>
-                  <p className="hint">Сначала запросите код, затем введите его. Ссылка из письма тоже входит.</p>
+                  {mode === "reset" && (
+                    <label>
+                      Новый пароль
+                      <input name="password" type="password" minLength={12} maxLength={128} autoComplete="new-password" required={Boolean(resetToken) || undefined} />
+                    </label>
+                  )}
+                  <p className="hint">
+                    {mode === "reset"
+                      ? (resetToken ? "Задайте новый пароль. Код не нужен, если открыли ссылку из письма." : "Сначала запросите код, затем введите его и новый пароль.")
+                      : "Сначала запросите код, затем введите его. Ссылка из письма тоже входит."}
+                  </p>
                 </>
               ) : (
                 <>
@@ -2126,10 +2212,15 @@ export function App() {
                   {mailConfigured ? " Если SMTP настроен, регистрация подтверждается письмом." : ""}
                 </p>
               )}
+              {mode === "login" && mailConfigured && (
+                <p className="hint">
+                  <button className="tab" type="button" onClick={() => { setMode("reset"); setError(""); setAuthNote(""); }}>Забыли пароль?</button>
+                </p>
+              )}
               {authNote && <p className="admin-panel__hint" role="status">{authNote}</p>}
               {error && <p className="form-error" role="alert">{error}</p>}
               <button className="button button--primary" type="submit" disabled={submitting}>
-                {submitting ? "Подождите…" : mode === "register" ? "Создать учётку" : mode === "email" ? "Код / войти" : "Войти"}
+                {submitting ? "Подождите…" : mode === "register" ? "Создать учётку" : mode === "email" ? "Код / войти" : mode === "reset" ? (resetToken ? "Сменить пароль" : "Код / сменить пароль") : "Войти"}
               </button>
               <button className="button button--quiet" type="button" onClick={() => setAuthOpen(false)}>К графу</button>
             </form>
