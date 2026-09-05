@@ -1408,8 +1408,6 @@ export function App() {
           {view === "search" && (
             <CardSearch
               canReadNotes
-              role={user.role}
-              hasPersonal={Boolean(repository?.personal?.connected || repository?.personal?.has_content)}
               onNeedAuth={() => setAuthOpen(true)}
             />
           )}
@@ -1562,40 +1560,49 @@ export function App() {
             )}
             {settingsBlock === "git" && (
               <div className="settings-stack">
-                <p className="admin-panel__hint">{personalLabel(repository?.personal ?? null)}</p>
-                {user.is_author ? (
-                  <form className="connect-form" onSubmit={(event) => void connectPersonal(event)}>
-                    <label>
-                      Свой git
-                      <input name="repository" placeholder="владелец/имя" maxLength={200} required />
-                    </label>
-                    <div className="settings-actions">
-                      <button className="button button--primary" type="submit" disabled={submitting}>Связать личный git</button>
-                      {repository?.personal?.connected && (
-                        <button className="button button--danger" type="button" disabled={submitting} onClick={() => void disconnectPersonal()}>
-                          Отключить git
-                        </button>
-                      )}
-                    </div>
-                    {repository?.personal?.connected && (
-                      <p className="admin-panel__hint">
-                        Git подключён — загрузка файлов выключена. Отключите git, чтобы снова грузить .md.
-                      </p>
-                    )}
-                  </form>
-                ) : (
-                  <p className="admin-panel__hint">Подключение git как вклад требует договор автора.</p>
-                )}
-                {!user.is_author && repository?.personal?.connected && (
+                {repository?.personal?.connected ? (
                   <>
+                    <p className="admin-panel__hint">
+                      Связан git{" "}
+                      {repository.personal.owner && repository.personal.name ? (
+                        <a
+                          className="git-ref"
+                          href={`https://github.com/${repository.personal.owner}/${repository.personal.name}`}
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          {repository.personal.owner}/{repository.personal.name}
+                        </a>
+                      ) : (
+                        "репозиторий"
+                      )}
+                      . — загрузка файлов в личное хранилище выключена. Отключите git, чтобы снова грузить .md.
+                    </p>
+                    <p className="admin-panel__hint">
+                      Но помните: при отключении git хранилище переиндексируется в ноль.
+                    </p>
                     <div className="settings-actions">
                       <button className="button button--danger" type="button" disabled={submitting} onClick={() => void disconnectPersonal()}>
                         Отключить git
                       </button>
                     </div>
-                    <p className="admin-panel__hint">
-                      Git подключён — загрузка файлов выключена. Отключите git, чтобы снова грузить .md.
-                    </p>
+                  </>
+                ) : (
+                  <>
+                    <p className="admin-panel__hint">{personalLabel(null)}</p>
+                    {user.is_author ? (
+                      <form className="connect-form" onSubmit={(event) => void connectPersonal(event)}>
+                        <label>
+                          Свой git
+                          <input name="repository" placeholder="владелец/имя" maxLength={200} required />
+                        </label>
+                        <div className="settings-actions">
+                          <button className="button button--primary" type="submit" disabled={submitting}>Связать личный git</button>
+                        </div>
+                      </form>
+                    ) : (
+                      <p className="admin-panel__hint">Подключение git как вклад требует договор автора.</p>
+                    )}
                   </>
                 )}
                 {user.role === "admin" && (
