@@ -7,16 +7,19 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit -p tsconfig.app.json && tsc --noEmit -p tsconfig.node.json && vite build",
+    "test": "tsc -p tsconfig.test.json && node --test test/card-route.test.mjs",
     "preview": "vite preview"
   },
   "dependencies": {
+    "cytoscape": "3.34.1",
+    "cytoscape-fcose": "2.2.0",
     "react": "latest",
     "react-dom": "latest"
   },
   "devDependencies": {
-    "@vitejs/plugin-react": "latest",
     "@types/react": "latest",
     "@types/react-dom": "latest",
+    "@vitejs/plugin-react": "latest",
     "typescript": "latest",
     "vite": "latest"
   }

@@ -1,5 +1,14 @@
 .env
 .venv/
+
+# Local working notes stay on nord (TZ, ADRs, stage journals, agent briefing)
+AGENTS.md
+README_FIRST.md
+START_*.md
+.cursor/
+docs/*
+!docs/deployment/
+
 __pycache__/
 *.py[cod]
 .pytest_cache/
@@ -11,4 +20,8 @@ build/
 node_modules/
 .pnpm-store/
 frontend/dist/
+frontend/test-out/
 *.tsbuildinfo
+.secrets/
+tmp/
+output/
