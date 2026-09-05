@@ -11,9 +11,11 @@ type SearchResponse = {
 
 export function CardSearch({
   canReadNotes,
+  layer = "overlay",
   onNeedAuth,
 }: {
   canReadNotes: boolean;
+  layer?: "overlay" | "personal" | "shared";
   onNeedAuth?: () => void;
 }) {
   const [query, setQuery] = useState("");
@@ -32,6 +34,7 @@ export function CardSearch({
       const params = new URLSearchParams();
       if (query.trim()) params.set("q", query.trim());
       if (tag) params.set("tag", tag);
+      if (canReadNotes) params.set("layer", layer);
       const suffix = params.toString() ? `?${params}` : "";
       setLoading(true);
       void fetch(`/api/search${suffix}`, { signal: controller.signal })
@@ -48,7 +51,7 @@ export function CardSearch({
       window.clearTimeout(timer);
       controller.abort();
     };
-  }, [query, tag]);
+  }, [query, tag, layer, canReadNotes]);
 
   const waiting = query.trim() || tag;
   const tags = body.available_tags;
@@ -60,7 +63,11 @@ export function CardSearch({
         <h2 id="card-search-heading">Поиск по ризоме</h2>
         <p className="admin-panel__hint">
           Слова в названии и пути, теги карточек. Ищем только то, что этому зрителю уже можно показать.
-          {canReadNotes ? " Совпадение открывает карточку с отрисованным Markdown." : " Гость видит совпадения; тело карточки — после входа."}
+          {canReadNotes
+            ? layer === "personal"
+              ? " Слой «ваша личная ризома»: карточки из полного личного git, не весь vault на общем графе."
+              : " Слой «ваша часть ризомы»: карточки общей и личных заметок, которые сами ссылаются на общую. Весь личный git сюда не высыпается."
+            : " Гость видит совпадения; тело карточки — после входа."}
         </p>
       </div>
       <label className="card-search__field">

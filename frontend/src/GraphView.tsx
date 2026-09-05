@@ -39,7 +39,7 @@ export type GraphResponse = {
   edges: GraphEdge[];
 };
 
-type FilterKind = "all" | "unresolved" | "isolated" | "overlay";
+export type FilterKind = "all" | "unresolved" | "isolated" | "overlay" | "personal";
 
 const STATUS_LABEL: Record<string, string> = {
   empty: "индекс пуст",
@@ -48,11 +48,26 @@ const STATUS_LABEL: Record<string, string> = {
   error: "ошибка индекса",
 };
 
-function originLabel(origin: string | undefined): string {
-  if (origin === "personal") return "ваша ризома";
-  if (origin === "both") return "общая и ваша ризома";
+function originLabel(origin: string | undefined, personalLayer: boolean): string {
+  if (origin === "personal") return personalLayer ? "ваша личная ризома" : "ваша часть ризомы";
+  if (origin === "both") return "общая и ваша часть ризомы";
   if (origin === "overlay") return "связь с общей";
   return "общая";
+}
+
+function layerStatusLabel(graphLayer: string | undefined, kind: FilterKind): string {
+  if (kind === "personal" || graphLayer === "personal") return "ваша личная ризома";
+  if (kind === "overlay") return "ваша часть ризомы";
+  if (graphLayer === "overlay") return "общая ризома и ваша часть ризомы";
+  return "общая ризома";
+}
+
+function cardPathFor(node: GraphNode, personalLayer: boolean): string {
+  if (node.path.startsWith("personal:") || node.path.startsWith("unresolved:") || node.path.startsWith("locked:")) {
+    return node.path;
+  }
+  if (personalLayer || node.origin === "personal") return `personal:${node.path}`;
+  return node.path;
 }
 
 export function GraphView({
@@ -62,6 +77,8 @@ export function GraphView({
   onExpand,
   canReadNotes = true,
   onNeedAuth,
+  filterKind,
+  onFilterKindChange,
   theme,
 }: {
   graph: GraphResponse | null;
@@ -70,14 +87,19 @@ export function GraphView({
   onExpand: (path: string) => void;
   canReadNotes?: boolean;
   onNeedAuth?: () => void;
+  filterKind?: FilterKind;
+  onFilterKindChange?: (kind: FilterKind) => void;
   theme: ThemeName;
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const cyRef = useRef<Core | null>(null);
   const [query, setQuery] = useState("");
-  const [kind, setKind] = useState<FilterKind>("all");
+  const [localKind, setLocalKind] = useState<FilterKind>("all");
+  const kind = filterKind ?? localKind;
   const [tag, setTag] = useState("");
   const [focusPath, setFocusPath] = useState<string | null>(null);
+  const personalLayer = kind === "personal" || graph?.layer === "personal";
+  const searchLayer = personalLayer ? "personal" : "overlay";
 
   const visible = useMemo(() => {
     if (!graph) return { nodes: [] as GraphNode[], edges: [] as GraphEdge[] };
@@ -113,7 +135,7 @@ export function GraphView({
     }
     const controller = new AbortController();
     const timer = window.setTimeout(() => {
-      void fetch(`/api/search?q=${encodeURIComponent(q)}`, { signal: controller.signal })
+      void fetch(`/api/search?q=${encodeURIComponent(q)}&layer=${searchLayer}`, { signal: controller.signal })
         .then(async (response) => (response.ok ? (await response.json()) as { hits: { path: string; title: string }[] } : { hits: [] }))
         .then((body) => setRemoteHits(body.hits))
         .catch(() => undefined);
@@ -122,7 +144,7 @@ export function GraphView({
       window.clearTimeout(timer);
       controller.abort();
     };
-  }, [query]);
+  }, [query, searchLayer]);
 
   const focusPathRef = useRef<string | null>(null);
   focusPathRef.current = focusPath || selectedPath || null;
@@ -248,12 +270,12 @@ export function GraphView({
     } else if (event.key === "Enter") {
       const node = currentNode();
       if (node && !node.unresolved) {
-        window.location.hash = cardHash(node.path);
+        window.location.hash = cardHash(cardPathFor(node, personalLayer));
         if (!canReadNotes) onNeedAuth?.();
       }
     } else if (event.key === "e" || event.key === "E") {
       const node = currentNode();
-      if (node && !node.unresolved && !node.locked && !node.path.startsWith("personal:")) onExpand(node.path);
+      if (node && !node.unresolved && !node.locked && (personalLayer || !node.path.startsWith("personal:"))) onExpand(node.path);
     } else if (event.key === "Escape") {
       setFocusPath(null);
     }
@@ -271,11 +293,19 @@ export function GraphView({
         </label>
         <label>
           Слой
-          <select value={kind} onChange={(event) => setKind(event.target.value as FilterKind)}>
+          <select
+            value={kind}
+            onChange={(event) => {
+              const next = event.target.value as FilterKind;
+              if (filterKind === undefined) setLocalKind(next);
+              onFilterKindChange?.(next);
+            }}
+          >
             <option value="all">все узлы</option>
             <option value="unresolved">нет заметки</option>
             <option value="isolated">отдельно</option>
-            {canReadNotes && <option value="overlay">ваша ризома</option>}
+            {canReadNotes && <option value="overlay">ваша часть ризомы</option>}
+            {canReadNotes && <option value="personal">ваша личная ризома</option>}
           </select>
         </label>
         <label>
@@ -284,7 +314,7 @@ export function GraphView({
         </label>
       </div>
       <p className="admin-panel__hint" role="status">
-        Слой: {graph?.layer === "overlay" ? "общая и ваша ризома" : "общая ризома"}. Состояние: {status}.
+        Слой: {layerStatusLabel(graph?.layer, kind)}. Состояние: {status}.
         {graph?.truncated ? " Показана часть узлов — выберите узел и нажмите «Соседи»." : ""}
         {loading ? " Обновляем граф…" : ""}
         {query.trim() && matches.length > 0 ? ` Совпадений на графе: ${matches.length}.` : ""}
@@ -298,13 +328,13 @@ export function GraphView({
         className="graph-canvas"
         tabIndex={0}
         role="application"
-        aria-label="Граф общей ризомы"
+        aria-label={personalLayer ? "Граф вашей личной ризомы" : "Граф общей ризомы"}
         onKeyDown={handleKey}
       />
       <div className="graph-legend" aria-hidden="true">
         <span><i className="swatch swatch--shared" /> общая</span>
         <span><i className="swatch swatch--both" /> есть у вас</span>
-        <span><i className="swatch swatch--personal" /> ваша ризома</span>
+        <span><i className="swatch swatch--personal" /> {personalLayer ? "ваша личная ризома" : "ваша часть ризомы"}</span>
         <span><i className="swatch swatch--missing" /> нет заметки</span>
       </div>
       {query.trim() && remoteHits.length > 0 && (
@@ -327,13 +357,13 @@ export function GraphView({
         <div className="graph-selection">
           <p>
             <strong>{selected.title}</strong>
-            <small> {originLabel(selected.origin)} · {selected.locked ? "замок" : selected.unresolved ? "нет заметки" : selected.path}</small>
+            <small> {originLabel(selected.origin, personalLayer)} · {selected.locked ? "замок" : selected.unresolved ? "нет заметки" : selected.path}</small>
           </p>
           <div className="graph-actions">
             <button
               className="button button--quiet"
               type="button"
-              disabled={selected.unresolved || Boolean(selected.locked) || selected.path.startsWith("personal:")}
+              disabled={selected.unresolved || Boolean(selected.locked) || (!personalLayer && selected.path.startsWith("personal:"))}
               onClick={() => onExpand(selected.path)}
             >
               Соседи
@@ -342,7 +372,7 @@ export function GraphView({
           {!selected.unresolved && (
             <p className="graph-selection__link">
               <a
-                href={cardHash(selected.path)}
+                href={cardHash(cardPathFor(selected, personalLayer))}
                 onClick={() => {
                   if (!canReadNotes) onNeedAuth?.();
                 }}

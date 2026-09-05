@@ -6,7 +6,12 @@ from app.models.graph import NoteIndex, NoteLayer, NoteTag, Tag
 from app.models.personal_upload import PersonalUpload
 from app.models.user import User
 from app.services.github import GitHubAppClient
-from app.services.index import IndexerError, ensure_personal_current, ensure_shared_current
+from app.services.index import (
+    IndexerError,
+    ensure_personal_current,
+    ensure_shared_current,
+    overlay_personal_paths,
+)
 from app.services.markdown import parse_markdown
 from app.services.repository import SHARED_SINGLETON_ID, refresh_personal, refresh_shared
 
@@ -18,6 +23,7 @@ async def search_visible_cards(
     user: User | None,
     tag: str = "",
     limit: int = 40,
+    layer: str = "overlay",
     client: GitHubAppClient | None = None,
 ) -> dict[str, object]:
     trimmed = query.strip()
@@ -26,6 +32,9 @@ async def search_visible_cards(
     hits: list[dict[str, object]] = []
     seen: set[str] = set()
     note_ids: list[object] = []
+    scope = layer if layer in {"overlay", "personal", "shared"} else "overlay"
+    if user is None:
+        scope = "shared"
 
     if client is not None:
         await refresh_shared(database, client)
@@ -41,7 +50,7 @@ async def search_visible_cards(
                 pass
 
     shared = await database.get(SharedRepository, SHARED_SINGLETON_ID)
-    if shared is not None and shared.indexed_sha:
+    if scope != "personal" and shared is not None and shared.indexed_sha:
         shared_rows = (
             await database.scalars(
                 _note_query(
@@ -60,11 +69,18 @@ async def search_visible_cards(
             note_ids.append(note.id)
             hits.append({"path": note.path, "title": note.title, "tags": []})
 
-    if user is not None:
+    if user is not None and scope != "shared":
         personal = await database.scalar(
             select(PersonalRepository).where(PersonalRepository.user_id == user.id)
         )
         leftover = cap - len(hits)
+        stitch: set[str] | None = None
+        if scope == "overlay":
+            stitch = await overlay_personal_paths(
+                database,
+                owner_id=user.id,
+                personal_revision=personal.indexed_sha if personal is not None else None,
+            )
         if personal is not None and personal.indexed_sha and leftover > 0:
             personal_rows = (
                 await database.scalars(
@@ -74,6 +90,7 @@ async def search_visible_cards(
                         revision=personal.indexed_sha,
                         text=trimmed,
                         tag_name=tag_name,
+                        paths=stitch,
                     ).order_by(NoteIndex.title, NoteIndex.path).limit(leftover)
                 )
             ).all()
@@ -97,6 +114,8 @@ async def search_visible_cards(
             for row in uploads:
                 if len(hits) >= cap:
                     break
+                if stitch is not None and row.path not in stitch:
+                    continue
                 path = f"personal:{row.path}"
                 if path in seen or row.path in seen:
                     continue
@@ -123,7 +142,7 @@ async def search_visible_cards(
         "query": trimmed,
         "tag": tag_name,
         "hits": hits,
-        "available_tags": await _available_tags(database, user=user),
+        "available_tags": await _available_tags(database, user=user, layer=scope),
     }
 
 
@@ -134,6 +153,7 @@ def _note_query(
     revision: str,
     text: str,
     tag_name: str,
+    paths: set[str] | None = None,
 ):
     clauses = [
         NoteIndex.layer == layer,
@@ -143,6 +163,8 @@ def _note_query(
         clauses.append(NoteIndex.owner_user_id.is_(None))
     else:
         clauses.append(NoteIndex.owner_user_id == owner_id)
+    if paths is not None:
+        clauses.append(NoteIndex.path.in_(paths) if paths else NoteIndex.id.is_(None))
     if text:
         pattern = f"%{text.casefold()}%"
         clauses.append(
@@ -196,10 +218,12 @@ async def _tags_for_notes(
     return mapping
 
 
-async def _available_tags(database: AsyncSession, *, user: User | None) -> list[str]:
+async def _available_tags(
+    database: AsyncSession, *, user: User | None, layer: str = "overlay"
+) -> list[str]:
     names: set[str] = set()
     shared = await database.get(SharedRepository, SHARED_SINGLETON_ID)
-    if shared is not None and shared.indexed_sha:
+    if layer != "personal" and shared is not None and shared.indexed_sha:
         names.update(
             await _layer_tag_names(
                 database,
@@ -208,19 +232,26 @@ async def _available_tags(database: AsyncSession, *, user: User | None) -> list[
                 revision=shared.indexed_sha,
             )
         )
-    if user is not None:
+    if user is not None and layer != "shared":
         personal = await database.scalar(
             select(PersonalRepository).where(PersonalRepository.user_id == user.id)
         )
-        if personal is not None and personal.indexed_sha:
-            names.update(
-                await _layer_tag_names(
-                    database,
-                    layer=NoteLayer.PERSONAL.value,
-                    owner_id=user.id,
-                    revision=personal.indexed_sha,
-                )
+        stitch: set[str] | None = None
+        if layer == "overlay":
+            stitch = await overlay_personal_paths(
+                database,
+                owner_id=user.id,
+                personal_revision=personal.indexed_sha if personal is not None else None,
             )
+        if personal is not None and personal.indexed_sha:
+            personal_names = await _layer_tag_names(
+                database,
+                layer=NoteLayer.PERSONAL.value,
+                owner_id=user.id,
+                revision=personal.indexed_sha,
+                paths=stitch,
+            )
+            names.update(personal_names)
         else:
             uploads = list(
                 (
@@ -230,6 +261,8 @@ async def _available_tags(database: AsyncSession, *, user: User | None) -> list[
                 ).all()
             )
             for row in uploads:
+                if stitch is not None and row.path not in stitch:
+                    continue
                 names.update(parse_markdown(row.path, row.body).tags)
     return sorted(names)[:80]
 
@@ -240,22 +273,28 @@ async def _layer_tag_names(
     layer: str,
     owner_id: object | None,
     revision: str,
+    paths: set[str] | None = None,
 ) -> list[str]:
     owner_clause = (
         NoteIndex.owner_user_id.is_(None)
         if owner_id is None
         else NoteIndex.owner_user_id == owner_id
     )
+    clauses = [
+        NoteIndex.layer == layer,
+        NoteIndex.revision_sha == revision,
+        owner_clause,
+    ]
+    if paths is not None:
+        if not paths:
+            return []
+        clauses.append(NoteIndex.path.in_(paths))
     rows = (
         await database.scalars(
             select(Tag.name)
             .join(NoteTag, NoteTag.tag_id == Tag.id)
             .join(NoteIndex, NoteIndex.id == NoteTag.note_id)
-            .where(
-                NoteIndex.layer == layer,
-                NoteIndex.revision_sha == revision,
-                owner_clause,
-            )
+            .where(*clauses)
             .distinct()
             .order_by(Tag.name)
             .limit(80)

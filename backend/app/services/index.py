@@ -591,7 +591,7 @@ async def load_overlay_from_uploads(
     shared_payload: dict[str, object],
     overlay_limit: int,
 ) -> dict[str, object]:
-    """Overlay «ваша ризома» from server uploads when git is not connected."""
+    """Overlay «ваша часть ризомы» from server uploads when git is not connected."""
     shared_nodes = list(shared_payload.get("nodes") or [])
     shared_edges = list(shared_payload.get("edges") or [])
     visible = {node["path"] for node in shared_nodes if not node.get("unresolved")}
@@ -679,6 +679,151 @@ async def load_overlay_from_uploads(
         "layer": "overlay",
         "index_status": status,
         "truncated": bool(shared_payload.get("truncated")) or overlay_truncated,
+        "nodes": nodes,
+        "edges": edges,
+    }
+
+
+async def overlay_personal_paths(
+    database: AsyncSession,
+    *,
+    owner_id: uuid.UUID,
+    personal_revision: str | None,
+) -> set[str]:
+    """Personal paths that wikilink into the published shared tree.
+
+    This is the automatic «ваша часть ризомы» stitch: no curated catalog.
+    The graph overlay further bounds those notes to the visible shared page.
+    """
+    shared_rows = (
+        await database.scalars(
+            select(NoteIndex.path).where(
+                NoteIndex.layer == NoteLayer.SHARED.value,
+                NoteIndex.owner_user_id.is_(None),
+            )
+        )
+    ).all()
+    shared_paths = {str(path) for path in shared_rows}
+    if not shared_paths:
+        return set()
+    lookup = notes_lookup_map(shared_paths)
+    hits: set[str] = set()
+    if personal_revision:
+        personal_notes = (
+            await database.scalars(
+                select(NoteIndex).where(
+                    NoteIndex.layer == NoteLayer.PERSONAL.value,
+                    NoteIndex.owner_user_id == owner_id,
+                    NoteIndex.revision_sha == personal_revision,
+                )
+            )
+        ).all()
+        personal_by_id = {note.id: note for note in personal_notes}
+        personal_ids = set(personal_by_id)
+        if not personal_ids:
+            return set()
+        links = (
+            await database.scalars(select(NoteLink).where(NoteLink.source_id.in_(personal_ids)))
+        ).all()
+        for link in links:
+            source = personal_by_id.get(link.source_id)
+            if source is None:
+                continue
+            target_path = resolve_link_target(link.target_raw, lookup)
+            if target_path is not None and target_path in shared_paths:
+                hits.add(source.path)
+        return hits
+    uploads = list(
+        (
+            await database.scalars(
+                select(PersonalUpload)
+                .where(PersonalUpload.user_id == owner_id)
+                .order_by(PersonalUpload.path)
+            )
+        ).all()
+    )
+    for row in uploads:
+        parsed = parse_markdown(row.path, row.body)
+        for raw in parsed.links:
+            target_path = resolve_link_target(raw, lookup)
+            if target_path is not None and target_path in shared_paths:
+                hits.add(row.path)
+                break
+    return hits
+
+
+async def load_personal_from_uploads(
+    database: AsyncSession,
+    *,
+    owner_id: uuid.UUID,
+    limit: int,
+    center: str | None,
+    depth: int,
+) -> dict[str, object]:
+    """Full «ваша личная ризома» from server uploads when git is not connected."""
+    empty = {
+        "layer": "personal",
+        "index_status": "empty",
+        "truncated": False,
+        "nodes": [],
+        "edges": [],
+    }
+    uploads = list(
+        (
+            await database.scalars(
+                select(PersonalUpload)
+                .where(PersonalUpload.user_id == owner_id)
+                .order_by(PersonalUpload.path)
+            )
+        ).all()
+    )
+    if not uploads:
+        return empty
+    parsed = [(row.path, parse_markdown(row.path, row.body)) for row in uploads]
+    paths = [path for path, _ in parsed]
+    lookup = notes_lookup_map(set(paths))
+    adjacency: dict[str, set[str]] = {path: set() for path in paths}
+    raw_edges: list[tuple[str, str]] = []
+    by_path = {path: note for path, note in parsed}
+    for path, note in parsed:
+        for raw in note.links:
+            target = resolve_link_target(raw, lookup)
+            if target is None or target not in adjacency:
+                continue
+            adjacency[path].add(target)
+            adjacency[target].add(path)
+            raw_edges.append((path, target))
+    chosen = _bounded_paths(paths, adjacency, center, depth, limit)
+    truncated = len(paths) > len(chosen)
+    nodes = []
+    for path in sorted(chosen):
+        note = by_path[path]
+        isolated = path not in adjacency or not (adjacency[path] & chosen)
+        nodes.append(
+            {
+                "path": path,
+                "title": note.title,
+                "tags": list(note.tags),
+                "isolated": isolated,
+                "unresolved": False,
+                "origin": "personal",
+            }
+        )
+    edges = [
+        {
+            "source": source,
+            "target": target,
+            "type": "wikilink",
+            "unresolved": False,
+            "origin": "personal",
+        }
+        for source, target in raw_edges
+        if source in chosen and target in chosen
+    ]
+    return {
+        "layer": "personal",
+        "index_status": "current",
+        "truncated": truncated,
         "nodes": nodes,
         "edges": edges,
     }

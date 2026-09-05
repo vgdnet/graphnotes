@@ -7,8 +7,14 @@ stay directed. Hover highlights the closed neighborhood.
 
 `GET /api/graph/shared` is readable without login. Logged-in users get
 `GET /api/graph/personal-overlay`: the same bounded shared page plus **ваша
-ризома** notes that link into it (connected git, or server uploads if git is
-not connected). Another user's overlay cannot be selected by query.
+часть ризомы** — personal notes that wikilink into the visible shared page
+(connected git, or server uploads if git is not connected). This is the
+stitch/intersection, not the whole personal git. `GET /api/graph/personal`
+is **ваша личная ризома**: the full indexed personal tree (bounded). Both
+layers are computed from `note_index` / `note_links`; the user does not
+hand-curate which notes belong where. Cards and the change/diff record
+(search, card GET, Graph Diff, interaction feed) follow that same
+visibility. Another user's overlay cannot be selected by query.
 
 Opening a node for a signed-in viewer with access goes to the **card page**
 (`#/card/{path}`): rendered Markdown on read, not an editor and not a raw
@@ -37,6 +43,7 @@ The UI shows truncation and can expand neighbors of a selected shared node.
 
 The graph shows layer and `index_status` (`empty` / `current` / `updating` /
 `error`). Public JSON still does not include Git SHA, `html_url` or secrets.
-The layer filter option, personal-origin legend and node origin copy say
-«ваша ризома», not «ваш git». Git vs server store is a settings fact, not
-the layer name.
+The overlay filter, personal-origin legend and node origin copy say
+«ваша часть ризомы». When the UI shows `GET /api/graph/personal`, the
+layer/menu/status/legend say «ваша личная ризома». Neither name is
+«ваш git». Git vs server store is a settings fact, not the layer name.

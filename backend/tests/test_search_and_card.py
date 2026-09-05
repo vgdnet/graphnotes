@@ -170,14 +170,51 @@ async def test_search_rebuilds_personal_when_git_sha_moves(
     await _connect_pair(author, "vgdnet/guide_psy")
 
     assert f"personal:{gone}" in {
-        item["path"] for item in (await author.get("/search", params={"q": "Ghost"})).json()["hits"]
+        item["path"]
+        for item in (await author.get("/search", params={"q": "Ghost", "layer": "personal"})).json()["hits"]
     }
 
     del github.repos["vgdnet/guide_psy"].files[gone]
     github.repos["vgdnet/guide_psy"].sha = "search-after"
 
     assert (await author.get(f"/cards/personal:{gone}")).status_code == 404
-    after = await author.get("/search", params={"q": "Ghost"})
+    after = await author.get("/search", params={"q": "Ghost", "layer": "personal"})
     assert after.status_code == 200
     assert f"personal:{gone}" not in {item["path"] for item in after.json()["hits"]}
+    await author.aclose()
+
+
+async def test_search_overlay_excludes_unlinked_personal(
+    auth_test_context: tuple[AsyncClient, async_sessionmaker[AsyncSession]],
+    monkeypatch: MonkeyPatch,
+) -> None:
+    from tests.test_ingest import _connect_pair
+    from tests.test_proposals import _second
+
+    admin, session_factory = auth_test_context
+    github = _install_graph(monkeypatch, _github())
+    github.repos["vgdnet/guide_psy"].files["mine.md"] = "# Mine\nSee [[card]].\n"
+    github.repos["vgdnet/guide_psy"].files["alone.md"] = "# Alone vault note\nNo shared link.\n"
+    github.repos["vgdnet/guide_psy"].sha = "layer-search-sha"
+    await _admin(admin, session_factory, "layer-search-admin")
+    author = await _second("layer-search-owner")
+    await _connect_pair(author, "vgdnet/guide_psy")
+
+    overlay = await author.get("/search", params={"q": "Alone", "layer": "overlay"})
+    assert overlay.status_code == 200
+    assert f"personal:alone.md" not in {item["path"] for item in overlay.json()["hits"]}
+
+    personal = await author.get("/search", params={"q": "Alone", "layer": "personal"})
+    assert personal.status_code == 200
+    assert f"personal:alone.md" in {item["path"] for item in personal.json()["hits"]}
+
+    stitched = await author.get("/search", params={"q": "Mine", "layer": "overlay"})
+    assert f"personal:mine.md" in {item["path"] for item in stitched.json()["hits"]}
+
+    graph = await author.get("/graph/personal")
+    assert graph.status_code == 200
+    assert graph.json()["layer"] == "personal"
+    paths = {node["path"] for node in graph.json()["nodes"]}
+    assert "alone.md" in paths
+    assert "mine.md" in paths
     await author.aclose()

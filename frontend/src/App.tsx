@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { GraphView } from "./GraphView";
-import type { GraphResponse } from "./GraphView";
+import type { FilterKind, GraphResponse } from "./GraphView";
 import { GraphDiffView } from "./GraphDiffView";
 import type { GraphDiffResponse } from "./GraphDiffView";
 import { MarkdownBody } from "./MarkdownBody";
@@ -392,6 +392,7 @@ export function App() {
   const [sharedGraph, setSharedGraph] = useState<GraphResponse | null>(null);
   const [graphLoading, setGraphLoading] = useState(false);
   const [graphCenter, setGraphCenter] = useState<string | null>(null);
+  const [graphLayer, setGraphLayer] = useState<FilterKind>("all");
   const [authorContract, setAuthorContract] = useState<AuthorContract | null>(null);
   const [userCard, setUserCard] = useState<UserCard | null>(null);
   const [noteFeed, setNoteFeed] = useState<NoteFeedEvent[]>([]);
@@ -668,11 +669,19 @@ export function App() {
     }
     const controller = new AbortController();
     const params = new URLSearchParams({ limit: "50", depth: "1" });
-    if (graphCenter) params.set("center", graphCenter);
-    const path = user
-      ? `/api/graph/personal-overlay?${params}`
-      : `/api/graph/shared?${params}`;
+    if (graphCenter) {
+      const center = graphCenter.startsWith("personal:")
+        ? graphCenter.slice("personal:".length)
+        : graphCenter;
+      params.set("center", center);
+    }
+    const path = !user
+      ? `/api/graph/shared?${params}`
+      : graphLayer === "personal"
+        ? `/api/graph/personal?${params}`
+        : `/api/graph/personal-overlay?${params}`;
     setGraphLoading(true);
+    setSharedGraph(null);
     void fetch(path, { signal: controller.signal })
       .then(async (response) => {
         if (!response.ok) throw new Error(await readError(response));
@@ -691,6 +700,7 @@ export function App() {
     repository?.personal?.updated_at,
     report?.revision,
     graphCenter,
+    graphLayer,
   ]);
 
   async function openGraphNote(path: string, origin: string) {
@@ -1384,7 +1394,11 @@ export function App() {
       ) : user ? (
         <>
           {view === "search" && (
-            <CardSearch canReadNotes onNeedAuth={() => setAuthOpen(true)} />
+            <CardSearch
+              canReadNotes
+              layer={graphLayer === "personal" ? "personal" : "overlay"}
+              onNeedAuth={() => setAuthOpen(true)}
+            />
           )}
           {view === "card" && (
           <section className="notes-panel notes-panel--card" aria-labelledby="card-heading">
@@ -1947,10 +1961,11 @@ export function App() {
             <section className="notes-panel notes-panel--graph" aria-labelledby="graph-heading">
               <div>
                 <p className="eyebrow">Граф</p>
-                <h2 id="graph-heading">Общая ризома</h2>
+                <h2 id="graph-heading">{graphLayer === "personal" ? "Ваша личная ризома" : "Общая ризома"}</h2>
                 <p className="admin-panel__hint">
-                  Живой граф собирается из git. После пуша из Obsidian обновите страницу.
-                  Координаты раскладки — только отображение, не знание.
+                  {graphLayer === "personal"
+                    ? "Полный проиндексированный личный git (или загрузки). Слой считается сам: какие заметки входят в «вашу часть ризомы», решает пересечение с общей, не ручной список."
+                    : "Живой граф собирается из git. После пуша из Obsidian обновите страницу. Координаты раскладки — только отображение, не знание."}
                 </p>
               </div>
               <div className="graph-actions">
@@ -1970,6 +1985,8 @@ export function App() {
                 loading={graphLoading}
                 selectedPath={selectedCardPath}
                 canReadNotes
+                filterKind={graphLayer}
+                onFilterKindChange={setGraphLayer}
                 onExpand={setGraphCenter}
                 theme={theme}
               />

@@ -20,6 +20,7 @@ from app.services.index import (
     load_graph,
     load_overlay,
     load_overlay_from_uploads,
+    load_personal_from_uploads,
     rebuild_derived_indexes,
 )
 from app.services.proposal import ProposalError
@@ -48,9 +49,10 @@ async def search_cards(
     q: Annotated[str, Query(max_length=200)] = "",
     tag: Annotated[str, Query(max_length=80)] = "",
     limit: Annotated[int, Query(ge=1, le=80)] = 40,
+    layer: Annotated[str, Query(pattern="^(overlay|personal|shared)$")] = "overlay",
 ) -> SearchResponse:
     payload = await search_visible_cards(
-        database, q, user=viewer, tag=tag, limit=limit, client=_client()
+        database, q, user=viewer, tag=tag, limit=limit, layer=layer, client=_client()
     )
     return SearchResponse.model_validate(payload)
 
@@ -104,7 +106,14 @@ async def personal_graph(
         select(PersonalRepository).where(PersonalRepository.user_id == user.id)
     )
     if personal is None or not personal.indexed_sha:
-        return GraphResponse(layer="personal", index_status="empty", nodes=[], edges=[])
+        uploads = await load_personal_from_uploads(
+            database,
+            owner_id=user.id,
+            limit=_limit(limit),
+            center=center,
+            depth=depth,
+        )
+        return GraphResponse.model_validate(uploads)
     payload = await load_graph(
         database,
         layer=NoteLayer.PERSONAL.value,
