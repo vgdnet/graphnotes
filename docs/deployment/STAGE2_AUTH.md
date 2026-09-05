@@ -26,9 +26,37 @@ After bootstrap, role and active-state changes are performed through the
 protected admin interface. The backend prevents demotion or blocking of the
 last active admin. An admin may set a new password for any account
 (`POST /api/admin/users/{id}/password`); that account's sessions end.
-The Administration tab also lists recent `audit_events` from PostgreSQL
-(`GET /api/admin/audit`). Passwords and tokens are never written into
-audit details or JSON responses.
+The Administration tab has three screens: users (search, create, role,
+block, set password, revoke sessions), a filterable journal
+(`GET /api/admin/audit`), and operator health / SMTP status
+(`GET /api/admin/operator`). Passwords, mail codes and tokens are never
+written into audit details or JSON responses.
+
+## SMTP (optional)
+
+Mail is sent only when both `GRAPHNOTES_SMTP_HOST` and
+`GRAPHNOTES_SMTP_FROM` are set in the host `.env`. Do not commit the
+password. Compose passes these through to the backend:
+
+```text
+GRAPHNOTES_SMTP_HOST
+GRAPHNOTES_SMTP_PORT=587
+GRAPHNOTES_SMTP_USERNAME
+GRAPHNOTES_SMTP_PASSWORD
+GRAPHNOTES_SMTP_FROM
+GRAPHNOTES_SMTP_USE_TLS=true
+GRAPHNOTES_PUBLIC_BASE_URL
+```
+
+`GRAPHNOTES_PUBLIC_BASE_URL` is the public origin used in confirmation and
+login links (for example `http://172.16.13.14:8080` on rhizome-test). If it
+is empty, mail still carries the one-time code.
+
+When SMTP is configured, registration waits for confirmation (code or
+link) before a session is opened. Password login then accepts username or
+email. An admin may send a test message with `POST /api/admin/mail/test`.
+When SMTP is not configured, those mail endpoints return 503 and the
+existing password session-on-register path remains.
 
 ## Recovery
 

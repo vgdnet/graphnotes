@@ -1,5 +1,6 @@
 from app.models.auth_session import AuthSession
 from app.models.audit_event import AuditEvent
+from app.models.email_token import EmailToken
 from app.models.closed_path import ClosedPath
 from app.models.comment import NoteComment
 from app.models.github import GitHubWebhookDelivery, PersonalRepository, SharedRepository
@@ -12,6 +13,7 @@ from app.models.user import User, UserRole
 __all__ = [
     "AuditEvent",
     "AuthSession",
+    "EmailToken",
     "ClosedPath",
     "NoteComment",
     "GitHubWebhookDelivery",

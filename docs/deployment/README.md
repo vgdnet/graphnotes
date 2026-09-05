@@ -6,7 +6,7 @@ a product specification.
 | Order | File | What it covers |
 | --- | --- | --- |
 | 1 | [STAGE1_DEPLOYMENT.md](STAGE1_DEPLOYMENT.md) | Compose, ports, Git vs SSH delivery, `rhizome-test` overlay |
-| 2 | [STAGE2_AUTH.md](STAGE2_AUTH.md) | First admin bootstrap, sessions, roles |
+| 2 | [STAGE2_AUTH.md](STAGE2_AUTH.md) | First admin bootstrap, sessions, roles, optional SMTP |
 | 3 | [STAGE3_GITHUB.md](STAGE3_GITHUB.md) | GitHub App key, env names, shared repository |
 | 4 | [STAGE4_INGEST.md](STAGE4_INGEST.md) | `.md`/ZIP upload into personal layer (git or no-git); shared is not downloadable |
 | 5 | [STAGE5_INDEX.md](STAGE5_INDEX.md) | Derived graph index and rebuild |

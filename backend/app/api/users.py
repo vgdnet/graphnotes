@@ -21,6 +21,7 @@ from app.services.author_contract import (
 )
 from app.services.contributions import get_user_card
 from app.services.github import GitHubAppClient
+from app.services.mail import smtp_configured
 
 router = APIRouter(prefix="/users", tags=["users"])
 
@@ -48,6 +49,8 @@ async def update_current_user(
                 status_code=status.HTTP_409_CONFLICT,
                 detail="email is already registered",
             )
+        if smtp_configured():
+            user.email_verified_at = None
     for field, value in data.items():
         setattr(user, field, value)
     record_audit_event(

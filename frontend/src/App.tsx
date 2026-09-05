@@ -7,6 +7,7 @@ import type { GraphDiffResponse } from "./GraphDiffView";
 import { MarkdownBody } from "./MarkdownBody";
 import { CardSearch } from "./CardSearch";
 import { cardApiUrl, cardHash, cardSearchHash, parseCardRoute } from "./cardRoute";
+import { AdminPanel } from "./AdminPanel";
 import { ThemeSwitcher } from "./ThemeSwitcher";
 import {
   applyTheme,
@@ -18,8 +19,9 @@ import {
 } from "./theme";
 
 type HealthState = "checking" | "online" | "offline";
-type AuthMode = "login" | "register";
+type AuthMode = "login" | "register" | "email";
 type ShellView = "graph" | "settings" | "differ" | "queue" | "admin" | "card" | "search";
+type QueueTab = "new" | "in_progress" | "rejected";
 type SettingsBlock = "profile" | "git" | "contract";
 
 type User = {
@@ -38,6 +40,8 @@ type User = {
   author_contract_version: string | null;
   author_contract_accepted_at: string | null;
   author_contract_withdrawn_at: string | null;
+  email_verified_at?: string | null;
+  last_login_at?: string | null;
 };
 
 type AuthorContract = {
@@ -47,18 +51,6 @@ type AuthorContract = {
   deposit: string;
   withdraw: string;
 };
-
-type AdminUsersResponse = { users: User[] };
-type AuditEventItem = {
-  id: string;
-  action: string;
-  actor_user_id: string | null;
-  target_user_id: string | null;
-  subject_username: string | null;
-  details: Record<string, unknown>;
-  created_at: string;
-};
-type AuditEventListResponse = { events: AuditEventItem[] };
 
 type RepositoryStatus = {
   connected: boolean;
@@ -117,7 +109,7 @@ type Proposal = {
   reason: string | null;
   created_at: string;
   updated_at: string;
-  diff: { path: string; diff: string }[];
+  diff: { path: string; diff: string; body?: string }[];
 };
 
 type DifferItem = {
@@ -208,38 +200,33 @@ type UserCard = {
   review: ReviewStats | null;
   closed_count: number | null;
 };
-type AdminContributionsResponse = {
-  users: {
-    user: ContributionUserRef;
-    stats: ContributionStats;
-    review: ReviewStats | null;
-    notes: ContributionNode[];
-    links: ContributionEdge[];
-  }[];
-};
 type UploadEventItem = { path: string; content_hash: string; created_at: string };
 type UploadHistoryResponse = { events: UploadEventItem[] };
 
-function auditActionLabel(action: string): string {
-  const labels: Record<string, string> = {
-    "admin.user_role_changed": "смена роли",
-    "admin.user_active_changed": "блокировка / активация",
-    "admin.user_password_set": "смена пароля",
-    "admin.bootstrap_succeeded": "назначение admin",
-    "auth.registration_succeeded": "регистрация",
-    "auth.registration_failed": "отказ в регистрации",
-    "auth.login_succeeded": "вход",
-    "auth.login_failed": "отказ во входе",
-    "auth.logout": "выход",
-    "index.rebuild": "пересборка индекса",
-  };
-  return labels[action] || action;
+function parseAuthHash(hash: string): { purpose: "confirm" | "login"; token: string } | null {
+  const value = hash.startsWith("#") ? hash.slice(1) : hash;
+  const match = value.match(/^\/auth\/(confirm|login-code)\?token=([^&]+)$/);
+  if (!match) return null;
+  return { purpose: match[1] === "confirm" ? "confirm" : "login", token: decodeURIComponent(match[2]) };
 }
 
 function differKindLabel(kind: string): string {
   if (kind === "added") return "нет в общей";
   if (kind === "changed") return "отличается";
   return kind;
+}
+
+function proposalQueueTab(status: string): QueueTab | null {
+  if (status === "rejected") return "rejected";
+  if (status === "changes_requested") return "in_progress";
+  if (status === "published") return null;
+  return "new";
+}
+
+function proposalCardTitle(path: string, body: string): string {
+  const heading = body.split("\n").find((line) => line.startsWith("# "));
+  if (heading) return heading.replace(/^#\s+/, "").trim() || path;
+  return path;
 }
 
 function proposalStatusLabel(status: string): string {
@@ -367,11 +354,8 @@ export function App() {
   const [mode, setMode] = useState<AuthMode>("login");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
-  const [adminUsers, setAdminUsers] = useState<User[]>([]);
-  const [adminContributions, setAdminContributions] = useState<AdminContributionsResponse | null>(null);
-  const [adminAudit, setAdminAudit] = useState<AuditEventItem[]>([]);
-  const [adminLoading, setAdminLoading] = useState(false);
-  const [passwordDrafts, setPasswordDrafts] = useState<Record<string, string>>({});
+  const [mailConfigured, setMailConfigured] = useState(false);
+  const [authNote, setAuthNote] = useState("");
   const [repository, setRepository] = useState<RepositoryStatusResponse | null>(null);
   const [sharedNotes, setSharedNotes] = useState<NoteProjection[]>([]);
   const [personalNotes, setPersonalNotes] = useState<NoteProjection[]>([]);
@@ -380,6 +364,7 @@ export function App() {
   const [differLoading, setDifferLoading] = useState(false);
   const [proposedPaths, setProposedPaths] = useState<string[]>([]);
   const [proposals, setProposals] = useState<Proposal[]>([]);
+  const [queueTab, setQueueTab] = useState<QueueTab>("new");
   const [openProposal, setOpenProposal] = useState<Proposal | null>(null);
   const [proposalDiff, setProposalDiff] = useState<GraphDiffResponse | null>(null);
   const [proposalDiffLoading, setProposalDiffLoading] = useState(false);
@@ -476,47 +461,16 @@ export function App() {
       .then(setAuthorContract)
       .catch(() => undefined);
 
+    void fetch("/api/auth/mail-status", { signal: controller.signal })
+      .then(async (response) => {
+        if (!response.ok) return;
+        const body = (await response.json()) as { configured: boolean };
+        setMailConfigured(body.configured);
+      })
+      .catch(() => undefined);
+
     return () => controller.abort();
   }, []);
-
-  useEffect(() => {
-    if (user?.role !== "admin") {
-      setAdminUsers([]);
-      setAdminContributions(null);
-      setAdminAudit([]);
-      return;
-    }
-
-    const controller = new AbortController();
-    setAdminLoading(true);
-    void Promise.all([
-      fetch("/api/admin/users", { signal: controller.signal }).then(async (response) => {
-        if (!response.ok) throw new Error(await readError(response));
-        return (await response.json()) as AdminUsersResponse;
-      }),
-      fetch("/api/admin/contributions", { signal: controller.signal }).then(async (response) => {
-        if (!response.ok) throw new Error(await readError(response));
-        return (await response.json()) as AdminContributionsResponse;
-      }),
-      fetch("/api/admin/audit", { signal: controller.signal }).then(async (response) => {
-        if (!response.ok) throw new Error(await readError(response));
-        return (await response.json()) as AuditEventListResponse;
-      }),
-    ])
-      .then(([usersBody, contribBody, auditBody]) => {
-        setAdminUsers(usersBody.users);
-        setAdminContributions(contribBody);
-        setAdminAudit(auditBody.events);
-      })
-      .catch((requestError: unknown) => {
-        if (!(requestError instanceof DOMException && requestError.name === "AbortError")) {
-          setError(requestError instanceof Error ? requestError.message : "Ошибка соединения");
-        }
-      })
-      .finally(() => setAdminLoading(false));
-
-    return () => controller.abort();
-  }, [user?.role]);
 
   useEffect(() => {
     if (authChecking) return;
@@ -1002,7 +956,9 @@ export function App() {
       });
       if (!response.ok) throw new Error(await readError(response));
       const updated = (await response.json()) as Proposal;
-      setOpenProposal(updated);
+      setOpenProposal(action === "approve" ? null : updated);
+      if (action === "reject") setQueueTab("rejected");
+      if (action === "request-changes") setQueueTab("in_progress");
       setDecisionReason("");
       await loadProposalGraphDiff(id);
       const listed = await fetch("/api/proposals");
@@ -1020,12 +976,6 @@ export function App() {
       const mine = await fetch("/api/contributions/me");
       if (mine.ok) {
         setContributions((await mine.json()) as ContributionsResponse);
-      }
-      if (user?.role === "admin") {
-        const all = await fetch("/api/admin/contributions");
-        if (all.ok) {
-          setAdminContributions((await all.json()) as AdminContributionsResponse);
-        }
       }
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "Ошибка соединения");
@@ -1080,37 +1030,103 @@ export function App() {
     }
   }
 
+  async function finishSignedIn(next: User) {
+    setUser(next);
+    setAuthOpen(false);
+    setAuthNote("");
+    const route = parseCardRoute(window.location.hash);
+    if (route.kind === "none") setView("graph");
+  }
+
+  async function verifyEmailToken(purpose: "confirm" | "login", token: string) {
+    setSubmitting(true);
+    setError("");
+    try {
+      const response = await fetch("/api/auth/email/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ purpose, token }),
+      });
+      if (!response.ok) throw new Error(await readError(response));
+      await finishSignedIn((await response.json()) as User);
+      if (window.location.hash.startsWith("#/auth/")) {
+        window.location.hash = "";
+      }
+    } catch (requestError) {
+      setAuthOpen(true);
+      setError(requestError instanceof Error ? requestError.message : "Ошибка соединения");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  useEffect(() => {
+    const parsed = parseAuthHash(window.location.hash);
+    if (!parsed) return;
+    void verifyEmailToken(parsed.purpose, parsed.token);
+    // hash consume once on load / hash change
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [locationHash]);
+
   async function submitAuth(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const formElement = event.currentTarget;
     setSubmitting(true);
     setError("");
+    setAuthNote("");
 
     const form = new FormData(formElement);
-    const endpoint = mode === "register" ? "/api/auth/register" : "/api/auth/login";
-    const payload = mode === "register"
-      ? {
-          username: form.get("username"),
-          password: form.get("password"),
-          display_name: form.get("displayName"),
-          email: form.get("email"),
-        }
-      : {
-          username: form.get("username"),
-          password: form.get("password"),
-        };
-
     try {
+      if (mode === "email") {
+        const email = String(form.get("email") || "");
+        const code = String(form.get("code") || "").trim();
+        if (!code) {
+          const requested = await fetch("/api/auth/email/request", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ email, purpose: "login" }),
+          });
+          if (!requested.ok) throw new Error(await readError(requested));
+          setAuthNote("Если такая почта есть и подтверждена, код уже в письме.");
+          return;
+        }
+        const verified = await fetch("/api/auth/email/verify", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email, purpose: "login", code }),
+        });
+        if (!verified.ok) throw new Error(await readError(verified));
+        await finishSignedIn((await verified.json()) as User);
+        formElement.reset();
+        return;
+      }
+
+      const endpoint = mode === "register" ? "/api/auth/register" : "/api/auth/login";
+      const payload = mode === "register"
+        ? {
+            username: form.get("username"),
+            password: form.get("password"),
+            display_name: form.get("displayName"),
+            email: form.get("email"),
+          }
+        : {
+            username: form.get("username"),
+            password: form.get("password"),
+          };
       const response = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
       if (!response.ok) throw new Error(await readError(response));
-      setUser((await response.json()) as User);
-      setAuthOpen(false);
-      const route = parseCardRoute(window.location.hash);
-      if (route.kind === "none") setView("graph");
+      const body = (await response.json()) as User;
+      if (mode === "register" && mailConfigured && !body.email_verified_at) {
+        setAuthNote("Письмо с кодом и ссылкой отправлено. Подтвердите почту, затем войдите.");
+        setMode("email");
+        formElement.reset();
+        return;
+      }
+      await finishSignedIn(body);
       formElement.reset();
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "Ошибка соединения");
@@ -1134,65 +1150,6 @@ export function App() {
       setProposalDiff(null);
       setProposedPaths([]);
       setDifferences([]);
-    } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "Ошибка соединения");
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
-  async function updateManagedUser(
-    managedUser: User,
-    change: { role?: User["role"]; is_active?: boolean },
-  ) {
-    setSubmitting(true);
-    setError("");
-    try {
-      const response = await fetch(`/api/admin/users/${managedUser.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(change),
-      });
-      if (!response.ok) throw new Error(await readError(response));
-      const updated = (await response.json()) as User;
-      setAdminUsers((users) => users.map((item) => item.id === updated.id ? updated : item));
-      if (updated.id === user?.id) {
-        setUser(updated.is_active ? updated : null);
-      }
-      const contrib = await fetch("/api/admin/contributions");
-      if (contrib.ok) {
-        setAdminContributions((await contrib.json()) as AdminContributionsResponse);
-      }
-    } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "Ошибка соединения");
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
-  async function setManagedPassword(managedUser: User) {
-    const password = (passwordDrafts[managedUser.id] || "").trim();
-    if (password.length < 12) {
-      setError("Новый пароль — минимум 12 символов.");
-      return;
-    }
-    setSubmitting(true);
-    setError("");
-    try {
-      const response = await fetch(`/api/admin/users/${managedUser.id}/password`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ password }),
-      });
-      if (!response.ok) throw new Error(await readError(response));
-      setPasswordDrafts((drafts) => ({ ...drafts, [managedUser.id]: "" }));
-      if (managedUser.id === user?.id) {
-        setUser(null);
-        setAuthOpen(true);
-        return;
-      }
-      const audit = await fetch("/api/admin/audit");
-      if (audit.ok) setAdminAudit(((await audit.json()) as AuditEventListResponse).events);
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "Ошибка соединения");
     } finally {
@@ -1314,6 +1271,13 @@ export function App() {
   }
 
   const canReview = user?.role === "editor" || user?.role === "admin";
+  const queueCounts = {
+    new: proposals.filter((item) => proposalQueueTab(item.status) === "new").length,
+    in_progress: proposals.filter((item) => proposalQueueTab(item.status) === "in_progress").length,
+    rejected: proposals.filter((item) => proposalQueueTab(item.status) === "rejected").length,
+  };
+  const queuedOnTab = proposals.filter((item) => proposalQueueTab(item.status) === queueTab);
+  const proposedLinks = (proposalDiff?.edges ?? []).filter((edge) => edge.change === "added");
 
   function openSettings(block: SettingsBlock = "profile") {
     backToGraph();
@@ -1891,15 +1855,50 @@ export function App() {
               <p className="eyebrow">Публикация</p>
               <h2 id="proposals-heading">{canReview ? "Очередь предложений" : "Ваши предложения"}</h2>
               <p className="admin-panel__hint">
-                Предложение берёт отмеченные отличия Differ. Личный git не меняется.
-                Читатели видят общую ризому только целиком, после принятия.
+                Сначала текст карточек и связи, потом ризома. Отклонённые и возвращённые
+                остаются с комментарием редактора.
               </p>
             </div>
-            {proposals.length === 0 ? (
-              <p className="admin-panel__hint">Пока нет предложений.</p>
+            <div className="tabs tabs--three" role="tablist" aria-label="Папки очереди">
+              <button
+                className={queueTab === "new" ? "tab tab--active" : "tab"}
+                type="button"
+                role="tab"
+                aria-selected={queueTab === "new"}
+                onClick={() => setQueueTab("new")}
+              >
+                Новые{queueCounts.new > 0 ? ` (${queueCounts.new})` : ""}
+              </button>
+              <button
+                className={queueTab === "in_progress" ? "tab tab--active" : "tab"}
+                type="button"
+                role="tab"
+                aria-selected={queueTab === "in_progress"}
+                onClick={() => setQueueTab("in_progress")}
+              >
+                В работе{queueCounts.in_progress > 0 ? ` (${queueCounts.in_progress})` : ""}
+              </button>
+              <button
+                className={queueTab === "rejected" ? "tab tab--active" : "tab"}
+                type="button"
+                role="tab"
+                aria-selected={queueTab === "rejected"}
+                onClick={() => setQueueTab("rejected")}
+              >
+                Отклонённые{queueCounts.rejected > 0 ? ` (${queueCounts.rejected})` : ""}
+              </button>
+            </div>
+            {queuedOnTab.length === 0 ? (
+              <p className="admin-panel__hint">
+                {queueTab === "new" && (canReview
+                  ? "Нет новых предложений: редактор их ещё не трогал."
+                  : "Нет предложений, которые редактор ещё не смотрел.")}
+                {queueTab === "in_progress" && "Нет возвращённых на доработку."}
+                {queueTab === "rejected" && "Нет отклонённых предложений."}
+              </p>
             ) : (
               <ul className="proposal-list">
-                {proposals.map((item) => (
+                {queuedOnTab.map((item) => (
                   <li key={item.id}>
                     <button className="proposal-row" type="button" onClick={() => void openProposalDetail(item.id)}>
                       <strong>{item.summary}</strong>
@@ -1909,7 +1908,7 @@ export function App() {
                 ))}
               </ul>
             )}
-            {openProposal && (
+            {openProposal && proposalQueueTab(openProposal.status) === queueTab && (
               <article className="proposal-detail">
                 <h3>{openProposal.summary}</h3>
                 <p className="admin-panel__hint">
@@ -1917,20 +1916,68 @@ export function App() {
                     {openProposal.author.display_name}
                   </button>
                   {" · "}{proposalStatusLabel(openProposal.status)}
-                  {openProposal.reason ? ` · ${openProposal.reason}` : ""}
                 </p>
-                <GraphDiffView diff={proposalDiff} loading={proposalDiffLoading} theme={theme} />
-                {openProposal.diff.map((item) => (
-                  <pre key={item.path} className="proposal-diff">{item.diff || item.path}</pre>
-                ))}
+                {openProposal.reason && (openProposal.status === "rejected" || openProposal.status === "changes_requested") && (
+                  <p className="proposal-comment" role="status">
+                    Комментарий редактора: {openProposal.reason}
+                  </p>
+                )}
+                <div className="proposal-text">
+                  <h4>Текст и связи</h4>
+                  {openProposal.diff.length === 0 ? (
+                    <p className="admin-panel__hint">В предложении нет файлов.</p>
+                  ) : (
+                    openProposal.diff.map((item) => (
+                      <article className="proposal-card" key={item.path}>
+                        <h5>{proposalCardTitle(item.path, item.body || "")}</h5>
+                        <p className="admin-panel__hint">
+                          {item.path}
+                          {openProposal.added.includes(item.path) ? " · новая карточка" : ""}
+                          {openProposal.changed.includes(item.path) ? " · изменение текста" : ""}
+                        </p>
+                        {item.body ? (
+                          <MarkdownBody
+                            body={item.body}
+                            note={{
+                              links: proposedLinks.filter((edge) => edge.source === item.path && !edge.unresolved).map((edge) => edge.target),
+                              unresolved_links: proposedLinks.filter((edge) => edge.source === item.path && edge.unresolved).map((edge) => edge.target),
+                            }}
+                          />
+                        ) : (
+                          <pre className="proposal-diff">{item.diff || item.path}</pre>
+                        )}
+                      </article>
+                    ))
+                  )}
+                  {proposedLinks.length > 0 && (
+                    <div>
+                      <h5>Связи</h5>
+                      <ul className="note-list">
+                        {proposedLinks.map((edge) => (
+                          <li key={`${edge.source}-${edge.target}-${edge.type}`}>
+                            <span className="note-link">
+                              <strong>{edge.source} → {edge.target}</strong>
+                              <small>{edge.type}{edge.unresolved ? " · нет заметки" : ""}</small>
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+                <div className="proposal-rhizome">
+                  <h4>Ризома</h4>
+                  <GraphDiffView diff={proposalDiff} loading={proposalDiffLoading} theme={theme} />
+                </div>
                 {canReview && openProposal.author.id !== user.id && (
                   <div className="proposal-actions">
                     <label>
-                      Причина
+                      Комментарий автору
                       <input
                         value={decisionReason}
                         onChange={(event) => setDecisionReason(event.target.value)}
                         maxLength={255}
+                        placeholder="обязателен, чтобы вернуть или отклонить"
                       />
                     </label>
                     {(openProposal.status === "open" || openProposal.status === "conflicted" || openProposal.status === "failed" || openProposal.status === "changes_requested") && (
@@ -1993,126 +2040,20 @@ export function App() {
             </section>
           )}
           {view === "admin" && user.role === "admin" && (
-            <section className="admin-panel" aria-labelledby="admin-heading">
-              <div>
-                <p className="eyebrow">Администрирование</p>
-                <h2 id="admin-heading">Пользователи</h2>
-                <p className="admin-panel__hint">
-                  Роли глобальны: editor включает права user, admin — все права.
-                  Статистика вклада, смена пароля и журнал действий — только здесь.
-                  После смены пароля старые сессии этой учётки заканчиваются.
-                </p>
-              </div>
-              <button className="button button--quiet" type="button" onClick={() => void connectShared()} disabled={submitting}>
-                Подключить общую ризому
-              </button>
-              {error && <p className="form-error" role="alert">{error}</p>}
-              {adminLoading ? (
-                <p className="admin-panel__hint">Загружаем пользователей…</p>
-              ) : (
-                <div className="user-list">
-                  {adminUsers.map((managedUser) => {
-                    const contribRow = adminContributions?.users.find((row) => row.user.id === managedUser.id);
-                    return (
-                    <article className="user-row" key={managedUser.id}>
-                      <div className="user-row__identity">
-                        <strong>{managedUser.display_name}</strong>
-                        <span>@{managedUser.username} · {managedUser.email}{managedUser.phone ? ` · ${managedUser.phone}` : ""}{managedUser.telegram ? ` · ${managedUser.telegram}` : ""}</span>
-                      </div>
-                      <label>
-                        Роль
-                        <select
-                          value={managedUser.role}
-                          disabled={submitting}
-                          onChange={(event) => void updateManagedUser(
-                            managedUser,
-                            { role: event.target.value as User["role"] },
-                          )}
-                        >
-                          <option value="user">user</option>
-                          <option value="editor">editor</option>
-                          <option value="admin">admin</option>
-                        </select>
-                      </label>
-                      <button
-                        className={managedUser.is_active ? "button button--danger" : "button button--quiet"}
-                        disabled={submitting}
-                        onClick={() => void updateManagedUser(
-                          managedUser,
-                          { is_active: !managedUser.is_active },
-                        )}
-                      >
-                        {managedUser.is_active ? "Заблокировать" : "Активировать"}
-                      </button>
-                      {contribRow && (
-                        <p className="user-row__stats">
-                          Карточки {contribRow.stats.notes} · добавлено {contribRow.stats.added} ·
-                          принято {contribRow.stats.accepted} · связи {contribRow.stats.links}
-                          {contribRow.review
-                            ? ` · решения: принял ${contribRow.review.accepted}, отклонил ${contribRow.review.rejected}, вернул ${contribRow.review.returned}, откатил ${contribRow.review.rolled_back}`
-                            : ""}
-                        </p>
-                      )}
-                      <form
-                        className="user-row__password"
-                        onSubmit={(event) => {
-                          event.preventDefault();
-                          void setManagedPassword(managedUser);
-                        }}
-                      >
-                        <label>
-                          Новый пароль
-                          <input
-                            type="password"
-                            minLength={12}
-                            maxLength={128}
-                            autoComplete="new-password"
-                            value={passwordDrafts[managedUser.id] || ""}
-                            disabled={submitting}
-                            onChange={(event) => setPasswordDrafts((drafts) => ({
-                              ...drafts,
-                              [managedUser.id]: event.target.value,
-                            }))}
-                          />
-                        </label>
-                        <button className="button button--quiet" type="submit" disabled={submitting}>
-                          Сменить пароль
-                        </button>
-                      </form>
-                    </article>
-                    );
-                  })}
-                </div>
-              )}
-              <div className="audit-log">
-                <h3>Журнал действий</h3>
-                <p className="admin-panel__hint">
-                  События из базы GraphNotes. Пароль и токен в записи не попадают.
-                </p>
-                {adminAudit.length === 0 ? (
-                  <p className="admin-panel__hint">Пока нет записей.</p>
-                ) : (
-                  <table className="audit-table">
-                    <thead>
-                      <tr>
-                        <th>Когда</th>
-                        <th>Действие</th>
-                        <th>Кого</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {adminAudit.map((event) => (
-                        <tr key={event.id}>
-                          <td>{new Date(event.created_at).toLocaleString("ru")}</td>
-                          <td>{auditActionLabel(event.action)}</td>
-                          <td>{event.subject_username ? `@${event.subject_username}` : "—"}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                )}
-              </div>
-            </section>
+            <AdminPanel
+              currentUserId={user.id}
+              submitting={submitting}
+              error={error}
+              onError={setError}
+              onSubmitting={setSubmitting}
+              onCurrentUserUpdated={(updated) => setUser((current) => current ? { ...current, ...updated } : current)}
+              onSignedOut={() => {
+                setUser(null);
+                setAuthOpen(true);
+                setView("graph");
+              }}
+              onConnectShared={connectShared}
+            />
           )}
         </>
       ) : (
@@ -2129,41 +2070,66 @@ export function App() {
           </div>
           <div className="auth-card">
             <div className="tabs" role="tablist" aria-label="Авторизация">
-              <button className={mode === "login" ? "tab tab--active" : "tab"} onClick={() => { setMode("login"); setError(""); }}>Вход</button>
-              <button className={mode === "register" ? "tab tab--active" : "tab"} onClick={() => { setMode("register"); setError(""); }}>Регистрация</button>
+              <button className={mode === "login" ? "tab tab--active" : "tab"} onClick={() => { setMode("login"); setError(""); setAuthNote(""); }}>Вход</button>
+              <button className={mode === "register" ? "tab tab--active" : "tab"} onClick={() => { setMode("register"); setError(""); setAuthNote(""); }}>Регистрация</button>
+              {mailConfigured && (
+                <button className={mode === "email" ? "tab tab--active" : "tab"} onClick={() => { setMode("email"); setError(""); setAuthNote(""); }}>Почта</button>
+              )}
             </div>
             <form onSubmit={(event) => void submitAuth(event)}>
-              <label>
-                Логин
-                <input name="username" minLength={3} maxLength={32} autoComplete="username" required />
-              </label>
-              {mode === "register" && (
+              {mode === "email" ? (
                 <>
-                  <label>
-                    Как к вам обращаться
-                    <input name="displayName" maxLength={80} autoComplete="name" required />
-                  </label>
                   <label>
                     Почта
                     <input name="email" type="email" maxLength={320} autoComplete="email" required />
                   </label>
+                  <label>
+                    Код из письма
+                    <input name="code" inputMode="numeric" maxLength={6} autoComplete="one-time-code" />
+                  </label>
+                  <p className="hint">Сначала запросите код, затем введите его. Ссылка из письма тоже входит.</p>
+                </>
+              ) : (
+                <>
+                  <label>
+                    {mode === "login" ? "Логин или почта" : "Логин"}
+                    <input name="username" minLength={3} maxLength={mode === "login" ? 320 : 32} autoComplete="username" required />
+                  </label>
+                  {mode === "register" && (
+                    <>
+                      <label>
+                        Как к вам обращаться
+                        <input name="displayName" maxLength={80} autoComplete="name" required />
+                      </label>
+                      <label>
+                        Почта
+                        <input name="email" type="email" maxLength={320} autoComplete="email" required />
+                      </label>
+                    </>
+                  )}
+                  <label>
+                    Пароль
+                    <input
+                      name="password"
+                      type="password"
+                      minLength={mode === "register" ? 12 : 1}
+                      maxLength={128}
+                      autoComplete={mode === "register" ? "new-password" : "current-password"}
+                      required
+                    />
+                  </label>
                 </>
               )}
-              <label>
-                Пароль
-                <input
-                  name="password"
-                  type="password"
-                  minLength={mode === "register" ? 12 : 1}
-                  maxLength={128}
-                  autoComplete={mode === "register" ? "new-password" : "current-password"}
-                  required
-                />
-              </label>
-              {mode === "register" && <p className="hint">Минимум 12 символов. Договор автора принимается в настройках.</p>}
+              {mode === "register" && (
+                <p className="hint">
+                  Минимум 12 символов. Договор автора принимается в настройках.
+                  {mailConfigured ? " Если SMTP настроен, регистрация подтверждается письмом." : ""}
+                </p>
+              )}
+              {authNote && <p className="admin-panel__hint" role="status">{authNote}</p>}
               {error && <p className="form-error" role="alert">{error}</p>}
               <button className="button button--primary" type="submit" disabled={submitting}>
-                {submitting ? "Подождите…" : mode === "register" ? "Создать учётку" : "Войти"}
+                {submitting ? "Подождите…" : mode === "register" ? "Создать учётку" : mode === "email" ? "Код / войти" : "Войти"}
               </button>
               <button className="button button--quiet" type="button" onClick={() => setAuthOpen(false)}>К графу</button>
             </form>

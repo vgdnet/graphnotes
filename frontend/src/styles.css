@@ -296,6 +296,16 @@ select { padding: .65rem .8rem; border: 1px solid var(--gn-input-border); border
 .loading { display: grid; min-height: calc(100vh - 6rem); place-items: center; color: var(--gn-text-faint); }
 
 .admin-panel { width: min(100%, 72rem); margin: -5rem auto 3rem; padding: 1.5rem; border: 1px solid var(--gn-border); border-radius: 1.3rem; background: var(--gn-surface); }
+.admin-panel--app { width: min(100%, 80rem); }
+.admin-panel__header { display: grid; gap: 1rem; }
+.admin-nav { display: flex; flex-wrap: wrap; gap: .4rem; }
+.admin-section { display: grid; gap: 1.25rem; }
+.admin-filters, .admin-create__grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr)); gap: .8rem; align-items: end; }
+.admin-filters label, .admin-create label { display: grid; gap: .35rem; font-size: .8rem; color: var(--gn-text-dim); }
+.admin-create { padding: 1rem; border: 1px solid var(--gn-border); border-radius: .9rem; background: var(--gn-bg-mid); }
+.admin-create h3 { margin: 0 0 .4rem; font-size: 1.05rem; }
+.user-row--admin { grid-template-columns: minmax(14rem, 1.4fr) 8rem auto; }
+.user-row__actions { display: flex; flex-wrap: wrap; gap: .5rem; }
 .notes-panel { width: min(100%, 72rem); margin: 0 auto 3rem; padding: 1.5rem; border: 1px solid var(--gn-border); border-radius: 1.3rem; background: var(--gn-surface); }
 .notes-panel h2, .notes-panel h3 { margin: 0 0 .75rem; }
 .notes-panel--graph { width: min(100%, 96rem); padding: 1.15rem 1.25rem 1.4rem; }
@@ -309,7 +319,12 @@ select { padding: .65rem .8rem; border: 1px solid var(--gn-input-border); border
 .proposal-list { list-style: none; margin: 0 0 1rem; padding: 0; display: grid; gap: .55rem; }
 .proposal-row { display: grid; gap: .25rem; width: 100%; padding: .8rem .9rem; border: 1px solid var(--gn-border); border-radius: .7rem; background: var(--gn-bg-mid); color: inherit; text-align: left; cursor: pointer; }
 .proposal-row span { color: var(--gn-text-dim); font-size: .8rem; }
-.proposal-detail { margin-top: 1rem; }
+.proposal-detail { margin-top: 1rem; display: grid; gap: 1.25rem; }
+.proposal-detail h4 { margin: 0 0 .5rem; font-size: 1rem; }
+.proposal-detail h5 { margin: 0; font-size: .95rem; }
+.proposal-comment { margin: 0; padding: .85rem 1rem; border: 1px solid var(--gn-border); border-radius: .7rem; background: var(--gn-bg-mid); color: var(--gn-text-strong); }
+.proposal-card { display: grid; gap: .5rem; padding: 1rem; border: 1px solid var(--gn-border); border-radius: .7rem; background: var(--gn-surface); }
+.proposal-text, .proposal-rhizome { display: grid; gap: .75rem; }
 .proposal-diff { overflow: auto; padding: 1rem; border: 1px solid var(--gn-border); border-radius: .7rem; background: var(--gn-bg-mid); white-space: pre-wrap; color: var(--gn-quiet-text); font-size: .8rem; }
 .proposal-actions { display: flex; flex-wrap: wrap; gap: .6rem; align-items: end; margin-top: 1rem; }
 .proposal-actions label { flex: 1 1 16rem; }
@@ -446,7 +461,7 @@ select { padding: .65rem .8rem; border: 1px solid var(--gn-input-border); border
   .admin-panel { margin-top: 1rem; }
   .notes-grid { grid-template-columns: 1fr; }
   .graph-toolbar { grid-template-columns: 1fr; }
-  .user-row { grid-template-columns: 1fr; align-items: stretch; }
+  .user-row, .user-row--admin { grid-template-columns: 1fr; align-items: stretch; }
   .user-row__password { grid-template-columns: 1fr; }
   .stat-grid { grid-template-columns: 1fr 1fr; }
 }

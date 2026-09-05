@@ -35,6 +35,15 @@ class Settings(BaseSettings):
     graph_diff_timeout_seconds: float = 30.0
     graph_diff_cache_max: int = 20
     personal_sync_interval_seconds: int = 300
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_username: str = ""
+    smtp_password: str = ""
+    smtp_from: str = ""
+    smtp_use_tls: bool = True
+    smtp_timeout_seconds: float = 15.0
+    public_base_url: str = ""
+    mail_code_ttl_minutes: int = 30
 
     model_config = SettingsConfigDict(
         env_file=PROJECT_ROOT / ".env",

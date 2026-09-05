@@ -2,7 +2,7 @@ import re
 import uuid
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator, model_validator
 
 USERNAME_PATTERN = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9_.-]*$")
 
@@ -43,6 +43,15 @@ class RegisterRequest(BaseModel):
         return str(value).casefold()
 
 
+def normalize_login_identifier(value: str) -> str:
+    identifier = value.strip()
+    if "@" in identifier:
+        if not 3 <= len(identifier) <= 320:
+            raise ValueError("email must be 3-320 characters")
+        return identifier.casefold()
+    return normalize_username(identifier)
+
+
 class LoginRequest(BaseModel):
     username: str
     password: str = Field(min_length=1, max_length=128)
@@ -50,7 +59,41 @@ class LoginRequest(BaseModel):
     @field_validator("username")
     @classmethod
     def validate_username(cls, value: str) -> str:
-        return normalize_username(value)
+        return normalize_login_identifier(value)
+
+
+class EmailRequest(BaseModel):
+    email: EmailStr
+    purpose: str = Field(pattern="^(confirm|login)$")
+
+    @field_validator("email")
+    @classmethod
+    def normalize_email(cls, value: EmailStr) -> str:
+        return str(value).casefold()
+
+
+class EmailVerifyRequest(BaseModel):
+    purpose: str = Field(pattern="^(confirm|login)$")
+    email: EmailStr | None = None
+    token: str | None = Field(default=None, min_length=8, max_length=128)
+    code: str | None = Field(default=None, min_length=6, max_length=6)
+
+    @field_validator("email")
+    @classmethod
+    def normalize_email(cls, value: EmailStr | None) -> str | None:
+        if value is None:
+            return None
+        return str(value).casefold()
+
+    @model_validator(mode="after")
+    def require_secret(self) -> "EmailVerifyRequest":
+        if not self.token and not self.code:
+            raise ValueError("token or code must be provided")
+        return self
+
+
+class MailStatusResponse(BaseModel):
+    configured: bool
 
 
 class UserResponse(BaseModel):
@@ -71,6 +114,8 @@ class UserResponse(BaseModel):
     author_contract_version: str | None
     author_contract_accepted_at: datetime | None
     author_contract_withdrawn_at: datetime | None
+    email_verified_at: datetime | None = None
+    last_login_at: datetime | None = None
     created_at: datetime
     updated_at: datetime
 
