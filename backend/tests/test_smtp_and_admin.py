@@ -101,7 +101,7 @@ async def test_smtp_registration_confirm_and_email_login(
     assert blocked.status_code == 403
     assert "not confirmed" in blocked.json()["detail"]
     assert sent and "Код:" in sent[0]["body"]
-    assert "http://rhizome.test/#/auth/confirm" in sent[0]["body"]
+    assert "http://rhizome.test/#/auth/confirm?token=" in sent[0]["body"]
     assert "a sufficiently long password" not in sent[0]["body"]
 
     resent = await client.post(
@@ -145,6 +145,38 @@ async def test_smtp_registration_confirm_and_email_login(
         )
         assert "a sufficiently long password" not in serialized
         assert "pending@example.com" not in serialized or "mail.confirmation_sent" in actions
+
+
+async def test_smtp_registration_confirm_link_opens_session(
+    auth_test_context: tuple[AsyncClient, async_sessionmaker[AsyncSession]],
+    monkeypatch: MonkeyPatch,
+) -> None:
+    client, _ = auth_test_context
+    sent = _enable_smtp(monkeypatch)
+    created = await client.post(
+        "/auth/register",
+        json={
+            "username": "link-pending",
+            "password": "a sufficiently long password",
+            "display_name": "Link Pending",
+            "email": "link-pending@example.com",
+        },
+    )
+    assert created.status_code == 201
+    assert created.json()["email_verified_at"] is None
+    assert "graphnotes_session" not in created.cookies
+    assert sent and "#/auth/confirm?token=" in sent[0]["body"]
+    assert "Код:" in sent[0]["body"]
+    token = sent[0]["body"].split("token=", 1)[1].split()[0]
+    confirmed = await client.post(
+        "/auth/email/verify",
+        json={"purpose": "confirm", "token": token},
+    )
+    assert confirmed.status_code == 200
+    assert confirmed.json()["email_verified_at"]
+    assert confirmed.json()["username"] == "link-pending"
+    assert client.cookies.get("graphnotes_session")
+    assert (await client.get("/users/me")).status_code == 200
 
 
 async def test_admin_create_search_revoke_audit_filters_and_mail_test(

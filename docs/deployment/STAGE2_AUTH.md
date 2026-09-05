@@ -50,7 +50,9 @@ GRAPHNOTES_PUBLIC_BASE_URL
 
 `GRAPHNOTES_PUBLIC_BASE_URL` is the public origin used in confirmation,
 login and password-reset links (for example `http://172.16.13.14:8080` on
-rhizome-test). If it is empty, mail still carries the one-time code.
+rhizome-test). The confirmation letter always includes
+`#/auth/confirm?token=` (absolute when this origin is set) plus the
+one-time 6-digit code.
 
 The working send path is **SMTP port 587 with STARTTLS**
 (`GRAPHNOTES_SMTP_USE_TLS=true`). Do not set 993 (IMAP). Do not write the
@@ -64,9 +66,10 @@ GRAPHNOTES_TELEGRAM_BOT_TOKEN
 
 Leave empty when there is no bot. Preferences still persist.
 
-When SMTP is configured, registration waits for confirmation (code or
-link) before a session is opened. Password login then accepts username or
-email. A user may reset a forgotten password with the same code/link
+When SMTP is configured, registration does not open a session. The
+letter must contain `#/auth/confirm?token=` (and still the 6-digit code).
+Password login then accepts username or email after the address is
+confirmed. A user may reset a forgotten password with the same code/link
 (`POST /api/auth/password/reset`). An admin may send a test message with
 `POST /api/admin/mail/test`. When SMTP is not configured, those mail
 endpoints return 503 and the existing password session-on-register path

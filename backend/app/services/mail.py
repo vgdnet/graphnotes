@@ -95,16 +95,17 @@ def _public_base() -> str:
 
 def confirmation_mail(user: User, token: str, code: str) -> tuple[str, str]:
     base = _public_base()
-    link = f"{base}/#/auth/confirm?token={token}" if base else ""
+    link = f"{base}/#/auth/confirm?token={token}" if base else f"#/auth/confirm?token={token}"
     lines = [
         f"Здравствуйте, {user.display_name}.",
         "",
         "Подтвердите почту для GraphNotes.",
         f"Код: {code}",
+        "",
+        f"Или откройте ссылку: {link}",
+        "",
+        "Если вы не регистрировались, письмо можно игнорировать.",
     ]
-    if link:
-        lines.extend(["", f"Или откройте ссылку: {link}"])
-    lines.extend(["", "Если вы не регистрировались, письмо можно игнорировать."])
     return "Подтверждение почты GraphNotes", "\n".join(lines)
 
 
