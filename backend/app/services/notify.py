@@ -9,6 +9,7 @@ from starlette.concurrency import run_in_threadpool
 from app.core.config import settings
 from app.models.user import User, UserRole
 from app.services.audit import record_audit_event
+from app.services.installation import resolve_public_base_url
 from app.services.mail import (
     MailDeliveryError,
     MailNotConfiguredError,
@@ -102,12 +103,14 @@ async def notify_new_proposal(
     emailed = 0
     telegramed = 0
     failed = 0
+    public_base = await resolve_public_base_url(database) if smtp_configured() else None
     for recipient in recipients:
         if recipient.notify_queue_email and smtp_configured():
             subject, body = queue_notify_mail(
                 recipient,
                 author_name=author.display_name,
                 summary=summary,
+                public_base_url=public_base,
             )
             try:
                 await run_in_threadpool(

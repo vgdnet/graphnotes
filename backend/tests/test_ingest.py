@@ -604,3 +604,135 @@ async def test_zip_over_one_mib_without_git(
     assert uploaded.status_code == 200
     assert uploaded.json()["accepted"] == [f"note{i}.md" for i in range(6)]
     await author.aclose()
+
+
+async def test_put_personal_note_upload_and_git(
+    auth_test_context: tuple[AsyncClient, async_sessionmaker[AsyncSession]],
+    monkeypatch: MonkeyPatch,
+) -> None:
+    client, _ = auth_test_context
+    github = _install(monkeypatch, _github())
+    await _register(client, "efimov")
+    uploaded = await client.post(
+        "/personal/import-md",
+        files={"file": ("mine.md", b"# Mine\nhello\n", "text/markdown")},
+    )
+    assert uploaded.status_code == 200
+    detail = await client.get("/personal/notes/mine.md")
+    assert detail.json()["source"] == "# Mine\nhello\n"
+    saved = await client.put(
+        "/personal/notes/mine.md",
+        json={"source": "# Mine\nedited\n", "expected_hash": detail.json()["content_hash"]},
+    )
+    assert saved.status_code == 200
+    assert saved.json()["source"] == "# Mine\nedited\n"
+    assert "edited" in saved.json()["body"]
+    feed = await client.get("/cards/personal:mine.md/feed")
+    assert feed.status_code == 200
+    upload_kinds = {item["kind"] for item in feed.json()["events"]}
+    assert "edited" in upload_kinds
+    for item in feed.json()["events"]:
+        assert "body" not in item
+        assert "source" not in item
+        assert "# Mine" not in str(item)
+    shared_same_path = await client.get("/shared/notes/mine.md/feed")
+    assert shared_same_path.status_code == 200
+    assert shared_same_path.json()["events"] == []
+    cards_shared_same = await client.get("/cards/mine.md/feed")
+    assert cards_shared_same.status_code == 200
+    assert cards_shared_same.json()["events"] == []
+    with_link = await client.put(
+        "/personal/notes/mine.md",
+        json={
+            "source": "# Mine\nedited [[other]]\n",
+            "expected_hash": saved.json()["content_hash"],
+        },
+    )
+    assert with_link.status_code == 200
+    linked_feed = await client.get("/cards/personal:mine.md/feed")
+    assert any(
+        item["kind"] == "linked" and item["other_path"] == "other"
+        for item in linked_feed.json()["events"]
+    )
+    unlinked = await client.put(
+        "/personal/notes/mine.md",
+        json={
+            "source": "# Mine\nedited\n",
+            "expected_hash": with_link.json()["content_hash"],
+        },
+    )
+    assert unlinked.status_code == 200
+    unlinked_feed = await client.get("/cards/personal:mine.md/feed")
+    assert any(
+        item["kind"] == "unlinked" and item["other_path"] == "other"
+        for item in unlinked_feed.json()["events"]
+    )
+    stale = await client.put(
+        "/personal/notes/mine.md",
+        json={"source": "# Mine\nstale\n", "expected_hash": detail.json()["content_hash"]},
+    )
+    assert stale.status_code == 409
+    missing_hash = await client.put(
+        "/personal/notes/mine.md",
+        json={"source": "# Mine\nno hash\n"},
+    )
+    assert missing_hash.status_code == 422
+    missing = await client.put(
+        "/personal/notes/missing.md",
+        json={"source": "# New\n", "expected_hash": "deadbeef"},
+    )
+    assert missing.status_code == 404
+
+    from tests.test_proposals import _second
+
+    stranger = await _second("put-stranger")
+    stolen = await stranger.put(
+        "/personal/notes/mine.md",
+        json={"source": "# Stolen\n", "expected_hash": saved.json()["content_hash"]},
+    )
+    assert stolen.status_code == 404
+    assert "Stolen" not in (await client.get("/personal/notes/mine.md")).json()["source"]
+    await stranger.aclose()
+
+    await _connect_pair(client, "vgdnet/guide_psy")
+    git_detail = await client.get("/personal/notes/already.md")
+    git_saved = await client.put(
+        "/personal/notes/already.md",
+        json={
+            "source": "# Mine\nfrom app\n",
+            "expected_hash": git_detail.json()["content_hash"],
+        },
+    )
+    assert git_saved.status_code == 200
+    assert git_saved.json()["source"] == "# Mine\nfrom app\n"
+    assert github.repos["vgdnet/guide_psy"].files["already.md"] == "# Mine\nfrom app\n"
+    git_missing = await client.put(
+        "/personal/notes/brand-new.md",
+        json={"source": "# New file\n", "expected_hash": "deadbeef"},
+    )
+    assert git_missing.status_code == 404
+    assert "brand-new.md" not in github.repos["vgdnet/guide_psy"].files
+
+    git_feed = await client.get("/cards/personal:already.md/feed")
+    assert git_feed.status_code == 200
+    assert "edited" in {item["kind"] for item in git_feed.json()["events"]}
+    leaked = await client.get("/shared/notes/already.md/feed")
+    assert leaked.status_code == 200
+    assert leaked.json()["events"] == []
+    leaked_cards = await client.get("/cards/already.md/feed")
+    assert leaked_cards.status_code == 200
+    assert leaked_cards.json()["events"] == []
+
+
+async def test_put_personal_note_requires_author_contract(
+    auth_test_context: tuple[AsyncClient, async_sessionmaker[AsyncSession]],
+    monkeypatch: MonkeyPatch,
+) -> None:
+    client, _ = auth_test_context
+    _install(monkeypatch, _github())
+    await _register(client, "plain-user", accept_author=False)
+    denied = await client.put(
+        "/personal/notes/mine.md",
+        json={"source": "# No\n", "expected_hash": "deadbeef"},
+    )
+    assert denied.status_code == 403

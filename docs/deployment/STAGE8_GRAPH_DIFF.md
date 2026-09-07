@@ -21,7 +21,8 @@ derived, not a second graph canon; a restart drops it.
 
 Direction reversal (A→B becomes B→A) is `edges_direction_changed`, not a
 pair of add+remove. Failed Graph Diff in the queue UI is an error, not a
-silent empty canvas.
+silent empty canvas. The queue opens proposed card Markdown and links first;
+Graph Diff is the following «ризома» block.
 
 Markers are shape plus label, not color alone: triangle added, octagon removed,
 rectangle modified, diamond renamed, star unresolved, ellipse neighbor.

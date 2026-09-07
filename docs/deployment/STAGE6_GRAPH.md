@@ -17,13 +17,30 @@ hand-curate which notes belong where. Cards and the change/diff record
 visibility. Another user's overlay cannot be selected by query.
 
 Opening a node for a signed-in viewer with access goes to the **card page**
-(`#/card/{path}`): rendered Markdown on read, not an editor and not a raw
-`<pre>` dump. Guests do not receive card bodies.
+(`#/card/{path}`): rendered Markdown, not a raw `<pre>` dump. The card opens
+**view-first**. Own personal addresses are `#/card/personal:{path}` for any
+own file (hash may show `personal%3A` — same route). Those URLs mount
+`PersonalCardEditor` and show **«Отредактировать карточку»** only when the
+viewer is the author (contract); then MDXEditor rich text + source
+(GraphNotes preview on read; TZ 2.50 / 2.53). Before this ship the editor
+was specified but not wired on the card page, so `personal:` hashes looked
+read-only. In-app saves land in the card
+interaction feed (`GET /api/cards/{path}/feed`), not as note bodies.
+Shared, others' personal (`personal:{uuid}:…`), and proposal cards stay
+read-only (no edit button, no author-contract tease on the card). Comments
+stay on published shared. Guests do not receive card bodies.
 
 Card URLs: `#/card/` opens rhizome search (words and tags from the derived
-index). `#/card/{path}` opens the card page. The chrome tab is «Карточки».
+index). Hits include `layer` (`shared` / `personal` / `proposal`) so the UI
+can highlight the layer when a personal rhizome is connected. Default
+`GET /api/search` is `layer=visible`: user searches own+shared; editor also
+searches proposal notes given for review; admin searches every card they
+can open. Graph overlay stitch (`layer=overlay`) is unchanged and still
+used for canvas highlight. `#/card/{path}` opens the card page. The chrome
+tab is «Карточки».
 MVP search is PostgreSQL (`GET /api/search`) on the same `note_index`
-revision as the graph. A rebuild or SHA change updates graph and search
+revision as the graph. Proposal create also writes `layer=proposal` rows
+(dropped on publish). A rebuild or SHA change updates graph and search
 together; a hash to a path that is not in the current git tree does not
 invent a card (API 404). Elasticsearch is the next iteration (ADR-015),
 not this Stage 6 stack.
@@ -37,7 +54,11 @@ No server config.
 ## Bounds
 
 Same as Stage 5: default page 50, max 200, neighborhood `center` + `depth` 0–4.
-The UI shows truncation and can expand neighbors of a selected shared node.
+The canvas has product names **весь граф** and **локальный граф** (depth 1–4,
+«Показать всё»). Overlay-only personal nodes use `personal:{path}` as
+`center` so the local view is that stitch, not the first shared page.
+An unknown `center` returns an empty neighborhood, not the default page.
+«К графу» from a card focuses the node on the whole graph.
 
 ## Status language
 

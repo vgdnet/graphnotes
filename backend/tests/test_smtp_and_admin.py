@@ -1,3 +1,4 @@
+from datetime import UTC, datetime, timedelta
 import uuid
 
 from httpx import ASGITransport, AsyncClient
@@ -9,8 +10,11 @@ from app.core.config import settings
 from app.main import app
 from app.models.audit_event import AuditEvent
 from app.models.auth_session import AuthSession
+from app.models.email_token import EmailToken
+from app.models.installation import InstallationSetting
 from app.models.user import User
 from app.services.admin import bootstrap_admin
+from app.services.installation import PUBLIC_BASE_URL_KEY
 
 
 async def _register(
@@ -64,6 +68,7 @@ async def test_login_by_email_without_smtp(
     status = await client.get("/auth/mail-status")
     assert status.status_code == 200
     assert status.json()["configured"] is False
+    assert status.json()["code_ttl_minutes"] == 30
     login = await client.post(
         "/auth/login",
         json={"username": "mail-login@example.com", "password": "a sufficiently long password"},
@@ -371,3 +376,207 @@ async def test_notify_prefs_default_off_and_admin_toggle(
     assert toggled.json()["notify_queue_telegram"] is False
     operator = await admin.get("/admin/operator")
     assert operator.json()["telegram"]["configured"] is False
+
+
+async def test_default_public_base_url_in_confirmation_mail(
+    auth_test_context: tuple[AsyncClient, async_sessionmaker[AsyncSession]],
+    monkeypatch: MonkeyPatch,
+) -> None:
+    client, _ = auth_test_context
+    sent = _enable_smtp(monkeypatch)
+    monkeypatch.setattr(settings, "public_base_url", "")
+    created = await client.post(
+        "/auth/register",
+        json={
+            "username": "default-url",
+            "password": "a sufficiently long password",
+            "display_name": "Default Url",
+            "email": "default-url@example.com",
+        },
+    )
+    assert created.status_code == 201
+    assert "https://rhizome.vsepsy.ru/#/auth/confirm?token=" in sent[0]["body"]
+    assert "172.16.13.14" not in sent[0]["body"]
+
+
+async def test_admin_persisted_public_url_overrides_lan_env(
+    auth_test_context: tuple[AsyncClient, async_sessionmaker[AsyncSession]],
+    monkeypatch: MonkeyPatch,
+) -> None:
+    admin, session_factory = auth_test_context
+    await _admin(admin, session_factory, "url-admin")
+    sent = _enable_smtp(monkeypatch)
+    monkeypatch.setattr(settings, "public_base_url", "http://172.16.13.14:8080")
+
+    saved = await admin.put(
+        "/admin/operator",
+        json={"public_base_url": "https://rhizome.vsepsy.ru/"},
+    )
+    assert saved.status_code == 200
+    assert saved.json()["public_base_url"] == "https://rhizome.vsepsy.ru"
+    assert saved.json()["smtp"]["public_base_url"] == "https://rhizome.vsepsy.ru"
+    assert saved.json()["mail_code_ttl_minutes"] == 30
+
+    listed = await admin.get("/admin/operator")
+    assert listed.json()["public_base_url"] == "https://rhizome.vsepsy.ru"
+
+    guest = AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver")
+    created = await guest.post(
+        "/auth/register",
+        json={
+            "username": "lan-env",
+            "password": "a sufficiently long password",
+            "display_name": "Lan Env",
+            "email": "lan-env@example.com",
+        },
+    )
+    assert created.status_code == 201
+    assert "https://rhizome.vsepsy.ru/#/auth/confirm?token=" in sent[-1]["body"]
+    assert "172.16.13.14" not in sent[-1]["body"]
+    await guest.aclose()
+
+    async with session_factory() as database:
+        row = await database.get(InstallationSetting, PUBLIC_BASE_URL_KEY)
+        assert row is not None
+        assert row.value == "https://rhizome.vsepsy.ru"
+        actions = set((await database.scalars(select(AuditEvent.action))).all())
+        assert "admin.public_base_url_changed" in actions
+
+
+async def test_expired_reset_and_confirm_tokens_do_not_open_session(
+    auth_test_context: tuple[AsyncClient, async_sessionmaker[AsyncSession]],
+    monkeypatch: MonkeyPatch,
+) -> None:
+    client, session_factory = auth_test_context
+    sent = _enable_smtp(monkeypatch)
+    await _register(client, "ttl-user", email="ttl-user@example.com")
+    confirm_code = sent[-1]["body"].split("Код: ", 1)[1].splitlines()[0].strip()
+    confirmed = await client.post(
+        "/auth/email/verify",
+        json={"purpose": "confirm", "email": "ttl-user@example.com", "code": confirm_code},
+    )
+    assert confirmed.status_code == 200
+    await client.post("/auth/logout")
+
+    asked = await client.post(
+        "/auth/email/request",
+        json={"email": "ttl-user@example.com", "purpose": "reset"},
+    )
+    assert asked.status_code == 204
+    code = sent[-1]["body"].split("Код: ", 1)[1].splitlines()[0].strip()
+    token = sent[-1]["body"].split("token=", 1)[1].split()[0]
+    async with session_factory() as database:
+        rows = (await database.scalars(select(EmailToken))).all()
+        assert rows
+        for row in rows:
+            row.expires_at = datetime.now(UTC) - timedelta(seconds=1)
+        await database.commit()
+
+    expired = await client.post(
+        "/auth/password/reset",
+        json={
+            "email": "ttl-user@example.com",
+            "code": code,
+            "password": "brand new long password",
+        },
+    )
+    assert expired.status_code == 401
+    assert "graphnotes_session" not in client.cookies
+    via_link = await client.post(
+        "/auth/password/reset",
+        json={"token": token, "password": "brand new long password"},
+    )
+    assert via_link.status_code == 401
+    assert "graphnotes_session" not in via_link.cookies
+    old = await client.post(
+        "/auth/login",
+        json={"username": "ttl-user@example.com", "password": "a sufficiently long password"},
+    )
+    assert old.status_code == 200
+    await client.post("/auth/logout")
+
+    created = await client.post(
+        "/auth/register",
+        json={
+            "username": "ttl-confirm",
+            "password": "a sufficiently long password",
+            "display_name": "Ttl Confirm",
+            "email": "ttl-confirm@example.com",
+        },
+    )
+    assert created.status_code == 201
+    confirm_token = sent[-1]["body"].split("token=", 1)[1].split()[0]
+    async with session_factory() as database:
+        rows = (
+            await database.scalars(
+                select(EmailToken).where(EmailToken.purpose == "confirm")
+            )
+        ).all()
+        for row in rows:
+            row.expires_at = datetime.now(UTC) - timedelta(seconds=1)
+        await database.commit()
+    failed_confirm = await client.post(
+        "/auth/email/verify",
+        json={"purpose": "confirm", "token": confirm_token},
+    )
+    assert failed_confirm.status_code == 401
+    assert "graphnotes_session" not in failed_confirm.cookies
+    blocked = await client.post(
+        "/auth/login",
+        json={"username": "ttl-confirm@example.com", "password": "a sufficiently long password"},
+    )
+    assert blocked.status_code == 403
+
+
+async def test_resend_is_generic_and_sends_after_expiry(
+    auth_test_context: tuple[AsyncClient, async_sessionmaker[AsyncSession]],
+    monkeypatch: MonkeyPatch,
+) -> None:
+    client, session_factory = auth_test_context
+    sent = _enable_smtp(monkeypatch)
+    await _register(client, "resend-me", email="resend-me@example.com")
+    await client.post("/auth/logout")
+
+    missing = await client.post(
+        "/auth/email/request",
+        json={"email": "nobody@example.com", "purpose": "reset"},
+    )
+    assert missing.status_code == 204
+    assert sent == [] or all("nobody@example.com" not in item["body"] for item in sent)
+    mail_count = len(sent)
+
+    first = await client.post(
+        "/auth/email/request",
+        json={"email": "resend-me@example.com", "purpose": "reset"},
+    )
+    assert first.status_code == 204
+    assert len(sent) == mail_count + 1
+    first_token = sent[-1]["body"].split("token=", 1)[1].split()[0]
+
+    second = await client.post(
+        "/auth/email/request",
+        json={"email": "resend-me@example.com", "purpose": "reset"},
+    )
+    assert second.status_code == 204
+    assert len(sent) == mail_count + 1
+
+    async with session_factory() as database:
+        rows = (await database.scalars(select(EmailToken))).all()
+        for row in rows:
+            row.expires_at = datetime.now(UTC) - timedelta(seconds=1)
+        await database.commit()
+
+    third = await client.post(
+        "/auth/email/request",
+        json={"email": "resend-me@example.com", "purpose": "reset"},
+    )
+    assert third.status_code == 204
+    assert len(sent) == mail_count + 2
+    new_token = sent[-1]["body"].split("token=", 1)[1].split()[0]
+    assert new_token != first_token
+    reused = await client.post(
+        "/auth/password/reset",
+        json={"token": first_token, "password": "brand new long password"},
+    )
+    assert reused.status_code == 401
+

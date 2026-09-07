@@ -1,3 +1,5 @@
+from uuid import UUID
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -135,15 +137,68 @@ async def record_publication_events(
             )
 
 
-async def list_note_feed(database: AsyncSession, path: str) -> dict[str, object]:
+async def record_personal_edit_events(
+    database: AsyncSession,
+    *,
+    user: User,
+    path: str,
+    before_text: str,
+    after_text: str,
+) -> None:
+    """Card history for an in-app personal save. No Markdown bodies."""
+    before = parse_markdown(path, before_text)
+    after = parse_markdown(path, after_text)
+    database.add(
+        RhizomeEvent(
+            path=path,
+            kind="edited",
+            actor_user_id=user.id,
+            owner_user_id=user.id,
+        )
+    )
+    before_links = set(before.links)
+    after_links = set(after.links)
+    for target in sorted(after_links - before_links):
+        database.add(
+            RhizomeEvent(
+                path=path,
+                kind="linked",
+                actor_user_id=user.id,
+                owner_user_id=user.id,
+                other_path=target[:180],
+            )
+        )
+    for target in sorted(before_links - after_links):
+        database.add(
+            RhizomeEvent(
+                path=path,
+                kind="unlinked",
+                actor_user_id=user.id,
+                owner_user_id=user.id,
+                other_path=target[:180],
+            )
+        )
+
+
+async def list_note_feed(
+    database: AsyncSession,
+    path: str,
+    *,
+    owner_id: UUID | None = None,
+) -> dict[str, object]:
     try:
         path = normalize_git_path(path)
     except PathError:
         path = path.strip()
+    owner_clause = (
+        RhizomeEvent.owner_user_id == owner_id
+        if owner_id is not None
+        else RhizomeEvent.owner_user_id.is_(None)
+    )
     events = (
         await database.scalars(
             select(RhizomeEvent)
-            .where(RhizomeEvent.path == path)
+            .where(RhizomeEvent.path == path, owner_clause)
             .order_by(RhizomeEvent.created_at.asc())
         )
     ).all()

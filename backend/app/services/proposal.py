@@ -18,7 +18,8 @@ from app.services.closed_corpus import closed_paths_for_user
 from app.services.git_paths import PathError, normalize_git_path
 from app.services.sync import refresh_caller_git
 from app.services.github import GitHubAppClient, GitHubAppError
-from app.services.index import IndexerError, rebuild_shared
+from app.services.index import IndexerError, drop_proposal_notes, index_proposal_notes, rebuild_shared
+from app.services.markdown import parse_markdown, unresolved_links
 from app.services.notify import notify_new_proposal
 from app.services.repository import SHARED_SINGLETON_ID, apply_snapshot, published_sha
 
@@ -210,6 +211,13 @@ async def create_proposal(
         head_sha=head,
     )
     database.add(row)
+    await index_proposal_notes(
+        database,
+        proposal_id=proposal_id,
+        owner_id=user.id,
+        revision=head,
+        files=to_commit,
+    )
     record_audit_event(
         database,
         action="proposal.created",
@@ -219,6 +227,8 @@ async def create_proposal(
     )
     await database.commit()
     await database.refresh(row)
+    await database.refresh(user)
+    payload = _public(row, user, added=added, changed=changed)
     try:
         await notify_new_proposal(
             database,
@@ -229,7 +239,7 @@ async def create_proposal(
         await database.commit()
     except Exception:
         await database.rollback()
-    return _public(row, user, added=added, changed=changed)
+    return payload
 
 
 async def list_proposals(
@@ -289,8 +299,56 @@ async def get_proposal(
                 added.append(path)
             elif before != after:
                 changed.append(path)
-            diffs.append({"path": path, "diff": _diff(path, before or "", after or "")})
+            diffs.append(
+                {
+                    "path": path,
+                    "diff": _diff(path, before or "", after or ""),
+                    "body": after or "",
+                }
+            )
     return _public(row, author, added=added, changed=changed, diffs=diffs)
+
+
+async def get_proposal_card(
+    database: AsyncSession,
+    user: User,
+    proposal_id: uuid.UUID,
+    path: str,
+    client: GitHubAppClient,
+) -> dict[str, object]:
+    try:
+        normalized = normalize_git_path(path)
+    except PathError as exc:
+        raise ProposalError(400, str(exc)) from exc
+    row = await proposal_for_viewer(database, user, proposal_id)
+    if normalized not in _paths(row.scope_paths):
+        raise ProposalError(404, "note was not found")
+    shared = await database.get(SharedRepository, SHARED_SINGLETON_ID)
+    if shared is None:
+        raise ProposalError(404, "note was not found")
+    try:
+        text = await _file(client, shared.owner, shared.name, normalized, row.head_sha)
+        paths = set(await client.list_markdown_files(shared.owner, shared.name, row.head_sha))
+    except GitHubAppError as exc:
+        raise _github(exc) from exc
+    if text is None:
+        raise ProposalError(404, "note was not found")
+    parsed = parse_markdown(normalized, text)
+    return {
+        "path": normalized,
+        "title": parsed.title,
+        "tags": list(parsed.tags),
+        "aliases": list(parsed.aliases),
+        "links": list(parsed.links),
+        "unresolved_links": list(unresolved_links(parsed.links, paths)),
+        "locked_links": [],
+        "warnings": list(parsed.warnings),
+        "body": parsed.body,
+        "content_hash": parsed.content_hash,
+        "locked": False,
+        "closed": False,
+        "source": text,
+    }
 
 
 async def decide(
@@ -450,6 +508,7 @@ async def _approve(
             await record_publication_events(
                 database, row, before_paths=before_paths, before_edges=before_edges
             )
+            await drop_proposal_notes(database, row.id)
         else:
             row.status = ProposalStatus.FAILED.value
             row.error = "index rebuild did not reach the merged revision"

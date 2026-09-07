@@ -104,6 +104,18 @@ class AdminOperatorResponse(BaseModel):
     health: dict[str, str]
     shared_repository: dict[str, object] | None = None
     public_base_url: str | None = None
+    mail_code_ttl_minutes: int = 30
+
+
+class AdminOperatorUpdate(BaseModel):
+    public_base_url: str = Field(min_length=8, max_length=300)
+
+    @field_validator("public_base_url")
+    @classmethod
+    def validate_public_base_url(cls, value: str) -> str:
+        from app.services.installation import normalize_public_base_url
+
+        return normalize_public_base_url(value)
 
 
 class AdminSessionRevokeResponse(BaseModel):

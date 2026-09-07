@@ -22,6 +22,7 @@ class ProposalAuthor(BaseModel):
 class ProposalFileDiff(BaseModel):
     path: str
     diff: str
+    body: str = ""
 
 
 class ProposalResponse(BaseModel):

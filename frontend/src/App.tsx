@@ -2,13 +2,22 @@ import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { GraphView } from "./GraphView";
 import type { FilterKind, GraphResponse } from "./GraphView";
+import { graphRequestParams } from "./graphQuery";
 import { GraphDiffView } from "./GraphDiffView";
 import type { GraphDiffResponse } from "./GraphDiffView";
 import { MarkdownBody } from "./MarkdownBody";
 import { CardSearch } from "./CardSearch";
-import { cardApiUrl, cardHash, cardSearchHash, parseCardRoute } from "./cardRoute";
+import { canShowCardEditButton, cardApiUrl, cardHash, cardSearchHash, isForeignPersonalCard, isOwnPersonalCard, parseCardRoute } from "./cardRoute";
+import { PersonalCardEditor } from "./PersonalCardEditor";
 import { AdminPanel } from "./AdminPanel";
 import { ThemeSwitcher } from "./ThemeSwitcher";
+import {
+  DEFAULT_MAIL_CODE_TTL_MINUTES,
+  mailCodeExpired,
+  parseAuthHash,
+  remainingMailCodeMs,
+  resetFormPhase,
+} from "./authMail";
 import {
   applyTheme,
   persistTheme,
@@ -96,7 +105,7 @@ type NoteProjection = {
   closed?: boolean;
 };
 
-type NoteDetail = NoteProjection & { body: string; content_hash: string };
+type NoteDetail = NoteProjection & { body: string; content_hash: string; source?: string | null };
 
 type NoteListResponse = {
   notes: NoteProjection[];
@@ -219,17 +228,17 @@ type UserCard = {
 type UploadEventItem = { path: string; content_hash: string; created_at: string };
 type UploadHistoryResponse = { events: UploadEventItem[] };
 
-function parseAuthHash(hash: string): { purpose: "confirm" | "login" | "reset"; token: string } | null {
-  const value = hash.startsWith("#") ? hash.slice(1) : hash;
-  const match = value.match(/^\/auth\/(confirm|login-code|reset)\?token=([^&]+)$/);
-  if (!match) return null;
-  const purpose = match[1] === "confirm" ? "confirm" : match[1] === "reset" ? "reset" : "login";
-  return { purpose, token: decodeURIComponent(match[2]) };
-}
-
 function differKindLabel(kind: string): string {
   if (kind === "added") return "нет в общей";
   if (kind === "changed") return "отличается";
+  return kind;
+}
+
+function feedKindLabel(kind: string): string {
+  if (kind === "created") return "создана";
+  if (kind === "edited") return "правка";
+  if (kind === "linked") return "связь";
+  if (kind === "unlinked") return "снята связь";
   return kind;
 }
 
@@ -368,6 +377,9 @@ export function App() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [mailConfigured, setMailConfigured] = useState(false);
+  const [mailCodeTtlMinutes, setMailCodeTtlMinutes] = useState(DEFAULT_MAIL_CODE_TTL_MINUTES);
+  const [mailChallengeStartedAt, setMailChallengeStartedAt] = useState<number | null>(null);
+  const [mailChallengeClock, setMailChallengeClock] = useState(0);
   const [authNote, setAuthNote] = useState("");
   const [resetToken, setResetToken] = useState("");
   const [repository, setRepository] = useState<RepositoryStatusResponse | null>(null);
@@ -391,6 +403,7 @@ export function App() {
   const [sharedGraph, setSharedGraph] = useState<GraphResponse | null>(null);
   const [graphLoading, setGraphLoading] = useState(false);
   const [graphCenter, setGraphCenter] = useState<string | null>(null);
+  const [graphDepth, setGraphDepth] = useState(1);
   const [graphLayer, setGraphLayer] = useState<FilterKind>("all");
   const [authorContract, setAuthorContract] = useState<AuthorContract | null>(null);
   const [userCard, setUserCard] = useState<UserCard | null>(null);
@@ -478,8 +491,11 @@ export function App() {
     void fetch("/api/auth/mail-status", { signal: controller.signal })
       .then(async (response) => {
         if (!response.ok) return;
-        const body = (await response.json()) as { configured: boolean };
+        const body = (await response.json()) as { configured: boolean; code_ttl_minutes?: number };
         setMailConfigured(body.configured);
+        if (typeof body.code_ttl_minutes === "number" && body.code_ttl_minutes > 0) {
+          setMailCodeTtlMinutes(body.code_ttl_minutes);
+        }
       })
       .catch(() => undefined);
 
@@ -636,13 +652,12 @@ export function App() {
       return;
     }
     const controller = new AbortController();
-    const params = new URLSearchParams({ limit: "50", depth: "1" });
-    if (graphCenter) {
-      const center = graphCenter.startsWith("personal:")
-        ? graphCenter.slice("personal:".length)
-        : graphCenter;
-      params.set("center", center);
-    }
+    const params = new URLSearchParams(graphRequestParams({
+      scope: graphCenter ? "local" : "full",
+      center: graphCenter,
+      depth: graphDepth,
+      personalLayer: graphLayer === "personal",
+    }));
     const path = !user
       ? `/api/graph/shared?${params}`
       : graphLayer === "personal"
@@ -668,6 +683,7 @@ export function App() {
     repository?.personal?.updated_at,
     report?.revision,
     graphCenter,
+    graphDepth,
     graphLayer,
   ]);
 
@@ -696,7 +712,6 @@ export function App() {
     const isPersonal = path.startsWith("personal:");
     const isProposal = path.startsWith("proposal:");
     const filePath = isPersonal ? path.slice("personal:".length).replace(/^[0-9a-f-]{36}:/i, "") : path;
-    const originKind = origin === "personal" || isPersonal ? "personal" : "shared";
     const endpoint = cardApiUrl(path);
     setSubmitting(true);
     setError("");
@@ -707,17 +722,17 @@ export function App() {
       const detail = (await response.json()) as NoteDetail;
       setOpenNote(detail);
       setSelectedCardPath(path.startsWith("personal:") ? path : detail.path);
-      if (!detail.locked && !isPersonal && !isProposal) {
-        const [feed, comments] = await Promise.all([
-          originKind === "personal"
-            ? Promise.resolve(null)
-            : fetch(`/api/shared/notes/${encodeURI(filePath)}/feed`),
-          fetch(`/api/shared/notes/${encodeURI(filePath)}/comments`),
-        ]);
-        if (feed && feed.ok) setNoteFeed(((await feed.json()) as { events: NoteFeedEvent[] }).events);
+      if (!detail.locked && !isProposal) {
+        const feed = await fetch(`${cardApiUrl(path)}/feed`);
+        if (feed.ok) setNoteFeed(((await feed.json()) as { events: NoteFeedEvent[] }).events);
         else setNoteFeed([]);
-        if (comments.ok) setNoteComments(((await comments.json()) as { comments: NoteCommentItem[] }).comments);
-        else setNoteComments([]);
+        if (!isPersonal) {
+          const comments = await fetch(`/api/shared/notes/${encodeURI(filePath)}/comments`);
+          if (comments.ok) setNoteComments(((await comments.json()) as { comments: NoteCommentItem[] }).comments);
+          else setNoteComments([]);
+        } else {
+          setNoteComments([]);
+        }
       } else {
         setNoteFeed([]);
         setNoteComments([]);
@@ -772,9 +787,10 @@ export function App() {
       setLocationHash("");
     }
     setView("graph");
+    setGraphCenter(null);
     if (path) {
+      if (isOwnPersonalCard(path)) setGraphLayer("personal");
       setSelectedCardPath(path);
-      setGraphCenter(path.startsWith("personal:") ? graphCenter : path);
     }
   }
 
@@ -1041,9 +1057,12 @@ export function App() {
     try {
       const response = await fetch(`/api/personal/notes/${encodeURI(path)}`);
       if (!response.ok) throw new Error(await readError(response));
-      setNoteFeed([]);
+      const detail = (await response.json()) as NoteDetail;
+      const feed = await fetch(`${cardApiUrl(`personal:${path}`)}/feed`);
+      if (feed.ok) setNoteFeed(((await feed.json()) as { events: NoteFeedEvent[] }).events);
+      else setNoteFeed([]);
       setNoteComments([]);
-      setOpenNote((await response.json()) as NoteDetail);
+      setOpenNote(detail);
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "Ошибка соединения");
     } finally {
@@ -1055,9 +1074,38 @@ export function App() {
     setUser(next);
     setAuthOpen(false);
     setAuthNote("");
+    setResetToken("");
+    setMailChallengeStartedAt(null);
     const route = parseCardRoute(window.location.hash);
     if (route.kind === "none") setView("graph");
   }
+
+  function expireMailChallenge(message: string) {
+    setResetToken("");
+    setMailChallengeStartedAt(null);
+    if (window.location.hash.startsWith("#/auth/")) {
+      window.location.hash = "";
+    }
+    setAuthOpen(true);
+    setAuthNote(message);
+    void fetch("/api/auth/logout", { method: "POST" }).catch(() => undefined);
+  }
+
+  useEffect(() => {
+    if (mailChallengeStartedAt == null) return;
+    const tick = () => {
+      const now = Date.now();
+      setMailChallengeClock(now);
+      if (mailCodeExpired(mailChallengeStartedAt, mailCodeTtlMinutes, now)) {
+        expireMailChallenge("Ссылка или код истекли. Запросите письмо снова.");
+      }
+    };
+    tick();
+    const id = window.setInterval(tick, 1000);
+    return () => window.clearInterval(id);
+    // expireMailChallenge is local state setter wrap
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mailChallengeStartedAt, mailCodeTtlMinutes]);
 
   async function verifyEmailToken(purpose: "confirm" | "login", token: string) {
     setSubmitting(true);
@@ -1068,7 +1116,14 @@ export function App() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ purpose, token }),
       });
-      if (!response.ok) throw new Error(await readError(response));
+      if (!response.ok) {
+        const message = await readError(response);
+        if (response.status === 401) {
+          setMode("email");
+          expireMailChallenge("Ссылка или код истекли. Запросите письмо снова.");
+        }
+        throw new Error(message);
+      }
       await finishSignedIn((await response.json()) as User);
       if (window.location.hash.startsWith("#/auth/")) {
         window.location.hash = "";
@@ -1088,6 +1143,7 @@ export function App() {
       setAuthOpen(true);
       setMode("reset");
       setResetToken(parsed.token);
+      setMailChallengeStartedAt(Date.now());
       setAuthNote("Введите новый пароль, чтобы завершить сброс.");
       return;
     }
@@ -1117,6 +1173,7 @@ export function App() {
               body: JSON.stringify({ email, purpose: "reset" }),
             });
             if (!requested.ok) throw new Error(await readError(requested));
+            setMailChallengeStartedAt(Date.now());
             setAuthNote("Если такая почта есть, код для сброса уже в письме.");
             return;
           }
@@ -1131,8 +1188,15 @@ export function App() {
               password,
             }),
           });
-          if (!reset.ok) throw new Error(await readError(reset));
+          if (!reset.ok) {
+            const message = await readError(reset);
+            if (reset.status === 401) {
+              expireMailChallenge("Ссылка или код истекли. Запросите письмо снова.");
+            }
+            throw new Error(message);
+          }
           setResetToken("");
+          setMailChallengeStartedAt(null);
           if (window.location.hash.startsWith("#/auth/")) window.location.hash = "";
           await finishSignedIn((await reset.json()) as User);
           formElement.reset();
@@ -1145,6 +1209,7 @@ export function App() {
             body: JSON.stringify({ email, purpose: "login" }),
           });
           if (!requested.ok) throw new Error(await readError(requested));
+          setMailChallengeStartedAt(Date.now());
           setAuthNote("Если такая почта есть и подтверждена, код уже в письме.");
           return;
         }
@@ -1398,7 +1463,7 @@ export function App() {
           </button>
           {user && (
             <button className={view === "differ" ? "button button--quiet tab--active" : "button button--quiet"} type="button" onClick={() => { backToGraph(); openDiffer(); }}>
-              Differ
+              Отличающиеся
             </button>
           )}
           {user && (
@@ -1444,6 +1509,8 @@ export function App() {
           {view === "search" && (
             <CardSearch
               canReadNotes
+              role={user.role}
+              hasPersonal={Boolean(repository?.personal?.connected) || personalNotes.length > 0}
               onNeedAuth={() => setAuthOpen(true)}
             />
           )}
@@ -1453,10 +1520,12 @@ export function App() {
               <p className="eyebrow">Карточка</p>
               <h2 id="card-heading">{openNote?.title || "Карточка ризомы"}</h2>
               <p className="admin-panel__hint">
-                Отрисованный Markdown на чтение. Правки текста здесь нет — авторство в git.
-                {cardPath?.startsWith("personal:") ? " Слой: ваша ризома." : ""}
-                {cardPath?.startsWith("proposal:") ? " Слой: правка из очереди." : ""}
-                {cardPath && !cardPath.startsWith("personal:") && !cardPath.startsWith("proposal:") ? " Слой: общая ризома." : ""}
+                {isOwnPersonalCard(cardPath) ? "Слой: ваша ризома." : ""}
+                {isForeignPersonalCard(cardPath) ? "Слой: личная ризома автора. Здесь не правят." : ""}
+                {cardPath?.startsWith("proposal:") ? "Слой: правка из очереди." : ""}
+                {cardPath && !cardPath.startsWith("personal:") && !cardPath.startsWith("proposal:")
+                  ? "Слой: общая ризома. Текст здесь не правят — предложение через Отличающиеся."
+                  : ""}
               </p>
             </div>
             <div className="graph-actions">
@@ -1472,7 +1541,31 @@ export function App() {
               <p className="admin-panel__hint">Закрытая заметка. Тело не показывается.</p>
             ) : openNote ? (
               <article className="note-read">
-                <MarkdownBody body={openNote.body} note={openNote} nodes={sharedGraph?.nodes ?? []} />
+                {isOwnPersonalCard(cardPath) && cardPath ? (
+                  <PersonalCardEditor
+                    note={openNote}
+                    cardPath={cardPath}
+                    nodes={sharedGraph?.nodes ?? []}
+                    theme={theme}
+                    canEdit={canShowCardEditButton(cardPath, user.is_author)}
+                    submitting={submitting}
+                    setSubmitting={setSubmitting}
+                    onSaved={(note) => {
+                      setOpenNote(note);
+                      setUploadStamp((value) => value + 1);
+                      void fetch(`${cardApiUrl(cardPath)}/feed`)
+                        .then((response) => (response.ok ? response.json() : null))
+                        .then((payload) => {
+                          if (payload && Array.isArray(payload.events)) {
+                            setNoteFeed(payload.events as NoteFeedEvent[]);
+                          }
+                        });
+                    }}
+                    onError={setError}
+                  />
+                ) : (
+                  <MarkdownBody body={openNote.body} note={openNote} nodes={sharedGraph?.nodes ?? []} />
+                )}
                 {noteFeed.length > 0 && (
                   <div>
                     <p className="admin-panel__hint">Кто трогал карточку (не git log и не тела в PostgreSQL).</p>
@@ -1481,13 +1574,18 @@ export function App() {
                         <li key={item.id}>
                           <span className="note-link">
                             <strong>{item.actor?.display_name || "автор"}</strong>
-                            <small>{item.kind}{item.other_path ? ` · ${item.other_path}` : ""}</small>
+                            <small>
+                              {feedKindLabel(item.kind)}
+                              {item.other_path ? ` · ${item.other_path}` : ""}
+                              {item.created_at ? ` · ${new Date(item.created_at).toLocaleString("ru")}` : ""}
+                            </small>
                           </span>
                         </li>
                       ))}
                     </ul>
                   </div>
                 )}
+                {cardPath && !cardPath.startsWith("personal:") && !cardPath.startsWith("proposal:") ? (
                 <div>
                   <p className="admin-panel__hint">Комментарии: любой вошедший; editor принимает.</p>
                   <ul className="note-list">
@@ -1513,6 +1611,7 @@ export function App() {
                     <button className="button button--quiet" type="submit" disabled={submitting}>Отправить</button>
                   </form>
                 </div>
+                ) : null}
               </article>
             ) : error ? (
               <p className="admin-panel__hint" role="status">Карточка не загрузилась.</p>
@@ -1687,7 +1786,7 @@ export function App() {
             <section className="notes-panel" aria-labelledby="differ-heading">
               <div>
                 <p className="eyebrow">Отличия</p>
-                <h2 id="differ-heading">Differ</h2>
+                <h2 id="differ-heading">Отличающиеся</h2>
                 <p className="admin-panel__hint">
                   Сравнение личного слоя (git или загруженные .md) с опубликованной общей
                   в одну сторону: чего в общей ещё нет или что отличается. Git не обязателен.
@@ -1767,7 +1866,7 @@ export function App() {
               {personalNotes.length > 0 && user.is_author && (
                 <div>
                   <p className="admin-panel__hint">
-                    Закрытый корпус остаётся у вас: не в Differ и не в общей. Ссылка из общей — замок, не текст.
+                    Закрытый корпус остаётся у вас: не в отличающихся и не в общей. Ссылка из общей — замок, не текст.
                   </p>
                   <ul className="note-list">
                     {personalNotes.map((item) => (
@@ -1807,38 +1906,15 @@ export function App() {
                           <li key={item.id}>
                             <span className="note-link">
                               <strong>{item.actor?.display_name || "автор"}</strong>
-                              <small>{item.kind}{item.other_path ? ` · ${item.other_path}` : ""}</small>
+                              <small>
+                                {feedKindLabel(item.kind)}
+                                {item.other_path ? ` · ${item.other_path}` : ""}
+                                {item.created_at ? ` · ${new Date(item.created_at).toLocaleString("ru")}` : ""}
+                              </small>
                             </span>
                           </li>
                         ))}
                       </ul>
-                    </div>
-                  )}
-                  {!openNote.locked && (
-                    <div>
-                      <p className="admin-panel__hint">Комментарии: любой вошедший; editor принимает.</p>
-                      <ul className="note-list">
-                        {noteComments.map((item) => (
-                          <li key={item.id}>
-                            <span className="note-link">
-                              <strong>{item.author.display_name}</strong>
-                              <small>{item.status} · {item.body}</small>
-                            </span>
-                            {canReview && item.status === "pending" && (
-                              <button className="button button--quiet" type="button" onClick={() => void moderateComment(item.id, "approved", openNote.path)}>
-                                Принять
-                              </button>
-                            )}
-                          </li>
-                        ))}
-                      </ul>
-                      <form className="connect-form" onSubmit={(event) => { event.preventDefault(); void submitComment(openNote.path); }}>
-                        <label>
-                          Комментарий
-                          <input value={commentDraft} onChange={(event) => setCommentDraft(event.target.value)} maxLength={2000} required />
-                        </label>
-                        <button className="button button--quiet" type="submit" disabled={submitting}>Отправить</button>
-                      </form>
                     </div>
                   )}
                 </article>
@@ -1851,7 +1927,7 @@ export function App() {
                 <p className="eyebrow">Автор</p>
                 <h2 id="contrib-heading">Мой вклад</h2>
                 <p className="admin-panel__hint">
-                  Пустой Differ не стирает принятое. Состояния: только в личном слое, предложено, принято в общую.
+                  Пустой список отличающихся не стирает принятое. Состояния: только в личном слое, предложено, принято в общую.
                   Карточка — след вклада в GraphNotes, не профиль GitHub.
                 </p>
               </div>
@@ -2132,11 +2208,6 @@ export function App() {
                 </p>
               </div>
               <div className="graph-actions">
-                {graphCenter && (
-                  <button className="button button--quiet" type="button" onClick={() => setGraphCenter(null)}>
-                    Вся страница
-                  </button>
-                )}
                 {user.role === "admin" && (
                   <button className="button button--quiet" type="button" disabled={submitting} onClick={() => void rebuildSharedIndex()}>
                     Пересобрать индекс
@@ -2147,10 +2218,13 @@ export function App() {
                 graph={sharedGraph}
                 loading={graphLoading}
                 selectedPath={selectedCardPath}
+                localCenter={graphCenter}
+                localDepth={graphDepth}
                 canReadNotes
                 filterKind={graphLayer}
                 onFilterKindChange={setGraphLayer}
-                onExpand={setGraphCenter}
+                onLocalCenterChange={setGraphCenter}
+                onLocalDepthChange={setGraphDepth}
                 theme={theme}
               />
             </section>
@@ -2187,13 +2261,13 @@ export function App() {
           </div>
           <div className="auth-card">
             <div className="tabs" role="tablist" aria-label="Авторизация">
-              <button className={mode === "login" ? "tab tab--active" : "tab"} onClick={() => { setMode("login"); setError(""); setAuthNote(""); setResetToken(""); }}>Вход</button>
-              <button className={mode === "register" ? "tab tab--active" : "tab"} onClick={() => { setMode("register"); setError(""); setAuthNote(""); setResetToken(""); }}>Регистрация</button>
+              <button className={mode === "login" ? "tab tab--active" : "tab"} onClick={() => { setMode("login"); setError(""); setAuthNote(""); setResetToken(""); setMailChallengeStartedAt(null); }}>Вход</button>
+              <button className={mode === "register" ? "tab tab--active" : "tab"} onClick={() => { setMode("register"); setError(""); setAuthNote(""); setResetToken(""); setMailChallengeStartedAt(null); }}>Регистрация</button>
               {mailConfigured && (
-                <button className={mode === "email" ? "tab tab--active" : "tab"} onClick={() => { setMode("email"); setError(""); setAuthNote(""); setResetToken(""); }}>Почта</button>
+                <button className={mode === "email" ? "tab tab--active" : "tab"} onClick={() => { setMode("email"); setError(""); setAuthNote(""); setResetToken(""); setMailChallengeStartedAt(null); }}>Почта</button>
               )}
               {mailConfigured && (
-                <button className={mode === "reset" ? "tab tab--active" : "tab"} onClick={() => { setMode("reset"); setError(""); setAuthNote(""); }}>Сброс</button>
+                <button className={mode === "reset" ? "tab tab--active" : "tab"} onClick={() => { setMode("reset"); setError(""); setAuthNote(""); setResetToken(""); setMailChallengeStartedAt(null); }}>Сброс</button>
               )}
             </div>
             <form onSubmit={(event) => void submitAuth(event)}>
@@ -2201,7 +2275,7 @@ export function App() {
                 <>
                   <label>
                     Почта
-                    <input name="email" type="email" maxLength={320} autoComplete="email" required={!resetToken || mode === "email"} />
+                    <input name="email" type="email" maxLength={320} autoComplete="email" required={resetFormPhase(resetToken, mailChallengeStartedAt, mailCodeTtlMinutes, mailChallengeClock || Date.now()) === "request" || mode === "email"} />
                   </label>
                   <label>
                     Код из письма
@@ -2210,14 +2284,21 @@ export function App() {
                   {mode === "reset" && (
                     <label>
                       Новый пароль
-                      <input name="password" type="password" minLength={12} maxLength={128} autoComplete="new-password" required={Boolean(resetToken) || undefined} />
+                      <input name="password" type="password" minLength={12} maxLength={128} autoComplete="new-password" required={resetFormPhase(resetToken, mailChallengeStartedAt, mailCodeTtlMinutes, mailChallengeClock || Date.now()) === "set-password" || undefined} />
                     </label>
                   )}
                   <p className="hint">
                     {mode === "reset"
-                      ? (resetToken ? "Задайте новый пароль. Код не нужен, если открыли ссылку из письма." : "Сначала запросите код, затем введите его и новый пароль.")
-                      : "Сначала запросите код, затем введите его. Ссылка из письма тоже входит."}
+                      ? (resetFormPhase(resetToken, mailChallengeStartedAt, mailCodeTtlMinutes, mailChallengeClock || Date.now()) === "set-password"
+                        ? `Задайте новый пароль. Код действует ${mailCodeTtlMinutes} мин.${mailChallengeStartedAt ? ` Осталось ${Math.ceil(remainingMailCodeMs(mailChallengeStartedAt, mailCodeTtlMinutes, mailChallengeClock || Date.now()) / 60000)} мин.` : ""} Код не нужен, если открыли ссылку из письма.`
+                        : `Сначала запросите код, затем введите его и новый пароль. Код действует ${mailCodeTtlMinutes} мин.`)
+                      : `Сначала запросите код, затем введите его. Ссылка из письма тоже входит. Код действует ${mailCodeTtlMinutes} мин.`}
                   </p>
+                  {mode === "reset" && resetFormPhase(resetToken, mailChallengeStartedAt, mailCodeTtlMinutes, mailChallengeClock || Date.now()) === "set-password" && (
+                    <p className="hint">
+                      <button className="tab" type="button" onClick={() => expireMailChallenge("Запросите новое письмо на почту.")}>Ссылка не работает? Запросить снова</button>
+                    </p>
+                  )}
                 </>
               ) : (
                 <>
@@ -2258,13 +2339,13 @@ export function App() {
               )}
               {mode === "login" && mailConfigured && (
                 <p className="hint">
-                  <button className="tab" type="button" onClick={() => { setMode("reset"); setError(""); setAuthNote(""); }}>Забыли пароль?</button>
+                  <button className="tab" type="button" onClick={() => { setMode("reset"); setError(""); setAuthNote(""); setResetToken(""); setMailChallengeStartedAt(null); }}>Забыли пароль?</button>
                 </p>
               )}
               {authNote && <p className="admin-panel__hint" role="status">{authNote}</p>}
               {error && <p className="form-error" role="alert">{error}</p>}
               <button className="button button--primary" type="submit" disabled={submitting}>
-                {submitting ? "Подождите…" : mode === "register" ? "Создать учётку" : mode === "email" ? "Код / войти" : mode === "reset" ? (resetToken ? "Сменить пароль" : "Код / сменить пароль") : "Войти"}
+                {submitting ? "Подождите…" : mode === "register" ? "Создать учётку" : mode === "email" ? "Код / войти" : mode === "reset" ? (resetFormPhase(resetToken, mailChallengeStartedAt, mailCodeTtlMinutes, mailChallengeClock || Date.now()) === "set-password" ? "Сменить пароль" : "Код / сменить пароль") : "Войти"}
               </button>
               <button className="button button--quiet" type="button" onClick={() => setAuthOpen(false)}>К графу</button>
             </form>
@@ -2305,9 +2386,12 @@ export function App() {
               graph={sharedGraph}
               loading={graphLoading}
               selectedPath={selectedCardPath}
+              localCenter={graphCenter}
+              localDepth={graphDepth}
               canReadNotes={false}
               onNeedAuth={() => setAuthOpen(true)}
-              onExpand={setGraphCenter}
+              onLocalCenterChange={setGraphCenter}
+              onLocalDepthChange={setGraphDepth}
               theme={theme}
             />
           </section>

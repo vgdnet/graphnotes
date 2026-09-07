@@ -19,6 +19,12 @@ class NoteProjection(BaseModel):
 class NoteDetail(NoteProjection):
     body: str
     content_hash: str
+    source: str | None = None
+
+
+class PersonalNoteWrite(BaseModel):
+    source: str
+    expected_hash: str
 
 
 class NoteListResponse(BaseModel):

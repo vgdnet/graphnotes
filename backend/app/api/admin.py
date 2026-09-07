@@ -15,6 +15,7 @@ from app.schemas.admin import (
     AdminMailTestRequest,
     AdminMailTestResponse,
     AdminOperatorResponse,
+    AdminOperatorUpdate,
     AdminPasswordSet,
     AdminSessionRevokeResponse,
     AdminUserCreate,
@@ -27,7 +28,9 @@ from app.schemas.auth import UserResponse
 from app.schemas.contributions import AdminContributionsResponse
 from app.services.audit import record_audit_event
 from app.services.auth import hash_password
+from app.core.config import settings
 from app.services.contributions import list_admin_contributions
+from app.services.installation import resolve_public_base_url, save_public_base_url
 from app.services.mail import (
     MailDeliveryError,
     MailNotConfiguredError,
@@ -430,14 +433,34 @@ async def operator_status(
             "status": shared.sync_status,
             "index_status": shared.index_status,
         }
-    smtp = smtp_public_status()
+    base = await resolve_public_base_url(database)
+    smtp = smtp_public_status(public_base_url=base)
     return AdminOperatorResponse(
         smtp=smtp,
         telegram=telegram_public_status(),
         health=health,
         shared_repository=shared_body,
-        public_base_url=smtp.get("public_base_url") if isinstance(smtp, dict) else None,
+        public_base_url=base,
+        mail_code_ttl_minutes=settings.mail_code_ttl_minutes,
     )
+
+
+@router.put("/operator", response_model=AdminOperatorResponse)
+async def update_operator(
+    payload: AdminOperatorUpdate,
+    admin: CurrentAdmin,
+    database: DatabaseSession,
+) -> AdminOperatorResponse:
+    saved = await save_public_base_url(database, payload.public_base_url)
+    record_audit_event(
+        database,
+        action="admin.public_base_url_changed",
+        actor_user_id=admin.id,
+        subject_username=admin.username,
+        details={"public_base_url": saved},
+    )
+    await database.commit()
+    return await operator_status(admin, database)
 
 
 @router.post("/mail/test", response_model=AdminMailTestResponse)

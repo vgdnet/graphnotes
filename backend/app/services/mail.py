@@ -7,9 +7,10 @@ from email.message import EmailMessage
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.config import settings
+from app.core.config import DEFAULT_PUBLIC_BASE_URL, settings
 from app.models.email_token import EmailToken
 from app.models.user import User
+from app.services.installation import normalize_public_base_url
 
 CONFIRM_PURPOSE = "confirm"
 LOGIN_PURPOSE = "login"
@@ -28,7 +29,7 @@ def smtp_configured() -> bool:
     return bool(settings.smtp_host.strip() and settings.smtp_from.strip())
 
 
-def smtp_public_status() -> dict[str, object]:
+def smtp_public_status(*, public_base_url: str | None = None) -> dict[str, object]:
     configured = smtp_configured()
     return {
         "configured": configured,
@@ -36,7 +37,7 @@ def smtp_public_status() -> dict[str, object]:
         "port": settings.smtp_port if configured else None,
         "from_address": settings.smtp_from.strip() or None if configured else None,
         "use_tls": settings.smtp_use_tls if configured else None,
-        "public_base_url": settings.public_base_url.strip() or None,
+        "public_base_url": _public_base(public_base_url) or None,
     }
 
 
@@ -89,12 +90,22 @@ def hash_mail_secret(value: str) -> str:
     return hashlib.sha256(value.encode("utf-8")).hexdigest()
 
 
-def _public_base() -> str:
-    return settings.public_base_url.strip().rstrip("/")
+def _public_base(public_base_url: str | None = None) -> str:
+    raw = public_base_url if public_base_url is not None else settings.public_base_url
+    try:
+        return normalize_public_base_url(raw)
+    except ValueError:
+        return DEFAULT_PUBLIC_BASE_URL
 
 
-def confirmation_mail(user: User, token: str, code: str) -> tuple[str, str]:
-    base = _public_base()
+def confirmation_mail(
+    user: User,
+    token: str,
+    code: str,
+    *,
+    public_base_url: str | None = None,
+) -> tuple[str, str]:
+    base = _public_base(public_base_url)
     link = f"{base}/#/auth/confirm?token={token}" if base else f"#/auth/confirm?token={token}"
     lines = [
         f"Здравствуйте, {user.display_name}.",
@@ -109,8 +120,14 @@ def confirmation_mail(user: User, token: str, code: str) -> tuple[str, str]:
     return "Подтверждение почты GraphNotes", "\n".join(lines)
 
 
-def login_mail(user: User, token: str, code: str) -> tuple[str, str]:
-    base = _public_base()
+def login_mail(
+    user: User,
+    token: str,
+    code: str,
+    *,
+    public_base_url: str | None = None,
+) -> tuple[str, str]:
+    base = _public_base(public_base_url)
     link = f"{base}/#/auth/login-code?token={token}" if base else ""
     lines = [
         f"Здравствуйте, {user.display_name}.",
@@ -124,8 +141,14 @@ def login_mail(user: User, token: str, code: str) -> tuple[str, str]:
     return "Вход в GraphNotes", "\n".join(lines)
 
 
-def reset_mail(user: User, token: str, code: str) -> tuple[str, str]:
-    base = _public_base()
+def reset_mail(
+    user: User,
+    token: str,
+    code: str,
+    *,
+    public_base_url: str | None = None,
+) -> tuple[str, str]:
+    base = _public_base(public_base_url)
     link = f"{base}/#/auth/reset?token={token}" if base else ""
     lines = [
         f"Здравствуйте, {user.display_name}.",
@@ -144,8 +167,9 @@ def queue_notify_mail(
     *,
     author_name: str,
     summary: str,
+    public_base_url: str | None = None,
 ) -> tuple[str, str]:
-    base = _public_base()
+    base = _public_base(public_base_url)
     link = f"{base}/#/" if base else ""
     lines = [
         f"Здравствуйте, {recipient.display_name}.",
@@ -191,6 +215,37 @@ async def issue_email_token(
         )
     )
     return token, code
+
+
+async def mail_resend_on_cooldown(
+    database: AsyncSession,
+    user: User,
+    purpose: str,
+) -> bool:
+    latest = await database.scalar(
+        select(EmailToken)
+        .where(
+            EmailToken.user_id == user.id,
+            EmailToken.purpose == purpose,
+        )
+        .order_by(EmailToken.created_at.desc())
+        .limit(1)
+    )
+    if latest is None:
+        return False
+    now = datetime.now(UTC)
+    expires_at = latest.expires_at
+    created_at = latest.created_at
+    if created_at is None:
+        return False
+    if expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=UTC)
+    if created_at.tzinfo is None:
+        created_at = created_at.replace(tzinfo=UTC)
+    if latest.used_at is not None or expires_at <= now:
+        return False
+    cooldown = max(0, settings.mail_resend_cooldown_seconds)
+    return (now - created_at).total_seconds() < cooldown
 
 
 async def consume_email_token(

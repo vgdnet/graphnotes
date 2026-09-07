@@ -369,12 +369,17 @@ async def _reload_binding(
     return row or binding
 
 
+async def drop_personal_layer(database: AsyncSession, owner_id: uuid.UUID) -> None:
+    await _delete_layer(database, NoteLayer.PERSONAL.value, owner_id)
+
+
 async def _delete_layer(database: AsyncSession, layer: str, owner_id: uuid.UUID | None) -> None:
     ids = select(NoteIndex.id).where(
         NoteIndex.layer == layer,
         NoteIndex.owner_user_id == owner_id,
     )
     await database.execute(delete(NoteLink).where(NoteLink.source_id.in_(ids)))
+    await database.execute(delete(NoteLink).where(NoteLink.target_id.in_(ids)))
     await database.execute(delete(NoteTag).where(NoteTag.note_id.in_(ids)))
     await database.execute(
         delete(NoteIndex).where(NoteIndex.layer == layer, NoteIndex.owner_user_id == owner_id)
@@ -403,6 +408,7 @@ async def load_graph(
     limit: int,
     center: str | None,
     depth: int,
+    extra_centers: list[str] | None = None,
 ) -> dict[str, object]:
     empty = {
         "layer": layer,
@@ -416,7 +422,8 @@ async def load_graph(
         NoteIndex.owner_user_id == owner_id,
         NoteIndex.revision_sha == revision,
     )
-    if center:
+    seeds = [item for item in [center, *(extra_centers or [])] if item]
+    if seeds:
         rows = (
             await database.execute(
                 select(NoteIndex.id, NoteIndex.path).where(*layer_filter).order_by(NoteIndex.path)
@@ -436,8 +443,10 @@ async def load_graph(
             if source_path and target_path:
                 adjacency[source_path].add(target_path)
                 adjacency[target_path].add(source_path)
-        chosen = _bounded_paths(list(path_ids), adjacency, center, depth, limit)
+        chosen = _bounded_from_seeds(list(path_ids), adjacency, seeds, depth, limit)
         truncated = len(rows) > len(chosen)
+        if not chosen:
+            return {**empty, "index_status": "current", "truncated": truncated}
         chosen_notes = list(
             (
                 await database.scalars(
@@ -793,7 +802,8 @@ async def load_personal_from_uploads(
             adjacency[path].add(target)
             adjacency[target].add(path)
             raw_edges.append((path, target))
-    chosen = _bounded_paths(paths, adjacency, center, depth, limit)
+    local_center = _personal_graph_center(center)
+    chosen = _bounded_paths(paths, adjacency, local_center, depth, limit)
     truncated = len(paths) > len(chosen)
     nodes = []
     for path in sorted(chosen):
@@ -857,6 +867,14 @@ async def _include_resolved_targets(
     return chosen_notes, chosen_ids
 
 
+def _personal_graph_center(center: str | None) -> str | None:
+    if not center:
+        return None
+    if center.startswith("personal:"):
+        return center[len("personal:") :]
+    return center
+
+
 def _bounded_paths(
     paths: list[str],
     adjacency: dict[str, set[str]],
@@ -864,23 +882,129 @@ def _bounded_paths(
     depth: int,
     limit: int,
 ) -> set[str]:
-    if center and center in adjacency:
-        seen = {center}
-        frontier = {center}
-        for _ in range(max(depth, 0)):
-            nxt: set[str] = set()
-            for node in frontier:
-                nxt.update(adjacency.get(node, set()))
-            nxt -= seen
-            if not nxt:
-                break
-            seen.update(nxt)
-            frontier = nxt
-            if len(seen) >= limit:
-                break
-        chosen = sorted(seen)[:limit]
-        return set(chosen)
-    return set(paths[:limit])
+    if not center:
+        return set(paths[:limit])
+    return _bounded_from_seeds(paths, adjacency, [center], depth, limit)
+
+
+def _bounded_from_seeds(
+    paths: list[str],
+    adjacency: dict[str, set[str]],
+    seeds: list[str],
+    depth: int,
+    limit: int,
+) -> set[str]:
+    starts = [seed for seed in dict.fromkeys(seeds) if seed in adjacency]
+    if not starts:
+        return set()
+    seen = set(starts)
+    frontier = set(starts)
+    for _ in range(max(depth, 0)):
+        nxt: set[str] = set()
+        for node in frontier:
+            nxt.update(adjacency.get(node, set()))
+        nxt -= seen
+        if not nxt:
+            break
+        seen.update(nxt)
+        frontier = nxt
+        if len(seen) >= limit:
+            break
+    return set(sorted(seen)[:limit])
+
+
+def bound_graph_payload(
+    payload: dict[str, object],
+    center: str,
+    depth: int,
+    limit: int,
+) -> dict[str, object]:
+    nodes = list(payload.get("nodes") or [])
+    edges = list(payload.get("edges") or [])
+    paths = [str(node["path"]) for node in nodes]
+    adjacency: dict[str, set[str]] = {path: set() for path in paths}
+    for edge in edges:
+        source = str(edge["source"])
+        target = str(edge["target"])
+        if source in adjacency and target in adjacency:
+            adjacency[source].add(target)
+            adjacency[target].add(source)
+    chosen = _bounded_from_seeds(paths, adjacency, [center], depth, limit)
+    chosen_nodes = [node for node in nodes if str(node["path"]) in chosen]
+    chosen_edges = [
+        edge
+        for edge in edges
+        if str(edge["source"]) in chosen and str(edge["target"]) in chosen
+    ]
+    truncated = bool(payload.get("truncated")) or len(nodes) > len(chosen_nodes)
+    return {**payload, "nodes": chosen_nodes, "edges": chosen_edges, "truncated": truncated}
+
+
+async def overlay_local_shared_seeds(
+    database: AsyncSession,
+    *,
+    owner_id: uuid.UUID,
+    personal_revision: str | None,
+    center: str | None,
+) -> list[str]:
+    """Shared notes that seed a local overlay graph around ``center``.
+
+    Overlay-only personal nodes are keyed ``personal:{path}``. Their neighborhood
+    starts at the published notes they wikilink into, not the first shared page.
+    """
+    if not center:
+        return []
+    if not center.startswith("personal:"):
+        return [center]
+    raw = center[len("personal:") :]
+    shared_rows = (
+        await database.scalars(
+            select(NoteIndex.path).where(
+                NoteIndex.layer == NoteLayer.SHARED.value,
+                NoteIndex.owner_user_id.is_(None),
+            )
+        )
+    ).all()
+    shared_paths = {str(path) for path in shared_rows}
+    if not shared_paths:
+        return []
+    lookup = notes_lookup_map(shared_paths)
+    seeds: list[str] = []
+
+    def add_target(raw_target: str) -> None:
+        target = resolve_link_target(raw_target, lookup)
+        if target is not None and target in shared_paths and target not in seeds:
+            seeds.append(target)
+
+    if personal_revision:
+        note = await database.scalar(
+            select(NoteIndex).where(
+                NoteIndex.layer == NoteLayer.PERSONAL.value,
+                NoteIndex.owner_user_id == owner_id,
+                NoteIndex.revision_sha == personal_revision,
+                NoteIndex.path == raw,
+            )
+        )
+        if note is None:
+            return []
+        links = (
+            await database.scalars(select(NoteLink).where(NoteLink.source_id == note.id))
+        ).all()
+        for link in links:
+            add_target(link.target_raw)
+        return seeds
+    upload = await database.scalar(
+        select(PersonalUpload).where(
+            PersonalUpload.user_id == owner_id,
+            PersonalUpload.path == raw,
+        )
+    )
+    if upload is None:
+        return []
+    parsed = parse_markdown(upload.path, upload.body)
+    for target in parsed.links:
+        add_target(target)
+    return seeds
 
 
 async def _parsed_from_existing(
@@ -1019,6 +1143,44 @@ async def _graph_payload(
         "nodes": nodes,
         "edges": edges,
     }
+
+
+async def index_proposal_notes(
+    database: AsyncSession,
+    *,
+    proposal_id: uuid.UUID,
+    owner_id: uuid.UUID,
+    revision: str,
+    files: dict[str, str],
+) -> None:
+    await drop_proposal_notes(database, proposal_id)
+    for path, text in files.items():
+        parsed = parse_markdown(path, text)
+        record = NoteIndex(
+            index_key=_index_key(NoteLayer.PROPOSAL.value, owner_id, proposal_id, revision, path),
+            layer=NoteLayer.PROPOSAL.value,
+            revision_sha=revision,
+            path=path,
+            slug=_slug(path),
+            title=parsed.title,
+            content_hash=parsed.content_hash,
+            owner_user_id=owner_id,
+            proposal_id=proposal_id,
+        )
+        database.add(record)
+        await database.flush()
+        for tag_name in dict.fromkeys(parsed.tags):
+            normalized = tag_name.casefold()[:80]
+            tag = await database.scalar(select(Tag).where(Tag.name == normalized))
+            if tag is None:
+                tag = Tag(name=normalized)
+                database.add(tag)
+                await database.flush()
+            database.add(NoteTag(note_id=record.id, tag_id=tag.id))
+
+
+async def drop_proposal_notes(database: AsyncSession, proposal_id: uuid.UUID) -> None:
+    await database.execute(delete(NoteIndex).where(NoteIndex.proposal_id == proposal_id))
 
 
 async def _tags_for(database: AsyncSession, note_ids: set[uuid.UUID]) -> dict[uuid.UUID, list[str]]:

@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+from datetime import UTC, datetime
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.models.github import PersonalRepository, SharedRepository
 from app.models.personal_upload import PersonalUpload, UploadEvent
-from app.models.user import User
+from app.models.user import User, UserRole
 from app.services.archive import ArchiveError, read_markdown_bytes, read_zip_markdown
 from app.services.audit import record_audit_event
 from app.services.closed_corpus import (
@@ -19,6 +22,7 @@ from app.services.git_paths import PathError, normalize_git_path
 from app.services.github import GitHubAppClient, GitHubAppError
 from app.services.index import IndexerError, ensure_personal_current, ensure_shared_current
 from app.services.markdown import parse_markdown, unresolved_links
+from app.services.provenance import record_personal_edit_events
 from app.services.repository import (
     SHARED_SINGLETON_ID,
     apply_error,
@@ -174,29 +178,36 @@ async def get_personal_note(
     user: User,
     path: str,
     client: GitHubAppClient,
+    *,
+    owner_id=None,
 ) -> dict[str, object]:
     try:
         normalized = normalize_git_path(path)
     except PathError as exc:
         raise IngestError(400, str(exc)) from exc
-    row = await _personal_or_none(database, user.id)
+    target_id = user.id
+    if owner_id is not None and owner_id != user.id:
+        if user.role != UserRole.ADMIN.value:
+            raise IngestError(404, "note was not found")
+        target_id = owner_id
+    row = await _personal_or_none(database, target_id)
     if row is not None:
-        await refresh_personal(database, user.id, client)
+        await refresh_personal(database, target_id, client)
         try:
-            await ensure_personal_current(database, user.id, client)
+            await ensure_personal_current(database, target_id, client)
         except IndexerError:
             pass
-        row = await _personal_or_none(database, user.id)
+        row = await _personal_or_none(database, target_id)
     if row is None or not row.observed_sha:
         upload = await database.scalar(
             select(PersonalUpload).where(
-                PersonalUpload.user_id == user.id,
+                PersonalUpload.user_id == target_id,
                 PersonalUpload.path == normalized,
             )
         )
         if upload is None:
             raise IngestError(404, "note was not found")
-        available = {item.path for item in await _uploads_for(database, user.id)}
+        available = {item.path for item in await _uploads_for(database, target_id)}
         parsed = parse_markdown(normalized, upload.body)
         return {
             "path": normalized,
@@ -210,7 +221,8 @@ async def get_personal_note(
             "body": parsed.body,
             "content_hash": parsed.content_hash,
             "locked": False,
-            "closed": normalized in await closed_paths_for_user(database, user.id),
+            "closed": normalized in await closed_paths_for_user(database, target_id),
+            "source": upload.body,
         }
     try:
         paths = set(await client.list_markdown_files(row.owner, row.name, row.observed_sha))
@@ -235,8 +247,166 @@ async def get_personal_note(
         "body": parsed.body,
         "content_hash": parsed.content_hash,
         "locked": False,
-        "closed": normalized in await closed_paths_for_user(database, user.id),
+        "closed": normalized in await closed_paths_for_user(database, target_id),
+        "source": text,
     }
+
+
+async def save_personal_note(
+    database: AsyncSession,
+    *,
+    user: User,
+    path: str,
+    source: str,
+    expected_hash: str,
+    client: GitHubAppClient,
+) -> dict[str, object]:
+    try:
+        normalized = normalize_git_path(path)
+    except PathError as exc:
+        raise IngestError(400, str(exc)) from exc
+    encoded = source.encode("utf-8")
+    if len(encoded) > settings.ingest_max_file_bytes:
+        raise IngestError(400, "file is too large")
+    try:
+        parsed = parse_markdown(normalized, source)
+    except ValueError as exc:
+        raise IngestError(400, str(exc)) from exc
+
+    row = await _personal_or_none(database, user.id)
+    if row is not None:
+        return await _save_personal_git(
+            database,
+            user=user,
+            row=row,
+            path=normalized,
+            source=source,
+            expected_hash=expected_hash,
+            client=client,
+        )
+    return await _save_personal_upload(
+        database,
+        user=user,
+        path=normalized,
+        source=source,
+        parsed_hash=parsed.content_hash,
+        expected_hash=expected_hash,
+        client=client,
+    )
+
+
+async def _save_personal_git(
+    database: AsyncSession,
+    *,
+    user: User,
+    row: PersonalRepository,
+    path: str,
+    source: str,
+    expected_hash: str,
+    client: GitHubAppClient,
+) -> dict[str, object]:
+    await refresh_personal(database, user.id, client)
+    row = await _personal_or_none(database, user.id)
+    if row is None or not row.observed_sha:
+        raise IngestError(409, "personal git has no commits yet")
+    try:
+        paths = set(await client.list_markdown_files(row.owner, row.name, row.observed_sha))
+    except GitHubAppError as exc:
+        raise _github_to_ingest(exc) from exc
+    if path not in paths:
+        raise IngestError(404, "note was not found")
+    try:
+        current = await client.get_file(row.owner, row.name, path, row.observed_sha)
+    except GitHubAppError as exc:
+        raise _github_to_ingest(exc) from exc
+    current_hash = parse_markdown(path, current).content_hash
+    if expected_hash != current_hash:
+        raise IngestError(409, "note changed, reload the card")
+    if current != source:
+        try:
+            head = await client.commit_markdown(
+                row.owner,
+                row.name,
+                row.default_branch,
+                {path: source},
+                f"GraphNotes: {path}",
+                row.observed_sha,
+            )
+        except GitHubAppError as exc:
+            if exc.status == "stale":
+                raise IngestError(409, "note changed, reload the card") from exc
+            raise _github_to_ingest(exc) from exc
+        row.observed_sha = head
+        row.observed_at = datetime.now(UTC)
+        row.sync_status = "ready"
+        row.last_error = None
+        await record_personal_edit_events(
+            database,
+            user=user,
+            path=path,
+            before_text=current,
+            after_text=source,
+        )
+        record_audit_event(
+            database,
+            action="notes.edit_personal",
+            actor_user_id=user.id,
+            target_user_id=user.id,
+            subject_username=user.username,
+            details={"path": path, "source": "git"},
+        )
+        await database.commit()
+        try:
+            await ensure_personal_current(database, user.id, client)
+        except IndexerError:
+            pass
+    return await get_personal_note(database, user, path, client)
+
+
+async def _save_personal_upload(
+    database: AsyncSession,
+    *,
+    user: User,
+    path: str,
+    source: str,
+    parsed_hash: str,
+    expected_hash: str,
+    client: GitHubAppClient,
+) -> dict[str, object]:
+    upload = await database.scalar(
+        select(PersonalUpload).where(
+            PersonalUpload.user_id == user.id,
+            PersonalUpload.path == path,
+        )
+    )
+    if upload is None:
+        raise IngestError(404, "note was not found")
+    if expected_hash != upload.content_hash:
+        raise IngestError(409, "note changed, reload the card")
+    if upload.body != source:
+        before_text = upload.body
+        upload.body = source
+        upload.content_hash = parsed_hash
+        database.add(
+            UploadEvent(user_id=user.id, path=path, content_hash=parsed_hash)
+        )
+        await record_personal_edit_events(
+            database,
+            user=user,
+            path=path,
+            before_text=before_text,
+            after_text=source,
+        )
+        record_audit_event(
+            database,
+            action="notes.edit_personal",
+            actor_user_id=user.id,
+            target_user_id=user.id,
+            subject_username=user.username,
+            details={"path": path, "source": "upload"},
+        )
+        await database.commit()
+    return await get_personal_note(database, user, path, client)
 
 
 async def get_shared_note(

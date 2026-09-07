@@ -29,7 +29,11 @@ last active admin. An admin may set a new password for any account
 The Administration tab has three screens: users (search, create, role,
 block, set password, revoke sessions), a filterable journal
 (`GET /api/admin/audit`), and operator health / SMTP status
-(`GET /api/admin/operator`). Passwords, mail codes and tokens are never
+(`GET /api/admin/operator`). Admin saves the **public site URL** used in
+mail links on Установка (`PUT /api/admin/operator`); it is stored in
+PostgreSQL `installation_settings` and survives Compose rebuilds.
+`GRAPHNOTES_PUBLIC_BASE_URL` is the bootstrap/default
+(`https://rhizome.vsepsy.ru`). Passwords, mail codes and tokens are never
 written into audit details or JSON responses.
 
 ## SMTP (optional)
@@ -48,9 +52,25 @@ GRAPHNOTES_SMTP_USE_TLS=true
 GRAPHNOTES_PUBLIC_BASE_URL
 ```
 
-`GRAPHNOTES_PUBLIC_BASE_URL` is the public origin used in confirmation,
-login and password-reset links (for example `http://172.16.13.14:8080` on
-rhizome-test). The confirmation letter always includes
+`GRAPHNOTES_PUBLIC_BASE_URL` is the **bootstrap** public origin for
+confirmation, login, password-reset and queue-notify links. After first
+migrate the live value is the row in `installation_settings` (Admin →
+Установка). Default and seed: `https://rhizome.vsepsy.ru` (no trailing
+slash). Links look like `https://rhizome.vsepsy.ru/#/auth/confirm?token=`.
+Do not leave the LAN bind (`http://172.16.13.14:8080`) in this setting:
+that address is only the rhizome-test frontend bind, not the public mail
+origin.
+
+Confirm, login and reset codes/tokens expire after **30 minutes**
+(`GRAPHNOTES_MAIL_CODE_TTL_MINUTES`). Expired secrets do not open a
+session or set a new password. `POST /api/auth/email/request` always
+returns 204 when SMTP is on (no existence leak); a real letter is sent
+only if the address exists. While an unused code is still live, another
+send for the same purpose waits 60 seconds
+(`GRAPHNOTES_MAIL_RESEND_COOLDOWN_SECONDS`). After expiry the user can
+request again from a clean form.
+
+The confirmation letter always includes
 `#/auth/confirm?token=` (absolute when this origin is set) plus the
 one-time 6-digit code.
 

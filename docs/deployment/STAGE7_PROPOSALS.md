@@ -12,8 +12,10 @@ The user selects those rows and creates a proposal. GraphNotes copies only
 those files onto a hidden branch of the shared repository. Connected personal
 git is not rewritten. Upload-without-git is not a write into published shared
 until an editor accepts. After accept and index catch-up, those paths leave
-Differ. The git XOR upload copy is next to connect/disconnect in Settings,
-not on the Differ tab.
+Differ. The chrome tab and heading are **Отличающиеся**; `/api/differ` is
+unchanged. The git XOR upload copy is next to connect/disconnect in Settings,
+not on the Differ tab. While git is connected, Settings hides the bind
+field and shows a GitHub link; disconnect drops the personal `note_index`.
 
 Opening Differ reads the caller's connected public git HEAD through the GitHub
 App before comparing trees. The personal index is rebuilt when the SHA moved

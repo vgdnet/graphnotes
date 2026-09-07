@@ -16,6 +16,7 @@ from app.schemas.notes import (
     IngestReport,
     NoteDetail,
     NoteListResponse,
+    PersonalNoteWrite,
     UploadHistoryResponse,
 )
 from app.schemas.comments import (
@@ -34,6 +35,8 @@ from app.services.closed_corpus import (
     list_closed_paths,
     unclose_path,
 )
+from app.models.user import UserRole
+from app.services.card_paths import parse_card_ref
 from app.services.ingest import (
     IngestError,
     get_personal_note,
@@ -42,7 +45,9 @@ from app.services.ingest import (
     list_personal_notes,
     list_shared_notes,
     list_upload_events,
+    save_personal_note,
 )
+from app.services.proposal import ProposalError, get_proposal_card
 
 router = APIRouter(tags=["notes"])
 
@@ -139,22 +144,48 @@ async def shared_note(
     return NoteDetail.model_validate(payload)
 
 
+@router.get("/cards/{note_path:path}/feed", response_model=NoteFeedResponse)
+async def rhizome_card_feed(
+    note_path: str,
+    database: DatabaseSession,
+    user: CurrentUser,
+) -> NoteFeedResponse:
+    layer, owner_id, proposal_id, path = parse_card_ref(note_path)
+    if layer == "proposal" or proposal_id is not None:
+        return NoteFeedResponse.model_validate({"path": path, "events": []})
+    if layer == "personal":
+        target = owner_id or user.id
+        if owner_id is not None and owner_id != user.id and user.role != UserRole.ADMIN.value:
+            raise HTTPException(status_code=404, detail="note was not found")
+        payload = await list_note_feed(database, path, owner_id=target)
+        return NoteFeedResponse.model_validate(payload)
+    payload = await list_note_feed(database, path)
+    return NoteFeedResponse.model_validate(payload)
+
+
 @router.get("/cards/{note_path:path}", response_model=NoteDetail)
 async def rhizome_card(
     note_path: str,
     database: DatabaseSession,
     user: CurrentUser,
 ) -> NoteDetail:
-    if note_path.startswith("personal:"):
+    layer, owner_id, proposal_id, path = parse_card_ref(note_path)
+    if layer == "proposal" and proposal_id is not None:
+        try:
+            payload = await get_proposal_card(database, user, proposal_id, path, _client())
+        except ProposalError as exc:
+            raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+        return NoteDetail.model_validate(payload)
+    if layer == "personal":
         try:
             payload = await get_personal_note(
-                database, user, note_path.removeprefix("personal:"), _client()
+                database, user, path, _client(), owner_id=owner_id
             )
         except IngestError as exc:
             _raise(exc)
         return NoteDetail.model_validate(payload)
     try:
-        payload = await get_shared_note(database, note_path, _client())
+        payload = await get_shared_note(database, path, _client())
     except IngestError as exc:
         _raise(exc)
     return NoteDetail.model_validate(payload)
@@ -183,6 +214,27 @@ async def personal_note(
     except IngestError as exc:
         _raise(exc)
     return NoteDetail.model_validate(payload)
+
+
+@router.put("/personal/notes/{note_path:path}", response_model=NoteDetail)
+async def write_personal_note(
+    note_path: str,
+    payload: PersonalNoteWrite,
+    user: CurrentAuthor,
+    database: DatabaseSession,
+) -> NoteDetail:
+    try:
+        saved = await save_personal_note(
+            database,
+            user=user,
+            path=note_path,
+            source=payload.source,
+            expected_hash=payload.expected_hash,
+            client=_client(),
+        )
+    except IngestError as exc:
+        _raise(exc)
+    return NoteDetail.model_validate(saved)
 
 
 @router.post("/personal/take-from-shared", response_model=None)

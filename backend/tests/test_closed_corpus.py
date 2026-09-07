@@ -59,11 +59,17 @@ async def test_closed_path_stays_out_of_differ_and_hides_body(
     assert own.status_code == 200
     assert "Secret closed body" in own.json()["body"]
     assert own.json()["closed"] is True
+    own_card = await author.get("/cards/personal:missing.md")
+    assert own_card.status_code == 200
+    assert "Secret closed body" in own_card.json()["body"]
 
     stranger = await _second("stranger")
     other_personal = await stranger.get("/personal/notes/missing.md")
     assert other_personal.status_code == 404
     assert "Secret closed body" not in other_personal.text
+    other_card = await stranger.get("/cards/personal:missing.md")
+    assert other_card.status_code == 404
+    assert "Secret closed body" not in other_card.text
 
     shared = await stranger.get("/shared/notes/missing.md")
     assert shared.status_code == 200
@@ -71,6 +77,12 @@ async def test_closed_path_stays_out_of_differ_and_hides_body(
     assert shared.json()["body"] == ""
     assert "Secret closed body" not in shared.text
     _assert_hidden(shared.text)
+
+    shared_card = await stranger.get("/cards/missing.md")
+    assert shared_card.status_code == 200
+    assert shared_card.json()["locked"] is True
+    assert shared_card.json()["body"] == ""
+    assert "Secret closed body" not in shared_card.text
 
     card = await stranger.get("/shared/notes/card.md")
     assert card.status_code == 200
@@ -87,6 +99,12 @@ async def test_closed_path_stays_out_of_differ_and_hides_body(
 
     archive = await stranger.get("/shared/archive")
     assert archive.status_code == 410
+
+    users = await admin.get("/admin/users")
+    author_id = next(item["id"] for item in users.json()["users"] if item["username"] == "keeper")
+    admin_card = await admin.get(f"/cards/personal:{author_id}:missing.md")
+    assert admin_card.status_code == 200
+    assert "Secret closed body" in admin_card.json()["body"]
 
     opened = await author.delete("/personal/closed-paths/missing.md")
     assert opened.status_code == 204

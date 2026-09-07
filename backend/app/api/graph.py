@@ -14,6 +14,7 @@ from app.services.github import GitHubAppClient
 from app.services.graph_diff import proposal_graph_diff
 from app.services.index import (
     IndexerError,
+    bound_graph_payload,
     ensure_personal_current,
     ensure_shared_current,
     index_status_label,
@@ -21,6 +22,7 @@ from app.services.index import (
     load_overlay,
     load_overlay_from_uploads,
     load_personal_from_uploads,
+    overlay_local_shared_seeds,
     rebuild_derived_indexes,
 )
 from app.services.proposal import ProposalError
@@ -49,7 +51,7 @@ async def search_cards(
     q: Annotated[str, Query(max_length=200)] = "",
     tag: Annotated[str, Query(max_length=80)] = "",
     limit: Annotated[int, Query(ge=1, le=80)] = 40,
-    layer: Annotated[str, Query(pattern="^(overlay|personal|shared)$")] = "overlay",
+    layer: Annotated[str, Query(pattern="^(overlay|personal|shared|visible)$")] = "visible",
 ) -> SearchResponse:
     payload = await search_visible_cards(
         database, q, user=viewer, tag=tag, limit=limit, layer=layer, client=_client()
@@ -114,13 +116,14 @@ async def personal_graph(
             depth=depth,
         )
         return GraphResponse.model_validate(uploads)
+    graph_center = center[len("personal:") :] if center and center.startswith("personal:") else center
     payload = await load_graph(
         database,
         layer=NoteLayer.PERSONAL.value,
         owner_id=user.id,
         revision=personal.indexed_sha,
         limit=_limit(limit),
-        center=center,
+        center=graph_center,
         depth=depth,
     )
     payload["index_status"] = index_status_label(
@@ -148,38 +151,49 @@ async def personal_overlay(
     shared = await database.get(SharedRepository, SHARED_SINGLETON_ID)
     if shared is None or not shared.indexed_sha:
         return GraphResponse(layer="overlay", index_status="empty", nodes=[], edges=[])
+    personal = await database.scalar(
+        select(PersonalRepository).where(PersonalRepository.user_id == user.id)
+    )
+    personal_revision = personal.indexed_sha if personal is not None else None
+    seeds = await overlay_local_shared_seeds(
+        database,
+        owner_id=user.id,
+        personal_revision=personal_revision,
+        center=center,
+    )
+    page_limit = _limit(limit)
     payload = await load_graph(
         database,
         layer=NoteLayer.SHARED.value,
         owner_id=None,
         revision=shared.indexed_sha,
-        limit=_limit(limit),
-        center=center,
+        limit=page_limit,
+        center=seeds[0] if seeds else None,
         depth=depth,
+        extra_centers=seeds[1:] or None,
     )
     payload["index_status"] = index_status_label(
         shared.observed_sha, shared.indexed_sha, shared.index_status
-    )
-    personal = await database.scalar(
-        select(PersonalRepository).where(PersonalRepository.user_id == user.id)
     )
     if personal is None or not personal.indexed_sha:
         overlay = await load_overlay_from_uploads(
             database,
             owner_id=user.id,
             shared_payload=payload,
-            overlay_limit=_limit(limit),
+            overlay_limit=page_limit,
         )
-        return GraphResponse.model_validate(overlay)
-    overlay = await load_overlay(
-        database,
-        owner_id=user.id,
-        personal_revision=personal.indexed_sha,
-        shared_payload=payload,
-        overlay_limit=_limit(limit),
-    )
-    if personal.index_status == "error" or shared.index_status == "error":
-        overlay["index_status"] = "error"
+    else:
+        overlay = await load_overlay(
+            database,
+            owner_id=user.id,
+            personal_revision=personal.indexed_sha,
+            shared_payload=payload,
+            overlay_limit=page_limit,
+        )
+        if personal.index_status == "error" or shared.index_status == "error":
+            overlay["index_status"] = "error"
+    if center:
+        overlay = bound_graph_payload(overlay, center, depth, page_limit)
     return GraphResponse.model_validate(overlay)
 
 

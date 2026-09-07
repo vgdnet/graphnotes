@@ -358,6 +358,27 @@ select { padding: .65rem .8rem; border: 1px solid var(--gn-input-border); border
 .markdown-body blockquote { padding: .2rem 0 .2rem .9rem; border-left: 3px solid var(--gn-accent); color: var(--gn-text-muted); }
 .markdown-body table { border-collapse: collapse; width: 100%; }
 .markdown-body th, .markdown-body td { padding: .4rem .6rem; border: 1px solid var(--gn-border); text-align: left; }
+.card-editor { display: grid; gap: .9rem; }
+.gn-mdx {
+  min-height: 22rem;
+  border: 1px solid var(--gn-border);
+  border-radius: .7rem;
+  overflow: hidden;
+  background: var(--gn-bg-mid);
+  color: var(--gn-text);
+}
+.gn-mdx .mdxeditor-toolbar {
+  background: var(--gn-bg);
+  border-bottom: 1px solid var(--gn-border);
+  color: var(--gn-text);
+}
+.gn-mdx-content {
+  min-height: 18rem;
+  padding: 1rem 1.1rem;
+  font-size: .95rem;
+  line-height: 1.65;
+  color: var(--gn-text);
+}
 .wiki-link { color: var(--gn-wiki); }
 .wiki-link--missing, .wiki-link--locked { color: var(--gn-warn); }
 .search-hits { display: flex; flex-wrap: wrap; gap: .5rem 1rem; list-style: none; margin: 0; padding: 0; color: var(--gn-quiet-text); font-size: .84rem; }
@@ -420,6 +441,8 @@ select { padding: .65rem .8rem; border: 1px solid var(--gn-input-border); border
 .card-search__hit small, .card-search__hit-tags { color: var(--gn-text-dim); font-size: .78rem; }
 .graph-selection__link { margin: 0; }
 .graph-selection__link a { color: var(--gn-wiki); font-weight: 650; }
+.graph-selection__links { margin: 0; padding-left: 1.1rem; color: var(--gn-quiet-text); font-size: 0.82rem; }
+.graph-selection__links a { color: var(--gn-wiki); }
 .admin-panel h2 { margin: 0; font-size: 1.7rem; }
 .admin-panel__hint { margin: .5rem 0 1.25rem; color: var(--gn-text-dim); font-size: .84rem; }
 .user-list { display: grid; gap: .7rem; }
@@ -443,7 +466,7 @@ select { padding: .65rem .8rem; border: 1px solid var(--gn-input-border); border
 .review-stats h3 { margin: 0 0 .4rem; font-size: 1rem; }
 
 .graph-view { display: grid; gap: 1rem; }
-.graph-toolbar { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.8rem; }
+.graph-toolbar { display: grid; grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr)); gap: 0.8rem; }
 .graph-canvas {
   width: 100%;
   height: min(78vh, 52rem);

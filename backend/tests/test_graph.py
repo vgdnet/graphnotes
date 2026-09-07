@@ -405,6 +405,18 @@ async def test_personal_overlay_isolation_shared_read_and_xss_inert(
     )
     xss_node = next(node for node in body["nodes"] if node["path"] == "xss.md")
     assert "<script>alert(1)</script>" in xss_node["title"]
+    local = await client.get(
+        "/graph/personal-overlay",
+        params={"center": "personal:mine.md", "depth": 1, "limit": 50},
+    )
+    assert local.status_code == 200
+    local_paths = {node["path"] for node in local.json()["nodes"]}
+    assert "personal:mine.md" in local_paths
+    assert "card.md" in local_paths
+    assert "xss.md" not in local_paths
+    missing = await client.get("/graph/shared", params={"center": "no-such.md", "depth": 1})
+    assert missing.status_code == 200
+    assert [node["path"] for node in missing.json()["nodes"] if not node["unresolved"]] == []
 
     shared_note = await client.get("/shared/notes/card.md")
     assert shared_note.status_code == 200

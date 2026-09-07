@@ -114,6 +114,7 @@ class PasswordResetRequest(BaseModel):
 
 class MailStatusResponse(BaseModel):
     configured: bool
+    code_ttl_minutes: int = 30
 
 
 class UserResponse(BaseModel):

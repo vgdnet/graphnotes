@@ -8,7 +8,9 @@ from app.db.base import Base
 
 
 class RhizomeEvent(Base):
-    """Derived interaction with a published rhizome card. No note bodies."""
+    """Card interaction history. No note bodies. Shared events have no owner;
+    personal in-app edits set owner_user_id so they do not mix into the shared feed.
+    """
 
     __tablename__ = "rhizome_events"
 
@@ -18,6 +20,12 @@ class RhizomeEvent(Base):
     path: Mapped[str] = mapped_column(String(180), index=True)
     kind: Mapped[str] = mapped_column(String(16), index=True)
     actor_user_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    owner_user_id: Mapped[uuid.UUID | None] = mapped_column(
         Uuid(as_uuid=True),
         ForeignKey("users.id", ondelete="SET NULL"),
         nullable=True,

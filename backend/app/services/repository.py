@@ -212,6 +212,9 @@ async def disconnect_personal_repository(
         subject_username=user.username,
         details={"owner": row.owner, "name": row.name},
     )
+    from app.services.index import drop_personal_layer
+
+    await drop_personal_layer(database, user.id)
     await database.delete(row)
     await database.commit()
 

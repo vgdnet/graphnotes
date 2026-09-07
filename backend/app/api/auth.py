@@ -41,10 +41,12 @@ from app.services.mail import (
     consume_email_token,
     issue_email_token,
     login_mail,
+    mail_resend_on_cooldown,
     reset_mail,
     send_plaintext_mail,
     smtp_configured,
 )
+from app.services.installation import resolve_public_base_url
 from app.services.session_cookie import (
     clear_session_cookie,
     session_cookie_deletion_header,
@@ -65,13 +67,20 @@ async def _open_session(database, user: User) -> str:
     return token
 
 
-async def _send_user_mail(user: User, purpose: str, token: str, code: str) -> None:
+async def _send_user_mail(
+    database,
+    user: User,
+    purpose: str,
+    token: str,
+    code: str,
+) -> None:
+    base = await resolve_public_base_url(database)
     if purpose == LOGIN_PURPOSE:
-        subject, body = login_mail(user, token, code)
+        subject, body = login_mail(user, token, code, public_base_url=base)
     elif purpose == RESET_PURPOSE:
-        subject, body = reset_mail(user, token, code)
+        subject, body = reset_mail(user, token, code, public_base_url=base)
     else:
-        subject, body = confirmation_mail(user, token, code)
+        subject, body = confirmation_mail(user, token, code, public_base_url=base)
     await run_in_threadpool(
         send_plaintext_mail,
         to_address=user.email,
@@ -88,7 +97,10 @@ async def _lookup_login_user(database, identifier: str) -> User | None:
 
 @router.get("/mail-status", response_model=MailStatusResponse)
 async def mail_status() -> MailStatusResponse:
-    return MailStatusResponse(configured=smtp_configured())
+    return MailStatusResponse(
+        configured=smtp_configured(),
+        code_ttl_minutes=settings.mail_code_ttl_minutes,
+    )
 
 
 @router.post(
@@ -141,7 +153,7 @@ async def register(
         if smtp_configured():
             token, code = await issue_email_token(database, user, CONFIRM_PURPOSE)
             try:
-                await _send_user_mail(user, CONFIRM_PURPOSE, token, code)
+                await _send_user_mail(database, user, CONFIRM_PURPOSE, token, code)
             except (MailNotConfiguredError, MailDeliveryError) as exc:
                 await database.rollback()
                 raise HTTPException(
@@ -264,9 +276,11 @@ async def request_email_code(
         return
     if payload.purpose == LOGIN_PURPOSE and user.email_verified_at is None:
         return
+    if await mail_resend_on_cooldown(database, user, payload.purpose):
+        return
     token, code = await issue_email_token(database, user, payload.purpose)
     try:
-        await _send_user_mail(user, payload.purpose, token, code)
+        await _send_user_mail(database, user, payload.purpose, token, code)
     except (MailNotConfiguredError, MailDeliveryError) as exc:
         await database.rollback()
         raise HTTPException(
@@ -310,9 +324,11 @@ async def reset_password(
             details={"reason": "invalid_email_code"},
         )
         await database.commit()
+        clear_session_cookie(response)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="invalid or expired email code",
+            headers={"Set-Cookie": session_cookie_deletion_header()},
         )
     user.password_hash = await run_in_threadpool(hash_password, payload.password)
     if user.email_verified_at is None:
@@ -359,9 +375,11 @@ async def verify_email_code(
             details={"reason": "invalid_email_code"},
         )
         await database.commit()
+        clear_session_cookie(response)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="invalid or expired email code",
+            headers={"Set-Cookie": session_cookie_deletion_header()},
         )
     if user.email_verified_at is None:
         user.email_verified_at = datetime.now(UTC)

@@ -53,6 +53,7 @@ type OperatorStatus = {
   health: { status: string; database: string };
   shared_repository: { connected: boolean; owner?: string; name?: string; status?: string; index_status?: string } | null;
   public_base_url: string | null;
+  mail_code_ttl_minutes?: number;
 };
 
 type AdminSection = "users" | "journal" | "operator";
@@ -75,6 +76,7 @@ const ACTION_LABELS: Record<string, string> = {
   "mail.test_sent": "проверочное письмо",
   "mail.test_failed": "ошибка проверочного письма",
   "auth.password_reset": "сброс пароля по почте",
+  "admin.public_base_url_changed": "публичный адрес сайта",
   "admin.user_notify_changed": "уведомления очереди",
   "notify.queue_sent": "письмо о новых правках",
   "notify.queue_failed": "ошибка уведомления очереди",
@@ -141,6 +143,7 @@ export function AdminPanel({
   const [auditUntil, setAuditUntil] = useState("");
   const [testTo, setTestTo] = useState("");
   const [mailNote, setMailNote] = useState("");
+  const [publicBaseDraft, setPublicBaseDraft] = useState("");
 
   async function loadUsers() {
     const params = new URLSearchParams();
@@ -171,7 +174,9 @@ export function AdminPanel({
   async function loadOperator() {
     const response = await fetch("/api/admin/operator");
     if (!response.ok) throw new Error(await readError(response));
-    setOperator((await response.json()) as OperatorStatus);
+    const body = (await response.json()) as OperatorStatus;
+    setOperator(body);
+    if (body.public_base_url) setPublicBaseDraft(body.public_base_url);
   }
 
   useEffect(() => {
@@ -301,6 +306,30 @@ export function AdminPanel({
       if (!response.ok) throw new Error(await readError(response));
       form.reset();
       await loadUsers();
+      await loadJournal();
+    } catch (requestError) {
+      onError(requestError instanceof Error ? requestError.message : "Ошибка соединения");
+    } finally {
+      onSubmitting(false);
+    }
+  }
+
+  async function savePublicBase(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    onSubmitting(true);
+    onError("");
+    setMailNote("");
+    try {
+      const response = await fetch("/api/admin/operator", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ public_base_url: publicBaseDraft }),
+      });
+      if (!response.ok) throw new Error(await readError(response));
+      const body = (await response.json()) as OperatorStatus;
+      setOperator(body);
+      if (body.public_base_url) setPublicBaseDraft(body.public_base_url);
+      setMailNote("Публичный адрес сайта сохранён. Письма будут ссылаться на него.");
       await loadJournal();
     } catch (requestError) {
       onError(requestError instanceof Error ? requestError.message : "Ошибка соединения");
@@ -621,9 +650,22 @@ export function AdminPanel({
             SMTP: {operator.smtp.configured
               ? `${operator.smtp.from_address} через ${operator.smtp.host}:${operator.smtp.port}`
               : "не настроен; вход паролем работает, письма подтверждения и кода нет."}
-            {operator.public_base_url ? ` Публичный URL: ${operator.public_base_url}.` : " GRAPHNOTES_PUBLIC_BASE_URL не задан — в письме будет только код."}
+            {" "}Код и ссылка в письме действуют {operator.mail_code_ttl_minutes ?? 30} мин.
             {" "}Telegram-уведомления: {operator.telegram?.configured ? "бот задан" : "GRAPHNOTES_TELEGRAM_BOT_TOKEN нет — предпочтение сохраняется, письма в Telegram не уходят. Это не вход."}
           </p>
+          <form className="admin-create" onSubmit={(event) => void savePublicBase(event)}>
+            <h3>Публичный адрес сайта</h3>
+            <p className="admin-panel__hint">
+              Этот адрес попадает в письма: подтверждение, вход, сброс пароля и уведомление очереди.
+              Сохраняется в базе и переживает пересборку Compose. GRAPHNOTES_PUBLIC_BASE_URL — только начальное значение.
+            </p>
+            <div className="admin-create__grid">
+              <label>URL <input type="url" value={publicBaseDraft} onChange={(event) => setPublicBaseDraft(event.target.value)} required /></label>
+              <button className="button button--primary" type="submit" disabled={submitting}>
+                Сохранить
+              </button>
+            </div>
+          </form>
           <div className="settings-actions">
             <button className="button button--quiet" type="button" onClick={() => void onConnectShared()} disabled={submitting}>
               Подключить общую ризому

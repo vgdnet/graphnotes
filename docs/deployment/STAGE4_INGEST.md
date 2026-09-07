@@ -41,6 +41,13 @@ and records a new history event.
 
 - `GET /api/shared/notes` — public listing of shared Markdown (in-app read)
 - `GET /api/personal/notes` — logged-in projection of the caller's personal layer
+- `GET /api/personal/notes/{path}` — personal card body (`source` is the full file)
+- `PUT /api/personal/notes/{path}` — own personal only; `source` + `expected_hash`;
+  404 if the path is missing, 409 if the hash is stale; writes git XOR upload store;
+  records `rhizome_events` (`edited` / `linked` / `unlinked`) with `owner_user_id`
+  and no Markdown bodies (Alembic `0014_personal_edit_events`)
+- `GET /api/cards/{path}/feed` — card history; personal in-app edits are owner-scoped
+  and do not mix into `GET /api/shared/notes/{path}/feed` for the same git path
 - `GET /api/personal/uploads` — upload history (path, hash, time)
 - `POST /api/personal/take-from-shared` — gone (HTTP 410)
 - `POST /api/personal/import-md` — multipart field `file` (`.md` or `.zip`)

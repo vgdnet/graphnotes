@@ -15,7 +15,8 @@ personal or upload store are deleted. Search itself refreshes HEADs and
 rebuilds a stale personal/shared layer when the SHA moved, so a deleted
 file does not linger in `#/card/` after the git tree changed.
 
-Graph API is bounded (`limit`, optional `center` and `depth`). Cytoscape UI is
+Graph API is bounded (`limit`, optional `center` and `depth` 0–4). An unknown
+`center` is an empty neighborhood, not the default page. Cytoscape UI is
 Stage 6.
 
 ## Rebuild

@@ -74,3 +74,86 @@ async def test_publication_feed_and_commenter_moderation(
     assert "Thanks for this card" in visible.text
     archive = await author.get("/shared/archive")
     assert archive.status_code == 410
+
+
+async def test_personal_in_app_feed_does_not_mix_with_shared(
+    auth_test_context: tuple[AsyncClient, async_sessionmaker[AsyncSession]],
+    monkeypatch: MonkeyPatch,
+) -> None:
+    admin, session_factory = auth_test_context
+    github = _install(monkeypatch, _github())
+    github.repos["vgdnet/guide_psy"].files["card.md"] = "# Personal card\nSee [[already]].\n"
+    await _admin(admin, session_factory, "feed-iso-admin")
+
+    author = await _second("feed-iso-author")
+    await author.post("/personal/connect", json={"repository": "vgdnet/guide_psy"})
+    created = await author.post("/proposals", json={"paths": ["already.md", "card.md"]})
+    assert created.status_code == 200
+    published = await admin.post(
+        f"/proposals/{created.json()['id']}/approve", json={"reason": ""}
+    )
+    assert published.status_code == 200
+
+    shared_before = await author.get("/shared/notes/card.md/feed")
+    assert shared_before.status_code == 200
+    shared_ids = {item["id"] for item in shared_before.json()["events"]}
+    assert shared_ids
+    cards_shared = await author.get("/cards/card.md/feed")
+    assert {item["id"] for item in cards_shared.json()["events"]} == shared_ids
+
+    detail = await author.get("/personal/notes/card.md")
+    assert detail.status_code == 200
+    saved = await author.put(
+        "/personal/notes/card.md",
+        json={
+            "source": "# Personal card\nedited in app [[already]]\n",
+            "expected_hash": detail.json()["content_hash"],
+        },
+    )
+    assert saved.status_code == 200
+
+    shared_after = await author.get("/shared/notes/card.md/feed")
+    assert {item["id"] for item in shared_after.json()["events"]} == shared_ids
+    cards_shared_after = await author.get("/cards/card.md/feed")
+    assert {item["id"] for item in cards_shared_after.json()["events"]} == shared_ids
+
+    personal_feed = await author.get("/cards/personal:card.md/feed")
+    assert personal_feed.status_code == 200
+    personal_events = personal_feed.json()["events"]
+    personal_ids = {item["id"] for item in personal_events}
+    assert personal_ids
+    assert personal_ids.isdisjoint(shared_ids)
+    assert "edited" in {item["kind"] for item in personal_events}
+    assert all(item.get("proposal_id") is None for item in personal_events)
+    for item in personal_events:
+        assert "body" not in item
+        assert "source" not in item
+        assert "edited in app" not in str(item)
+
+    unlinked = await author.put(
+        "/personal/notes/card.md",
+        json={
+            "source": "# Personal card\nedited in app\n",
+            "expected_hash": saved.json()["content_hash"],
+        },
+    )
+    assert unlinked.status_code == 200
+    after_unlink = await author.get("/cards/personal:card.md/feed")
+    assert any(
+        item["kind"] == "unlinked" and item["other_path"] == "already"
+        for item in after_unlink.json()["events"]
+    )
+    still_shared = await author.get("/shared/notes/card.md/feed")
+    assert {item["id"] for item in still_shared.json()["events"]} == shared_ids
+
+    owner_id = (await author.get("/users/me")).json()["id"]
+    stranger = await _second("feed-iso-stranger")
+    stolen_feed = await stranger.get(f"/cards/personal:{owner_id}:card.md/feed")
+    assert stolen_feed.status_code == 404
+    admin_feed = await admin.get(f"/cards/personal:{owner_id}:card.md/feed")
+    assert admin_feed.status_code == 200
+    assert {item["id"] for item in admin_feed.json()["events"]} == {
+        item["id"] for item in after_unlink.json()["events"]
+    }
+    await author.aclose()
+    await stranger.aclose()
