@@ -29,6 +29,11 @@ interaction feed (`GET /api/cards/{path}/feed`), not as note bodies.
 Shared, others' personal (`personal:{uuid}:…`), and proposal cards stay
 read-only (no edit button, no author-contract tease on the card). Comments
 stay on published shared. Guests do not receive card bodies.
+`[[wikilink]]` hrefs inherit the open card's layer (TZ 2.54): from
+`#/card/personal:{path}` a wiki target becomes `personal:{file}` (foreign
+personal keeps the owner UUID; proposal keeps the proposal id). The same
+git path can exist in shared and personal; do not collapse wiki clicks
+onto the unprefixed shared hash.
 
 Card URLs: `#/card/` opens rhizome search (words and tags from the derived
 index). Hits include `layer` (`shared` / `personal` / `proposal`) so the UI

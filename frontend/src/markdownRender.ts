@@ -52,7 +52,12 @@ function resolveWiki(
   return { kind: "missing", label };
 }
 
-function renderInline(text: string, note: NoteLinks, nodes: WikiNode[], cardHash: (path: string) => string): string {
+function renderInline(
+  text: string,
+  note: NoteLinks,
+  nodes: WikiNode[],
+  cardHash: (path: string) => string,
+): string {
   const escaped = escapeHtml(text);
   const withCode = escaped.replace(/`([^`]+)`/g, "<code>$1</code>");
   const withWiki = withCode.replace(/\[\[([^[\]]+)\]\]/g, (_match, raw: string) => {

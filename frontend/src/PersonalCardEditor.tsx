@@ -116,7 +116,7 @@ export function PersonalCardEditor({
           />
         </Suspense>
       ) : (
-        <MarkdownBody body={note.body} note={note} nodes={nodes} />
+        <MarkdownBody body={note.body} note={note} nodes={nodes} cardPath={cardPath} />
       )}
     </div>
   );

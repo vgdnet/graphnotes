@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { cardApiUrl, cardHash, cardSearchHash, parseCardRoute, pathFromCardHash, isOwnPersonalCard, canShowCardEditButton, normalizeCardPath } from "../test-out/cardRoute.js";
+import { cardApiUrl, cardHash, cardSearchHash, parseCardRoute, pathFromCardHash, isOwnPersonalCard, canShowCardEditButton, normalizeCardPath, qualifyCardPath, wikiCardHash } from "../test-out/cardRoute.js";
 import { renderBlocks } from "../test-out/markdownRender.js";
 
 const UNICODE_PATH = "personal:вариант Б — конспекты/Паранойя (Б).md";
@@ -67,6 +67,26 @@ test("edit button only for own personal when the author contract is accepted", (
   assert.equal(canShowCardEditButton("personal:aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee:secret.md", true), false);
   assert.equal(canShowCardEditButton("proposal:aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee:card.md", true), false);
   assert.equal(canShowCardEditButton(null, true), false);
+});
+
+test("wikilinks on a personal card keep the personal layer (same path can exist in shared)", () => {
+  assert.equal(qualifyCardPath("personal:Индекс.md", "часы терапии.md"), "personal:часы терапии.md");
+  assert.equal(qualifyCardPath("personal:Индекс.md", "часы терапии"), "personal:часы терапии");
+  assert.equal(
+    wikiCardHash("personal:Индекс.md", "часы терапии.md"),
+    cardHash("personal:часы терапии.md"),
+  );
+  assert.equal(qualifyCardPath("Индекс.md", "часы терапии.md"), "часы терапии.md");
+  assert.equal(
+    qualifyCardPath("personal:aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee:Индекс.md", "peer.md"),
+    "personal:aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee:peer.md",
+  );
+  assert.equal(qualifyCardPath("personal:Индекс.md", "personal:already.md"), "personal:already.md");
+  const html = renderBlocks("See [[часы терапии]]", { links: ["часы терапии.md"], unresolved_links: [] }, [], (path) =>
+    wikiCardHash("personal:Индекс.md", path),
+  );
+  assert.match(html, /personal%3A/);
+  assert.match(html, /%D1%87%D0%B0%D1%81%D1%8B/);
 });
 
 test("hashtags and hash-only lines do not hang the markdown renderer", () => {

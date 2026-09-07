@@ -7,7 +7,7 @@ import { GraphDiffView } from "./GraphDiffView";
 import type { GraphDiffResponse } from "./GraphDiffView";
 import { MarkdownBody } from "./MarkdownBody";
 import { CardSearch } from "./CardSearch";
-import { canShowCardEditButton, cardApiUrl, cardHash, cardSearchHash, isForeignPersonalCard, isOwnPersonalCard, parseCardRoute } from "./cardRoute";
+import { canShowCardEditButton, cardApiUrl, cardFilePath, cardHash, cardSearchHash, isForeignPersonalCard, isOwnPersonalCard, parseCardRoute } from "./cardRoute";
 import { PersonalCardEditor } from "./PersonalCardEditor";
 import { AdminPanel } from "./AdminPanel";
 import { ThemeSwitcher } from "./ThemeSwitcher";
@@ -1564,7 +1564,7 @@ export function App() {
                     onError={setError}
                   />
                 ) : (
-                  <MarkdownBody body={openNote.body} note={openNote} nodes={sharedGraph?.nodes ?? []} />
+                  <MarkdownBody body={openNote.body} note={openNote} nodes={sharedGraph?.nodes ?? []} cardPath={cardPath ?? undefined} />
                 )}
                 {noteFeed.length > 0 && (
                   <div>
@@ -1896,7 +1896,12 @@ export function App() {
                   {openNote.locked ? (
                     <p className="admin-panel__hint">Закрытая заметка. Тело в общей ризоме не показывается.</p>
                   ) : (
-                    <MarkdownBody body={openNote.body} note={openNote} nodes={sharedGraph?.nodes ?? []} />
+                    <MarkdownBody
+                      body={openNote.body}
+                      note={openNote}
+                      nodes={sharedGraph?.nodes ?? []}
+                      cardPath={cardPath ?? `personal:${cardFilePath(openNote.path)}`}
+                    />
                   )}
                   {noteFeed.length > 0 && (
                     <div>
@@ -2134,6 +2139,7 @@ export function App() {
                               links: proposedLinks.filter((edge) => edge.source === item.path && !edge.unresolved).map((edge) => edge.target),
                               unresolved_links: proposedLinks.filter((edge) => edge.source === item.path && edge.unresolved).map((edge) => edge.target),
                             }}
+                            cardPath={`proposal:${openProposal.id}:${item.path}`}
                           />
                         ) : (
                           <pre className="proposal-diff">{item.diff || item.path}</pre>
