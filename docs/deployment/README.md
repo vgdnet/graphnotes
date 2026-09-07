@@ -1,7 +1,8 @@
 # Deployment
 
 These notes are for a person who clones GraphNotes and runs it. They are not
-a product specification.
+a product specification. Delivery path and merge rules:
+[INTEGRATOR.md](INTEGRATOR.md).
 
 | Order | File | What it covers |
 | --- | --- | --- |
