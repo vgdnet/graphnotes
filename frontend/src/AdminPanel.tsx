@@ -53,6 +53,7 @@ type OperatorStatus = {
   health: { status: string; database: string };
   shared_repository: { connected: boolean; owner?: string; name?: string; status?: string; index_status?: string } | null;
   public_base_url: string | null;
+  start_card_path?: string | null;
   mail_code_ttl_minutes?: number;
 };
 
@@ -77,6 +78,7 @@ const ACTION_LABELS: Record<string, string> = {
   "mail.test_failed": "ошибка проверочного письма",
   "auth.password_reset": "сброс пароля по почте",
   "admin.public_base_url_changed": "публичный адрес сайта",
+  "admin.start_card_changed": "стартовая карточка",
   "admin.user_notify_changed": "уведомления очереди",
   "notify.queue_sent": "письмо о новых правках",
   "notify.queue_failed": "ошибка уведомления очереди",
@@ -144,6 +146,7 @@ export function AdminPanel({
   const [testTo, setTestTo] = useState("");
   const [mailNote, setMailNote] = useState("");
   const [publicBaseDraft, setPublicBaseDraft] = useState("");
+  const [startCardDraft, setStartCardDraft] = useState("");
 
   async function loadUsers() {
     const params = new URLSearchParams();
@@ -177,6 +180,7 @@ export function AdminPanel({
     const body = (await response.json()) as OperatorStatus;
     setOperator(body);
     if (body.public_base_url) setPublicBaseDraft(body.public_base_url);
+    setStartCardDraft(body.start_card_path || "");
   }
 
   useEffect(() => {
@@ -323,13 +327,14 @@ export function AdminPanel({
       const response = await fetch("/api/admin/operator", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ public_base_url: publicBaseDraft }),
+        body: JSON.stringify({ public_base_url: publicBaseDraft, start_card_path: startCardDraft }),
       });
       if (!response.ok) throw new Error(await readError(response));
       const body = (await response.json()) as OperatorStatus;
       setOperator(body);
       if (body.public_base_url) setPublicBaseDraft(body.public_base_url);
-      setMailNote("Публичный адрес сайта сохранён. Письма будут ссылаться на него.");
+      setStartCardDraft(body.start_card_path || "");
+      setMailNote("Установка сохранена. Письма и стартовая карточка читают эти значения.");
       await loadJournal();
     } catch (requestError) {
       onError(requestError instanceof Error ? requestError.message : "Ошибка соединения");
@@ -658,9 +663,18 @@ export function AdminPanel({
             <p className="admin-panel__hint">
               Этот адрес попадает в письма: подтверждение, вход, сброс пароля и уведомление очереди.
               Сохраняется в базе и переживает пересборку Compose. GRAPHNOTES_PUBLIC_BASE_URL — только начальное значение.
+              Стартовая карточка — git-путь для `/card`. Пустое поле — 404.
             </p>
             <div className="admin-create__grid">
               <label>URL <input type="url" value={publicBaseDraft} onChange={(event) => setPublicBaseDraft(event.target.value)} required /></label>
+              <label>
+                Стартовая карточка
+                <input
+                  value={startCardDraft}
+                  onChange={(event) => setStartCardDraft(event.target.value)}
+                  placeholder="git-путь, например Welcome.md"
+                />
+              </label>
               <button className="button button--primary" type="submit" disabled={submitting}>
                 Сохранить
               </button>

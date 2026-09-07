@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { cardHash } from "./cardRoute";
+import { canonicalCardHash } from "./cardRoute";
 
 type SearchLayer = "shared" | "personal" | "proposal";
 type SearchHit = {
@@ -95,8 +95,8 @@ export function CardSearch({
   return (
     <section className="notes-panel notes-panel--search" aria-labelledby="card-search-heading">
       <div>
-        <p className="eyebrow">Карточки</p>
-        <h2 id="card-search-heading">Поиск по ризоме</h2>
+        <p className="eyebrow">Поиск</p>
+        <h2 id="card-search-heading">Поиск по карточкам</h2>
         <p className="admin-panel__hint">{hint}</p>
       </div>
       <label className="card-search__field">
@@ -178,7 +178,7 @@ export function CardSearch({
             <li key={hit.path}>
               <a
                 className={showLayer ? `card-search__hit card-search__hit--${layer}` : "card-search__hit"}
-                href={cardHash(hit.path)}
+                href={canonicalCardHash(hit.path)}
                 onClick={() => {
                   if (!canReadNotes) onNeedAuth?.();
                 }}

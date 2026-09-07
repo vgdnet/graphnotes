@@ -276,7 +276,12 @@ async def consume_email_token(
     user = await database.get(User, row.user_id)
     if user is None or not user.is_active:
         return None
-    if email and user.email != email.casefold():
-        return None
+    if email:
+        ident = email.strip()
+        if "@" in ident:
+            if user.email != ident.casefold():
+                return None
+        elif user.username != ident.casefold():
+            return None
     row.used_at = now
     return user

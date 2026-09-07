@@ -1,17 +1,28 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { cardApiUrl, cardHash, cardSearchHash, parseCardRoute, pathFromCardHash, isOwnPersonalCard, canShowCardEditButton, normalizeCardPath, qualifyCardPath, wikiCardHash } from "../test-out/cardRoute.js";
+import { cardApiUrl, cardHash, cardSearchHash, canonicalCardHash, parseCardRoute, pathFromCardHash, isOwnPersonalCard, canShowCardEditButton, normalizeCardPath, qualifyCardPath, wikiCardHash } from "../test-out/cardRoute.js";
+import { parseAppRoute, routeToView, viewHash } from "../test-out/appRoute.js";
 import { renderBlocks } from "../test-out/markdownRender.js";
 
 const UNICODE_PATH = "personal:вариант Б — конспекты/Паранойя (Б).md";
 const emptyNote = { links: [], unresolved_links: [] };
 
-test("empty #/card/ is the rhizome search hub, not a card path", () => {
+test("empty #/card/ is legacy search; #/card is the start card", () => {
   assert.deepEqual(parseCardRoute("#/card/"), { kind: "search" });
-  assert.deepEqual(parseCardRoute("#/card"), { kind: "search" });
+  assert.deepEqual(parseCardRoute("#/card"), { kind: "none" });
   assert.equal(pathFromCardHash("#/card/"), null);
-  assert.equal(cardSearchHash(), "#/card/");
+  assert.equal(cardSearchHash(), "#/search");
+  assert.deepEqual(parseAppRoute("#/card"), { kind: "start_card" });
+  assert.deepEqual(parseAppRoute("#/search"), { kind: "search" });
+  assert.equal(routeToView(parseAppRoute("#/offer")), "offer");
+  assert.equal(routeToView(parseAppRoute("#/queue")), "queue");
+  assert.equal(routeToView(parseAppRoute("#/user")), "settings");
+  assert.equal(routeToView(parseAppRoute("#/my_graph")), "my_graph");
+  assert.equal(routeToView(parseAppRoute("#/contribution")), "contribution");
+  assert.equal(viewHash("graph"), "#/graph");
+  assert.equal(canonicalCardHash("personal:notes/mine.md"), cardHash("notes/mine.md"));
+  assert.match(canonicalCardHash("proposal:aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee:card.md"), /proposal/);
 });
 
 test("card hash round-trips encoded personal unicode paths with slash", () => {

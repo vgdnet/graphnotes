@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from datetime import UTC, datetime
 
 from sqlalchemy import select
@@ -8,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import settings
 from app.models.github import PersonalRepository, SharedRepository
 from app.models.personal_upload import PersonalUpload, UploadEvent
+from app.models.proposal import Proposal, ProposalStatus
 from app.models.user import User, UserRole
 from app.services.archive import ArchiveError, read_markdown_bytes, read_zip_markdown
 from app.services.audit import record_audit_event
@@ -65,12 +67,46 @@ async def list_upload_events(database: AsyncSession, user: User) -> dict[str, ob
             .limit(100)
         )
     ).all()
+    proposals = (
+        await database.scalars(
+            select(Proposal)
+            .where(Proposal.author_user_id == user.id)
+            .order_by(Proposal.created_at.desc())
+        )
+    ).all()
+    latest_by_path: dict[str, Proposal] = {}
+    for row in proposals:
+        try:
+            paths = json.loads(row.scope_paths)
+        except json.JSONDecodeError:
+            paths = []
+        if not isinstance(paths, list):
+            continue
+        for path in paths:
+            key = str(path)
+            if key not in latest_by_path:
+                latest_by_path[key] = row
+    outcome_map = {
+        ProposalStatus.PUBLISHED.value: "accepted",
+        ProposalStatus.REJECTED.value: "rejected",
+        ProposalStatus.CHANGES_REQUESTED.value: "returned",
+        ProposalStatus.OPEN.value: "proposed",
+        ProposalStatus.ACCEPTED_PENDING_MERGE.value: "proposed",
+        ProposalStatus.MERGED_INDEXING.value: "proposed",
+        ProposalStatus.CONFLICTED.value: "proposed",
+        ProposalStatus.FAILED.value: "proposed",
+    }
     return {
         "events": [
             {
                 "path": row.path,
                 "content_hash": row.content_hash,
                 "created_at": row.created_at,
+                "differed": row.path in latest_by_path,
+                "proposed": row.path in latest_by_path,
+                "outcome": outcome_map.get(latest_by_path[row.path].status)
+                if row.path in latest_by_path
+                else None,
             }
             for row in rows
         ]

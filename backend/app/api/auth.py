@@ -271,7 +271,8 @@ async def request_email_code(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="SMTP is not configured",
         )
-    user = await database.scalar(select(User).where(User.email == payload.email))
+    ident = payload.identifier or payload.email or ""
+    user = await _lookup_login_user(database, ident)
     if user is None or not user.is_active:
         return
     if payload.purpose == LOGIN_PURPOSE and user.email_verified_at is None:
@@ -314,13 +315,13 @@ async def reset_password(
         purpose=RESET_PURPOSE,
         token=payload.token,
         code=payload.code,
-        email=payload.email,
+        email=payload.identifier or payload.email,
     )
     if user is None:
         record_audit_event(
             database,
             action="auth.password_reset_failed",
-            subject_username=(payload.email or "")[:32] or None,
+            subject_username=(payload.identifier or payload.email or "")[:32] or None,
             details={"reason": "invalid_email_code"},
         )
         await database.commit()
@@ -365,13 +366,13 @@ async def verify_email_code(
         purpose=payload.purpose,
         token=payload.token,
         code=payload.code,
-        email=payload.email,
+        email=payload.identifier or payload.email,
     )
     if user is None:
         record_audit_event(
             database,
             action="auth.login_failed",
-            subject_username=(payload.email or "")[:32] or None,
+            subject_username=(payload.identifier or payload.email or "")[:32] or None,
             details={"reason": "invalid_email_code"},
         )
         await database.commit()

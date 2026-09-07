@@ -8,7 +8,20 @@ export function cardHash(path: string): string {
 }
 
 export function cardSearchHash(): string {
-  return "#/card/";
+  return "#/search";
+}
+
+export function startCardHash(): string {
+  return "#/card";
+}
+
+/** TZ 2.58: own personal hits open `/card/{git-path}` with no layer in the URL. */
+export function canonicalCardHash(path: string): string {
+  const normalized = normalizeCardPath(path);
+  if (normalized.startsWith("proposal:") || isForeignPersonalCard(normalized)) {
+    return cardHash(normalized);
+  }
+  return cardHash(cardFilePath(normalized));
 }
 
 /** Hash encodes `:` as `%3A`; the card path must still be `personal:{file}`. */
@@ -29,7 +42,9 @@ export function normalizeCardPath(path: string): string {
 
 export function parseCardRoute(hash: string): CardRoute {
   const value = hash.startsWith("#") ? hash : `#${hash}`;
-  if (value === "#/card" || value === "#/card/") return { kind: "search" };
+  if (value === "#/search") return { kind: "search" };
+  if (value === "#/card/") return { kind: "search" };
+  if (value === "#/card") return { kind: "none" };
   const prefix = "#/card/";
   if (!value.startsWith(prefix)) return { kind: "none" };
   const rest = value.slice(prefix.length);

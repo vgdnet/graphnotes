@@ -30,7 +30,12 @@ from app.services.audit import record_audit_event
 from app.services.auth import hash_password
 from app.core.config import settings
 from app.services.contributions import list_admin_contributions
-from app.services.installation import resolve_public_base_url, save_public_base_url
+from app.services.installation import (
+    resolve_public_base_url,
+    resolve_start_card_path,
+    save_public_base_url,
+    save_start_card_path,
+)
 from app.services.mail import (
     MailDeliveryError,
     MailNotConfiguredError,
@@ -441,6 +446,7 @@ async def operator_status(
         health=health,
         shared_repository=shared_body,
         public_base_url=base,
+        start_card_path=(await resolve_start_card_path(database)) or None,
         mail_code_ttl_minutes=settings.mail_code_ttl_minutes,
     )
 
@@ -459,6 +465,15 @@ async def update_operator(
         subject_username=admin.username,
         details={"public_base_url": saved},
     )
+    if payload.start_card_path is not None:
+        start = await save_start_card_path(database, payload.start_card_path)
+        record_audit_event(
+            database,
+            action="admin.start_card_changed",
+            actor_user_id=admin.id,
+            subject_username=admin.username,
+            details={"start_card_path": start or None},
+        )
     await database.commit()
     return await operator_status(admin, database)
 

@@ -17,6 +17,7 @@ from app.schemas.notes import (
     NoteDetail,
     NoteListResponse,
     PersonalNoteWrite,
+    StartCardResponse,
     UploadHistoryResponse,
 )
 from app.schemas.comments import (
@@ -47,6 +48,7 @@ from app.services.ingest import (
     list_upload_events,
     save_personal_note,
 )
+from app.services.installation import resolve_start_card_path
 from app.services.proposal import ProposalError, get_proposal_card
 
 router = APIRouter(tags=["notes"])
@@ -58,6 +60,12 @@ def _client() -> GitHubAppClient:
 
 def _raise(error: IngestError) -> NoReturn:
     raise HTTPException(status_code=error.status_code, detail=error.detail) from error
+
+
+@router.get("/installation/start-card", response_model=StartCardResponse)
+async def installation_start_card(database: DatabaseSession) -> StartCardResponse:
+    path = await resolve_start_card_path(database)
+    return StartCardResponse(path=path or None)
 
 
 @router.get("/shared/notes", response_model=NoteListResponse)

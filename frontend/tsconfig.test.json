@@ -10,5 +10,5 @@
     "outDir": "test-out",
     "rootDir": "src"
   },
-  "include": ["src/cardRoute.ts", "src/markdownRender.ts", "src/graphQuery.ts", "src/authMail.ts"]
+  "include": ["src/cardRoute.ts", "src/appRoute.ts", "src/markdownRender.ts", "src/graphQuery.ts", "src/authMail.ts"]
 }

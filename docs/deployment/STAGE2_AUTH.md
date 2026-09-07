@@ -64,8 +64,10 @@ origin.
 Confirm, login and reset codes/tokens expire after **30 minutes**
 (`GRAPHNOTES_MAIL_CODE_TTL_MINUTES`). Expired secrets do not open a
 session or set a new password. `POST /api/auth/email/request` always
-returns 204 when SMTP is on (no existence leak); a real letter is sent
-only if the address exists. While an unused code is still live, another
+returns 204 when SMTP is on (no existence leak). Purpose `reset`
+accepts login or email (`identifier` or `email`); a real letter is sent
+only to the **stored account email**. A typed address that is not that
+mailbox does not receive mail. While an unused code is still live, another
 send for the same purpose waits 60 seconds
 (`GRAPHNOTES_MAIL_RESEND_COOLDOWN_SECONDS`). After expiry the user can
 request again from a clean form.

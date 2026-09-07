@@ -63,27 +63,34 @@ class LoginRequest(BaseModel):
 
 
 class EmailRequest(BaseModel):
-    email: EmailStr
     purpose: str = Field(pattern="^(confirm|login|reset)$")
+    email: str | None = None
+    identifier: str | None = None
 
-    @field_validator("email")
-    @classmethod
-    def normalize_email(cls, value: EmailStr) -> str:
-        return str(value).casefold()
+    @model_validator(mode="after")
+    def require_identity(self) -> "EmailRequest":
+        raw = (self.identifier or self.email or "").strip()
+        if not raw:
+            raise ValueError("identifier or email must be provided")
+        ident = normalize_login_identifier(raw)
+        self.identifier = ident
+        self.email = ident if "@" in ident else None
+        return self
 
 
 class EmailVerifyRequest(BaseModel):
     purpose: str = Field(pattern="^(confirm|login)$")
-    email: EmailStr | None = None
+    email: str | None = None
+    identifier: str | None = None
     token: str | None = Field(default=None, min_length=8, max_length=128)
     code: str | None = Field(default=None, min_length=6, max_length=6)
 
-    @field_validator("email")
+    @field_validator("email", "identifier")
     @classmethod
-    def normalize_email(cls, value: EmailStr | None) -> str | None:
+    def normalize_verify_identity(cls, value: str | None) -> str | None:
         if value is None:
             return None
-        return str(value).casefold()
+        return normalize_login_identifier(value)
 
     @model_validator(mode="after")
     def require_secret(self) -> "EmailVerifyRequest":
@@ -94,16 +101,17 @@ class EmailVerifyRequest(BaseModel):
 
 class PasswordResetRequest(BaseModel):
     password: str = Field(min_length=12, max_length=128)
-    email: EmailStr | None = None
+    email: str | None = None
+    identifier: str | None = None
     token: str | None = Field(default=None, min_length=8, max_length=128)
     code: str | None = Field(default=None, min_length=6, max_length=6)
 
-    @field_validator("email")
+    @field_validator("email", "identifier")
     @classmethod
-    def normalize_email(cls, value: EmailStr | None) -> str | None:
+    def normalize_reset_identity(cls, value: str | None) -> str | None:
         if value is None:
             return None
-        return str(value).casefold()
+        return normalize_login_identifier(value)
 
     @model_validator(mode="after")
     def require_secret(self) -> "PasswordResetRequest":

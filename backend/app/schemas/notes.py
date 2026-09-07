@@ -46,10 +46,17 @@ class UploadEventItem(BaseModel):
     path: str
     content_hash: str
     created_at: datetime
+    differed: bool = False
+    proposed: bool = False
+    outcome: str | None = None
 
 
 class UploadHistoryResponse(BaseModel):
     events: list[UploadEventItem]
+
+
+class StartCardResponse(BaseModel):
+    path: str | None = None
 
 
 class ClosedPathItem(BaseModel):

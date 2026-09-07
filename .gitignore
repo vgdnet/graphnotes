@@ -1,13 +1,19 @@
 .env
 .venv/
 
-# Local working notes stay on nord (TZ, ADRs, stage journals, agent briefing)
+# Local working notes stay on nord (stage journals, agent briefing)
 AGENTS.md
 README_FIRST.md
 START_*.md
 .cursor/
 docs/*
 !docs/deployment/
+!docs/product/
+!docs/context/
+!docs/decisions/
+!docs/stages/
+docs/stages/*
+!docs/stages/PRODUCT_TRACEABILITY.md
 
 __pycache__/
 *.py[cod]

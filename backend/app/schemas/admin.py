@@ -104,11 +104,13 @@ class AdminOperatorResponse(BaseModel):
     health: dict[str, str]
     shared_repository: dict[str, object] | None = None
     public_base_url: str | None = None
+    start_card_path: str | None = None
     mail_code_ttl_minutes: int = 30
 
 
 class AdminOperatorUpdate(BaseModel):
     public_base_url: str = Field(min_length=8, max_length=300)
+    start_card_path: str | None = Field(default=None, max_length=300)
 
     @field_validator("public_base_url")
     @classmethod

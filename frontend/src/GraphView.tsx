@@ -64,11 +64,17 @@ function layerStatusLabel(graphLayer: string | undefined, kind: FilterKind): str
   return "общая ризома";
 }
 
-function cardPathFor(node: GraphNode, personalLayer: boolean): string {
-  if (node.path.startsWith("personal:") || node.path.startsWith("unresolved:") || node.path.startsWith("locked:")) {
+function cardPathFor(node: GraphNode, _personalLayer: boolean): string {
+  if (node.path.startsWith("unresolved:") || node.path.startsWith("locked:")) {
     return node.path;
   }
-  if (personalLayer || node.origin === "personal") return `personal:${node.path}`;
+  if (node.path.startsWith("personal:")) {
+    const rest = node.path.slice("personal:".length);
+    if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}:/i.test(rest)) {
+      return node.path;
+    }
+    return rest;
+  }
   return node.path;
 }
 

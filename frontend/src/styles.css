@@ -259,6 +259,10 @@ button { color: inherit; }
 .tabs--three { grid-template-columns: 1fr 1fr 1fr; }
 .tab { padding: .75rem; border: 0; border-radius: .58rem; background: transparent; color: var(--gn-text-faint); cursor: pointer; }
 .tab--active { background: var(--gn-tab-active); color: var(--gn-text-strong); }
+.auth-link { padding: 0; border: 0; background: none; color: var(--gn-accent); cursor: pointer; font: inherit; text-decoration: underline; }
+.auth-switch { display: flex; flex-wrap: wrap; gap: .35rem; align-items: center; }
+.card-stack__pane { margin: 0 0 2rem; padding-bottom: 1.5rem; border-bottom: 1px solid var(--gn-border); }
+.card-stack__label { margin: 0 0 .75rem; color: var(--gn-text-faint); font-size: .78rem; letter-spacing: .08em; text-transform: uppercase; }
 
 form { display: grid; gap: 1rem; }
 label { display: grid; gap: .5rem; color: var(--gn-text-label); font-size: .84rem; font-weight: 650; }

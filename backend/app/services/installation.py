@@ -7,6 +7,16 @@ from app.core.config import DEFAULT_PUBLIC_BASE_URL, settings
 from app.models.installation import InstallationSetting
 
 PUBLIC_BASE_URL_KEY = "public_base_url"
+START_CARD_PATH_KEY = "start_card_path"
+
+
+def normalize_start_card_path(value: str | None) -> str:
+    raw = (value or "").strip().lstrip("/")
+    if raw.startswith("#/card/"):
+        raw = raw[len("#/card/") :]
+    if raw.startswith("#/card"):
+        raw = raw[len("#/card") :].lstrip("/")
+    return raw[:300]
 
 
 def normalize_public_base_url(value: str | None) -> str:
@@ -43,6 +53,35 @@ async def save_public_base_url(database: AsyncSession, value: str) -> str:
         database.add(
             InstallationSetting(
                 key=PUBLIC_BASE_URL_KEY,
+                value=normalized,
+                updated_at=now,
+            )
+        )
+    else:
+        row.value = normalized
+        row.updated_at = now
+    return normalized
+
+
+async def resolve_start_card_path(database: AsyncSession) -> str:
+    row = await database.get(InstallationSetting, START_CARD_PATH_KEY)
+    if row is None:
+        return ""
+    return normalize_start_card_path(row.value)
+
+
+async def save_start_card_path(database: AsyncSession, value: str | None) -> str:
+    normalized = normalize_start_card_path(value)
+    row = await database.get(InstallationSetting, START_CARD_PATH_KEY)
+    now = datetime.now(UTC)
+    if not normalized:
+        if row is not None:
+            await database.delete(row)
+        return ""
+    if row is None:
+        database.add(
+            InstallationSetting(
+                key=START_CARD_PATH_KEY,
                 value=normalized,
                 updated_at=now,
             )

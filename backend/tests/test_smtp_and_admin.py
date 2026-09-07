@@ -443,6 +443,27 @@ async def test_admin_persisted_public_url_overrides_lan_env(
         assert "admin.public_base_url_changed" in actions
 
 
+async def test_start_card_path_persists_and_is_public(
+    auth_test_context: tuple[AsyncClient, async_sessionmaker[AsyncSession]],
+) -> None:
+    admin, session_factory = auth_test_context
+    await _admin(admin, session_factory, "start-admin")
+    missing = await admin.get("/installation/start-card")
+    assert missing.status_code == 200
+    assert missing.json()["path"] is None
+    saved = await admin.put(
+        "/admin/operator",
+        json={
+            "public_base_url": "https://rhizome.vsepsy.ru",
+            "start_card_path": "Welcome.md",
+        },
+    )
+    assert saved.status_code == 200
+    assert saved.json()["start_card_path"] == "Welcome.md"
+    listed = await admin.get("/installation/start-card")
+    assert listed.json()["path"] == "Welcome.md"
+
+
 async def test_expired_reset_and_confirm_tokens_do_not_open_session(
     auth_test_context: tuple[AsyncClient, async_sessionmaker[AsyncSession]],
     monkeypatch: MonkeyPatch,
@@ -579,4 +600,80 @@ async def test_resend_is_generic_and_sends_after_expiry(
         json={"token": first_token, "password": "brand new long password"},
     )
     assert reused.status_code == 401
+
+
+async def test_password_reset_by_username_sends_to_stored_email(
+    auth_test_context: tuple[AsyncClient, async_sessionmaker[AsyncSession]],
+    monkeypatch: MonkeyPatch,
+) -> None:
+    client, _ = auth_test_context
+    sent = _enable_smtp(monkeypatch)
+    await _register(client, "by-login", email="stored-box@example.com")
+    await client.post("/auth/logout")
+
+    asked = await client.post(
+        "/auth/email/request",
+        json={"identifier": "by-login", "purpose": "reset"},
+    )
+    assert asked.status_code == 204
+    assert sent[-1]["to"] == "stored-box@example.com"
+    assert "Сброс пароля" in sent[-1]["subject"]
+
+    by_email = await client.post(
+        "/auth/email/request",
+        json={"email": "stored-box@example.com", "purpose": "reset"},
+    )
+    assert by_email.status_code == 204
+
+    unknown = await client.post(
+        "/auth/email/request",
+        json={"identifier": "no-such-user", "purpose": "reset"},
+    )
+    assert unknown.status_code == 204
+    stray = await client.post(
+        "/auth/email/request",
+        json={"email": "not-the-account@example.com", "purpose": "reset"},
+    )
+    assert stray.status_code == 204
+    assert all(item["to"] == "stored-box@example.com" for item in sent)
+
+
+async def test_password_reset_by_username_sends_to_stored_email(
+    auth_test_context: tuple[AsyncClient, async_sessionmaker[AsyncSession]],
+    monkeypatch: MonkeyPatch,
+) -> None:
+    client, _ = auth_test_context
+    sent = _enable_smtp(monkeypatch)
+    await _register(client, "by-login", email="stored-box@example.com")
+    await client.post("/auth/logout")
+
+    asked = await client.post(
+        "/auth/email/request",
+        json={"identifier": "by-login", "purpose": "reset"},
+    )
+    assert asked.status_code == 204
+    assert sent[-1]["to"] == "stored-box@example.com"
+    assert "evil@example.com" not in sent[-1]["to"]
+    assert "Сброс пароля" in sent[-1]["subject"]
+    assert "https://rhizome.vsepsy.ru/#/auth/reset" in sent[-1]["body"] or (
+        "http://rhizome.test/#/auth/reset" in sent[-1]["body"]
+    )
+
+    by_email = await client.post(
+        "/auth/email/request",
+        json={"email": "stored-box@example.com", "purpose": "reset"},
+    )
+    assert by_email.status_code == 204
+
+    unknown = await client.post(
+        "/auth/email/request",
+        json={"identifier": "no-such-user", "purpose": "reset"},
+    )
+    assert unknown.status_code == 204
+    stray = await client.post(
+        "/auth/email/request",
+        json={"email": "not-the-account@example.com", "purpose": "reset"},
+    )
+    assert stray.status_code == 204
+    assert all(item["to"] == "stored-box@example.com" for item in sent)
 
