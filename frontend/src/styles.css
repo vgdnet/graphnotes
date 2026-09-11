@@ -130,7 +130,7 @@ button { color: inherit; }
     var(--gn-bg);
 }
 
-.topbar { display: flex; align-items: center; justify-content: space-between; gap: 1rem; max-width: 76rem; margin: 0 auto; flex-wrap: wrap; }
+.topbar { display: flex; align-items: center; justify-content: space-between; gap: 1rem; max-width: 76rem; margin: 0 auto; flex-wrap: wrap; padding-inline: 1.25rem; }
 .topnav { display: flex; flex-wrap: wrap; gap: .4rem; }
 .topnav .button { margin: 0; padding: .5rem .8rem; font-size: .8rem; }
 .topbar__end { display: flex; align-items: center; gap: .75rem; }

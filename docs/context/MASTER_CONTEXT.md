@@ -1,8 +1,8 @@
 # GraphNotes - MASTER CONTEXT
 
-Updated: 2026-09-11
+Updated: 2026-09-12
 Status: canonical architecture baseline
-Aligned with PRODUCT_SPEC 2.71. TZ 2.68–2.71 / §12.1: Obsidian plugin
+Aligned with PRODUCT_SPEC 2.77. TZ 2.68–2.71 / §12.1: Obsidian plugin
 **API** copies selected vault files into the owner's `personal_uploads` /
 `personal_assets`. Desktop **GraphNotes Publisher** lives in
 `obsidian-plugin/` (TZ 2.69). Token is an SSH-key analog (TZ 2.70):
@@ -186,7 +186,7 @@ use CSS theme tokens, not hardcoded washed-out fills. Landing `/` is `/graph`
 is the personal layer only. Guests see published nodes/edges and may
 open published shared card bodies (TZ 2.64); feed, comments, personal
 and queue still require a session. Account settings
-(§5.5 / TZ 2.13 / 2.58) live at **`/user`** (name in header opens it):
+(§5.5 / TZ 2.13 / 2.58 / 2.77) live at **`/user`** (name in header opens it; `.topbar` `padding-inline: 1.25rem` keeps that control and the brand off the window edge):
 required unique email, optional phone/Telegram contacts (not login), git
 connect/disconnect and author contract — not the public person card.
 ZIP download of published shared is removed (TZ 2.5; ADR-009 amendment
