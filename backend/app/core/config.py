@@ -26,7 +26,7 @@ class Settings(BaseSettings):
     ingest_max_file_bytes: int = 262_144
     ingest_max_zip_bytes: int = 2_097_152
     ingest_max_unpacked_bytes: int = 8_388_608
-    ingest_max_files: int = 100
+    ingest_max_files: int = 10_000
     ingest_max_path_depth: int = 8
     ingest_max_path_length: int = 180
     take_max_paths: int = 50

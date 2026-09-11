@@ -2,7 +2,10 @@
 
 Updated: 2026-09-11
 
-Product model TZ 2.63: GitHub is copy-in only. Local stores hold `.md`
+Product model TZ 2.65: personal ZIP ingest accepts **10 000** files
+(`GRAPHNOTES_INGEST_MAX_FILES`; over → HTTP 400 `archive has too many files`).
+~120-file vaults succeed. Zip-bomb size/ratio guards unchanged (2 MiB / 8 MiB /
+256 KiB). TZ 2.63: GitHub is copy-in only. Local stores hold `.md`
 (`personal_uploads`, `shared_notes`); PostgreSQL `note_index` is the
 search/graph index, not a second canon. Personal export (if any) is
 from the store, not synthesized from the index. Shared is not a product ZIP.
@@ -347,6 +350,11 @@ TZ 2.5–2.7 on this branch (not merged to main; production
   Leftover: GitHub App merge/rollback live-read of proposal branches.
   Live on `rhizome-test` 2026-09-11: SHA `10586d6fd178cbbcba58d8306225eb238e80e9b0`,
   Alembic `0016_shared_notes`. Production `rhizome` not deployed.
+- TZ 2.65: personal ZIP file-count cap is **10 000** (was 100). A ~120-file
+  archive succeeds; over the cap is HTTP 400 `archive has too many files`.
+  Compressed ZIP 2 MiB, unpacked 8 MiB, per-file 256 KiB and zip-bomb
+  ratio/symlink/encryption guards stay. Named in PRODUCT_SPEC 2.65 /
+  `functional.md` §6.3 / `STAGE4_INGEST.md`. Production `rhizome` not deployed.
 - leftover: rhizome access-level **entitlement tables** / payment
   gateway (ADR-016 + TZ 2.41 name the model and the «ризома автора»
   view; `closed_paths` already exists — not this slice); vsepsy

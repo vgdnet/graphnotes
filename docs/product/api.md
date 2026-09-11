@@ -26,7 +26,8 @@ POST /api/users/me/author-contract/withdraw
 GET  /api/repository/status
 
 POST /api/personal/connect          # from account settings, not the graph home
-POST /api/personal/import-md          # .md/ZIP into the local personal store
+POST /api/personal/import-md          # .md/ZIP into the local personal store;
+                                    # ZIP ≤ 10 000 files else 400 archive has too many files
 GET  /api/personal/notes              # read-only index of the local personal store
 GET  /api/personal/notes/{id}
 PUT  /api/personal/notes/{path}       # own personal only; source + expected_hash;

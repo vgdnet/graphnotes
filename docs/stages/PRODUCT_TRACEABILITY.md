@@ -88,7 +88,7 @@
 | Isolated connected personal git | 3, 4 |
 | One shared rhizome readable in-app (graph/cards/Markdown); no product ZIP/clone of corpus | 3, 5, 6 |
 | No GraphNotes write of selected shared notes into personal git; no ZIP download of shared | 7; Stage 4 take-from-shared historical only |
-| Safe MD/ZIP upload only when git is not connected; never into connected git | 4 |
+| Safe MD/ZIP upload (≤10 000 ZIP members; zip-bomb size/ratio guards); never into connected git | 4 |
 | User creates proposal from Differ selection | 7 |
 | Differ git input is the latest pulled public HEAD | 7 |
 | Author contribution: wrote / linked / proposed / accepted; empty Differ keeps accepted | next wave |

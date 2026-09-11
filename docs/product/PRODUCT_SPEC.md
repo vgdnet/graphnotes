@@ -1,7 +1,7 @@
 # GraphNotes — продуктовое ТЗ
 
 Статус: CANONICAL / LIVING DOCUMENT  
-Версия: 2.63  
+Версия: 2.66  
 Обновлено: 2026-09-11
 
 Это **оглавление**. Требования живут в связанных файлах, не в одной простыне.
@@ -51,6 +51,7 @@
 ## Куда смотреть по задаче
 
 - **Локальный склад у нас** (ТЗ 2.61–2.63): GitHub, git, позже Dropbox / Google Drive — только **источники**. Продукт **копирует** `.md` в локальное хранилище (личное и опубликованная общая). Граф, карточки и Differ читают копию. → [vision.md](vision.md), [principles.md](principles.md) §3.1–3.4, [functional.md](functional.md) §6.2–6.3
+- **ZIP загрузка (ТЗ 2.65):** до **10 000 файлов** в одном архиве (vault / git dump). ~120 файлов проходит. Свыше — HTTP 400, `archive has too many files`. Размер ZIP 2 МиБ / распаковка 8 МиБ / файл 256 КиБ и zip-бомба остаются. → [functional.md](functional.md) §6.3, [acceptance-and-nfr.md](acceptance-and-nfr.md) §9.1
 - **Настройки аккаунта (`/user`), договор, свой git (опция), почта, Theme Switcher светлая/тёмная** → [user-settings.md](user-settings.md)
 - **Текст договора автора, лицензия карточек (WTFPL) и ПО (AGPL-3.0)** → [user-settings.md](user-settings.md) §5.5.3, [roles.md](roles.md) §5.4
 - **Карта адресов** (ТЗ 2.58/2.59; опечатка `/seach` → `/search`) →

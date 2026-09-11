@@ -1,7 +1,8 @@
 # GraphNotes — канонический контекст Technical Observer
 
 Статус: ACTIVE
-Updated: 2026-09-11 (TZ 2.63: GitHub copy-in only; local personal + shared stores)
+Updated: 2026-09-11 (TZ 2.65: ZIP ingest 10 000 files; zip-bomb size/ratio
+guards stay. TZ 2.63: GitHub copy-in only; local personal + shared stores)
 
 Этот файл задаёт рабочий регламент отдельного Technical Observer проекта
 GraphNotes. Его можно передать новому воркеру целиком. Он не заменяет
@@ -281,6 +282,9 @@ Observer проверяет diff на:
   shared/personal/proposal layers;
 - утечки секретов, персональных данных и чувствительных значений в логах;
 - небезопасные uploads, webhooks, cookies, токены и GitHub credentials;
+  ZIP ingest: file-count cap is 10 000 (TZ 2.65); do not treat a raise of
+  `ingest_max_files` as licence to drop zip-bomb guards (2 MiB compressed,
+  8 MiB unpacked, 256 KiB/file, compression ratio, no symlink/encrypt);
 - несовместимые лицензии и незафиксированные зависимости;
   проектный код остаётся AGPL-3.0 (`LICENSE`, ADR-005); карточки в общую —
   WTFPL в тексте договора, без второго LICENSE;

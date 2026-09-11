@@ -2,7 +2,11 @@
 
 Updated: 2026-09-11
 Status: canonical architecture baseline
-Aligned with PRODUCT_SPEC 2.63. Knowledge Markdown **always** lives in GraphNotes
+Aligned with PRODUCT_SPEC 2.65. ZIP personal ingest accepts **10 000**
+files per archive (Obsidian vault / git dump); ~120 files succeed. Over the
+cap is HTTP 400 `archive has too many files`. Zip-bomb guards stay: 2 MiB
+compressed, 8 MiB unpacked, 256 KiB per file, compression ratio, no
+symlinks/encryption/odd compression. Knowledge Markdown **always** lives in GraphNotes
 local stores (personal `personal_uploads`, published shared `shared_notes`).
 GitHub is a **source**: connectors copy `.md` in. Cards and Differ read copies.
 Git live-read of blobs for cards is leftover. Editor merge may still push GitHub
@@ -568,7 +572,9 @@ Authentication / users:
 Personal layer (connected git **or** upload without git):
 - `POST /api/personal/connect` (from account settings; requires author contract)
 - `DELETE /api/personal/connect` (unbind personal git; uploads remain)
-- `POST /api/personal/import-md` (`.md`/ZIP into the local personal store)
+- `POST /api/personal/import-md` (`.md`/ZIP into the local personal store;
+  ZIP up to 10 000 members, else 400 `archive has too many files`;
+  2 MiB compressed / 8 MiB unpacked / 256 KiB per file remain)
 - `GET  /api/personal/notes` (read-only index of the caller's personal layer)
 - `GET  /api/personal/notes/{id}`
 - `PUT  /api/personal/notes/{path}` (TZ 2.50: own personal only after the

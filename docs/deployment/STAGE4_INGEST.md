@@ -28,14 +28,18 @@ Webhook remains unused on the LAN.
 | Markdown file | 256 KiB |
 | ZIP upload | 2 MiB |
 | Unpacked ZIP | 8 MiB |
-| Files in one ZIP | 100 |
+| Files in one ZIP | 10 000 |
 | Path depth | 8 |
 | Path length | 180 |
 
 Hidden paths, `..`, absolute paths, symlinks, encrypted ZIP entries and
-extreme compression ratios are rejected. Connected personal git is never
-overwritten silently (conflict). Upload-without-git replaces the staged path
-and records a new history event.
+extreme compression ratios are rejected. The file-count cap is 10 000 so an
+Obsidian vault or personal git dump (thousands of notes; ~120 files must
+succeed) is accepted; over the cap the API returns HTTP 400
+`archive has too many files`. Raising the count does not remove zip-bomb
+guards (compressed size, unpacked size, per-file size, compression ratio).
+Connected personal git is never overwritten silently (conflict).
+Upload-without-git replaces the staged path and records a new history event.
 
 ## API
 

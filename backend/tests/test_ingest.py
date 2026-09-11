@@ -596,6 +596,35 @@ async def test_zip_import_without_git(
     await author.aclose()
 
 
+async def test_zip_vault_file_count_without_git(
+    auth_test_context: tuple[AsyncClient, async_sessionmaker[AsyncSession]],
+    monkeypatch: MonkeyPatch,
+) -> None:
+    _, _ = auth_test_context
+    _install(monkeypatch, _github())
+    author = AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver")
+    await _register(author, "zip-vault")
+    payload = _zip_bytes({f"note{i}.md": f"# N{i}\n".encode() for i in range(150)})
+    uploaded = await author.post(
+        "/personal/import-md",
+        files={"file": ("vault.zip", payload, "application/zip")},
+    )
+    assert uploaded.status_code == 200
+    assert uploaded.json()["accepted"] == [f"note{i}.md" for i in range(150)]
+    over = _zip_bytes(
+        {f"{i}.md": b"x" for i in range(settings.ingest_max_files + 1)},
+        stored=True,
+    )
+    assert len(over) < settings.ingest_max_zip_bytes
+    rejected = await author.post(
+        "/personal/import-md",
+        files={"file": ("too-many.zip", over, "application/zip")},
+    )
+    assert rejected.status_code == 400
+    assert rejected.json()["detail"] == "archive has too many files"
+    await author.aclose()
+
+
 async def test_zip_over_one_mib_without_git(
     auth_test_context: tuple[AsyncClient, async_sessionmaker[AsyncSession]],
     monkeypatch: MonkeyPatch,

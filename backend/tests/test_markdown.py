@@ -113,3 +113,41 @@ def test_zip_reads_cyrillic_names_without_utf8_flag() -> None:
         archive.writestr("заметки/привет.md", "# Привет\n")
     files = read_zip_markdown(_clear_zip_utf8_flags(buffer.getvalue()))
     assert files == [("заметки/привет.md", "# Привет\n")]
+
+
+def test_zip_accepts_vault_sized_file_count() -> None:
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w", compression=zipfile.ZIP_STORED) as archive:
+        for index in range(150):
+            archive.writestr(f"note{index}.md", f"# N{index}\n")
+    files = read_zip_markdown(buffer.getvalue())
+    assert len(files) == 150
+    assert files[0] == ("note0.md", "# N0\n")
+    assert files[-1] == ("note149.md", "# N149\n")
+
+
+def test_zip_rejects_over_file_cap() -> None:
+    from app.core.config import settings
+
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w", compression=zipfile.ZIP_STORED) as archive:
+        for index in range(settings.ingest_max_files + 1):
+            archive.writestr(f"{index}.md", "x")
+    with pytest.raises(ArchiveError, match="archive has too many files"):
+        read_zip_markdown(buffer.getvalue())
+
+
+def test_zip_rejects_oversize_archive_before_open() -> None:
+    from app.core.config import settings
+
+    payload = b"PK" + b"x" * settings.ingest_max_zip_bytes
+    with pytest.raises(ArchiveError, match="archive is too large"):
+        read_zip_markdown(payload)
+
+
+def test_zip_rejects_compression_bomb() -> None:
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr("bomb.md", b"\x00" * 70_000)
+    with pytest.raises(ArchiveError, match="archive looks like a compression bomb"):
+        read_zip_markdown(buffer.getvalue())
