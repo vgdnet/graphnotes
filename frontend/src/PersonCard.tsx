@@ -142,10 +142,14 @@ export function PersonCardPage({
               inviterId={card.inviter?.id}
               inviterUsername={card.inviter?.username}
             />
+            {(card.user.website || card.user.telegram || card.user.phone) ? (
+              <p className="person-description">
+                {[card.user.website, card.user.telegram, card.user.phone]
+                  .filter(Boolean)
+                  .join(" · ")}
+              </p>
+            ) : null}
           </div>
-          {card.user.website ? (
-            <p className="admin-panel__hint">{card.user.website}</p>
-          ) : null}
           <div className="stat-grid" aria-label="Карточка пользователя">
             <div className="stat-card">
               <strong>{card.store?.personal_notes ?? 0}</strong>

@@ -5,6 +5,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.audit_event import AuditEvent
+from app.models.card_revision import CardRevision
 from app.models.graph import NoteIndex, NoteLink, NoteLayer, NoteTag, Tag
 from app.models.github import PersonalRepository, SharedRepository
 from app.models.personal_upload import PersonalUpload
@@ -489,8 +490,9 @@ async def _public_store_stats(
 ) -> dict[str, int]:
     notes = list(body["notes"])
     edges = list(body["edges"])
-    personal_notes = sum(1 for note in notes if note["state"] == "personal")
-    personal_links = sum(1 for edge in edges if edge["state"] == "personal")
+    personal = await database.scalar(
+        select(PersonalRepository).where(PersonalRepository.user_id == target.id)
+    )
     uploads = list(
         (
             await database.scalars(
@@ -498,14 +500,43 @@ async def _public_store_stats(
             )
         ).all()
     )
-    if personal_notes == 0:
+    body_by_path = {row.path: row.body for row in uploads}
+    if personal is not None and personal.indexed_sha:
+        personal_note_rows = list(
+            (
+                await database.scalars(
+                    select(NoteIndex).where(
+                        NoteIndex.layer == NoteLayer.PERSONAL.value,
+                        NoteIndex.owner_user_id == target.id,
+                        NoteIndex.revision_sha == personal.indexed_sha,
+                    )
+                )
+            ).all()
+        )
+        personal_notes = len(personal_note_rows)
+        if personal_note_rows:
+            personal_links = int(
+                await database.scalar(
+                    select(func.count()).select_from(NoteLink).where(
+                        NoteLink.source_id.in_([row.id for row in personal_note_rows])
+                    )
+                )
+                or 0
+            )
+        else:
+            personal_links = 0
+    else:
         personal_notes = len(uploads)
-    if personal_links == 0:
+        personal_links = 0
         for row in uploads:
             try:
                 personal_links += len(parse_markdown(row.path, row.body).links)
             except ValueError:
                 continue
+    if personal_notes == 0:
+        personal_notes = len(notes)
+    if personal_links == 0:
+        personal_links = len(edges)
     proposals = list(
         (
             await database.scalars(
@@ -516,7 +547,23 @@ async def _public_store_stats(
     proposed_paths: set[str] = set()
     for row in proposals:
         proposed_paths |= _parse_scope_paths(row.scope_paths)
-    body_by_path = {row.path: row.body for row in uploads}
+    if not proposed_paths:
+        proposed_paths = {str(note["path"]) for note in notes if note["state"] == "proposed"}
+    if proposed_paths:
+        revision_rows = list(
+            (
+                await database.scalars(
+                    select(CardRevision)
+                    .where(
+                        CardRevision.owner_user_id == target.id,
+                        CardRevision.path.in_(proposed_paths),
+                    )
+                    .order_by(CardRevision.path, CardRevision.n.desc())
+                )
+            ).all()
+        )
+        for row in revision_rows:
+            body_by_path.setdefault(row.path, row.source)
     proposed_links = 0
     proposed_edit_bytes = 0
     for path in proposed_paths:
@@ -529,8 +576,6 @@ async def _public_store_stats(
         except ValueError:
             continue
     proposed_notes = len(proposed_paths)
-    if proposed_notes == 0:
-        proposed_notes = sum(1 for note in notes if note["state"] == "proposed")
     if proposed_links == 0:
         proposed_links = sum(1 for edge in edges if edge["state"] == "proposed")
     return {

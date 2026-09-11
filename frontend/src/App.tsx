@@ -2374,15 +2374,17 @@ export function App() {
                   {openNote.locked ? (
                     <p className="admin-panel__hint">Закрытая заметка. Тело в общей ризоме не показывается.</p>
                   ) : (
-                    <MarkdownBody
-                      body={openNote.body}
-                      note={openNote}
-                      nodes={sharedGraph?.nodes ?? []}
-                      cardPath={cardPath ?? `personal:${cardFilePath(openNote.path)}`}
-                      signedIn
-                      onCreateMissing={(path) => void createMissingCard(path)}
-                    />
-                    <CardHistory cardPath={cardPath ?? `personal:${cardFilePath(openNote.path)}`} />
+                    <>
+                      <MarkdownBody
+                        body={openNote.body}
+                        note={openNote}
+                        nodes={sharedGraph?.nodes ?? []}
+                        cardPath={cardPath ?? `personal:${cardFilePath(openNote.path)}`}
+                        signedIn
+                        onCreateMissing={(path) => void createMissingCard(path)}
+                      />
+                      <CardHistory cardPath={cardPath ?? `personal:${cardFilePath(openNote.path)}`} />
+                    </>
                   )}
                 </article>
               )}
