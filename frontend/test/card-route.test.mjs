@@ -20,13 +20,18 @@ test("empty #/card/ is legacy search; #/card is the start card", () => {
   assert.equal(routeToView(parseAppRoute("#/user")), "settings");
   assert.equal(routeToView(parseAppRoute("#/my_graph")), "my_graph");
   assert.equal(routeToView(parseAppRoute("#/contribution")), "contribution");
+  assert.deepEqual(parseAppRoute("#/users/efimov"), {
+    kind: "person",
+    login: "efimov",
+  });
   assert.deepEqual(parseAppRoute("#/users/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"), {
     kind: "person",
-    userId: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+    login: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
   });
-  assert.equal(routeToView(parseAppRoute("#/users/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")), "person");
+  assert.equal(routeToView(parseAppRoute("#/users/efimov")), "person");
   assert.equal(parseAppRoute("#/user").kind, "user");
-  assert.equal(personCardHash("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"), "#/users/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee");
+  assert.equal(personCardHash("efimov"), "#/users/efimov");
+  assert.equal(personCardHash("@Efimov"), "#/users/efimov");
   assert.equal(viewHash("graph"), "#/graph");
   assert.equal(canonicalCardHash("personal:notes/mine.md"), cardHash("notes/mine.md"));
   assert.match(canonicalCardHash("proposal:aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee:card.md"), /proposal/);

@@ -863,22 +863,28 @@ export function App() {
 
   const appRoute = parseAppRoute(locationHash);
   const cardPath = appRoute.kind === "card" ? appRoute.path : null;
-  const personUserId = appRoute.kind === "person" ? appRoute.userId : null;
+  const personLogin = appRoute.kind === "person" ? appRoute.login : null;
   const loadedCardRef = useRef<string | null>(null);
   useEffect(() => {
-    if (!personUserId) {
+    if (!personLogin) {
       setPersonCard(null);
       return;
     }
     const controller = new AbortController();
     setError("");
-    void fetch(`/api/users/${personUserId}/card`, { signal: controller.signal })
+    void fetch(`/api/users/${encodeURIComponent(personLogin)}/card`, { signal: controller.signal })
       .then(async (response) => {
         if (!response.ok) throw new Error(await readError(response));
         return (await response.json()) as UserCard;
       })
       .then((body) => {
-        if (!controller.signal.aborted) setPersonCard(body);
+        if (controller.signal.aborted) return;
+        setPersonCard(body);
+        const canonical = personCardHash(body.user.username);
+        if (window.location.hash.toLowerCase() !== canonical) {
+          window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}${canonical}`);
+          setLocationHash(canonical);
+        }
       })
       .catch((requestError: unknown) => {
         if (requestError instanceof DOMException && requestError.name === "AbortError") return;
@@ -886,7 +892,7 @@ export function App() {
         setError(requestError instanceof Error ? requestError.message : "Не удалось открыть карточку человека");
       });
     return () => controller.abort();
-  }, [personUserId]);
+  }, [personLogin]);
   useEffect(() => {
     if (authChecking) return;
     const route = parseAppRoute(locationHash);
@@ -2393,7 +2399,7 @@ export function App() {
           {view === "person" && (
             <PersonCardPage
               card={personCard}
-              loading={Boolean(personUserId) && !personCard && !error}
+              loading={Boolean(personLogin) && !personCard && !error}
               error={error}
               onOpenNote={(path) => goHash(cardHash(path))}
             />
@@ -2430,7 +2436,7 @@ export function App() {
                     {userCard.user.phone ? ` · ${userCard.user.phone}` : ""}
                     {userCard.user.telegram ? ` · ${userCard.user.telegram}` : ""}
                     {" "}
-                    <a className="person-link" href={personCardHash(userCard.user.id)}>Публичная карточка</a>
+                    <a className="person-link" href={personCardHash(userCard.user.username)}>Публичная карточка</a>
                   </p>
                   {userCard.achievements && (
                     <div className="stat-grid" aria-label="Публичные достижения">
@@ -2604,7 +2610,7 @@ export function App() {
               <article className="proposal-detail">
                 <h3>{openProposal.summary}</h3>
                 <p className="admin-panel__hint">
-                  <a className="person-link" href={personCardHash(openProposal.author.id)}>
+                  <a className="person-link" href={personCardHash(openProposal.author.username)}>
                     {openProposal.author.display_name}
                   </a>
                   {" · "}{proposalStatusLabel(openProposal.status)}
@@ -2847,7 +2853,7 @@ export function App() {
         {view === "person" && (
           <PersonCardPage
             card={personCard}
-            loading={Boolean(personUserId) && !personCard && !error}
+            loading={Boolean(personLogin) && !personCard && !error}
             error={error}
             onOpenNote={(path) => goHash(cardHash(path))}
           />

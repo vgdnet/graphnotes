@@ -81,4 +81,10 @@ async def test_user_card_hides_other_personal_and_closed(
     assert store["proposed_links"] >= 0
     assert store["proposed_edit_bytes"] >= 0
     assert "Hidden diary" not in anon.text
+    by_login = await guest.get("/users/card-author/card")
+    assert by_login.status_code == 200
+    assert by_login.json()["user"]["id"] == author_id
+    assert by_login.json()["user"]["username"] == "card-author"
+    missing = await guest.get("/users/no-such-login/card")
+    assert missing.status_code == 404
     await guest.aclose()

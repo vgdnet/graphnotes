@@ -76,13 +76,9 @@ export function InviteAttribution({
   return (
     <p className="person-invite">
       Приглашен {formatInvitedAt(invitedAt)} по приглашению от{" "}
-      {inviterId ? (
-        <a className="person-link" href={personCardHash(inviterId)}>
-          @{handle}
-        </a>
-      ) : (
-        <span>@{handle}</span>
-      )}
+      <a className="person-link" href={personCardHash(handle)}>
+        @{handle}
+      </a>
     </p>
   );
 }
@@ -90,11 +86,13 @@ export function InviteAttribution({
 export function ActorLink({
   actor,
 }: {
-  actor: { id: string; display_name: string } | null | undefined;
+  actor: { id?: string; username?: string; display_name: string } | null | undefined;
 }) {
   if (!actor) return <strong>автор</strong>;
+  const login = actor.username?.replace(/^@/, "").trim();
+  if (!login) return <strong>{actor.display_name}</strong>;
   return (
-    <a className="person-link" href={personCardHash(actor.id)}>
+    <a className="person-link" href={personCardHash(login)}>
       {actor.display_name}
     </a>
   );

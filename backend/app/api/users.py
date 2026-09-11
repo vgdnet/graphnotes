@@ -11,6 +11,7 @@ from app.schemas.auth import (
     AuthorContractResponse,
     ProfileUpdateRequest,
     UserResponse,
+    normalize_username,
 )
 from app.schemas.contributions import UserCardResponse
 from app.schemas.integration import IntegrationTokenCreateRequest
@@ -211,15 +212,28 @@ async def revoke_my_integration_token(
         raise _http_from_integration(exc) from exc
 
 
-@router.get("/{user_id}/card", response_model=UserCardResponse)
+async def _public_card_user(database: DatabaseSession, user_key: str) -> User:
+    key = user_key.strip()
+    try:
+        target = await database.get(User, uuid.UUID(key))
+    except ValueError:
+        try:
+            login = normalize_username(key)
+        except ValueError:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="user not found") from None
+        target = await database.scalar(select(User).where(User.username == login))
+    if target is None or not target.is_active:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="user not found")
+    return target
+
+
+@router.get("/{user_key}/card", response_model=UserCardResponse)
 async def user_card(
-    user_id: uuid.UUID,
+    user_key: str,
     database: DatabaseSession,
     viewer: OptionalUser,
 ) -> UserCardResponse:
-    target = await database.scalar(select(User).where(User.id == user_id))
-    if target is None or not target.is_active:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="user not found")
+    target = await _public_card_user(database, user_key)
     body = await get_user_card(
         database,
         target=target,

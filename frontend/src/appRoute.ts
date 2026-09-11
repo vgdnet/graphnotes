@@ -22,7 +22,7 @@ export type AppRoute =
   | { kind: "start_card" }
   | { kind: "card"; path: string }
   | { kind: "user" }
-  | { kind: "person"; userId: string }
+  | { kind: "person"; login: string }
   | { kind: "offer" }
   | { kind: "queue" }
   | { kind: "contribution" }
@@ -48,10 +48,11 @@ export function viewHash(kind: keyof typeof VIEW_HASH): string {
   return VIEW_HASH[kind];
 }
 
-const PERSON_ID = /^\/users\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i;
+const PERSON_UUID = /^\/users\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i;
+const PERSON_LOGIN = /^\/users\/([a-z0-9][a-z0-9_.-]{2,31})$/i;
 
-export function personCardHash(userId: string): string {
-  return `#/users/${userId}`;
+export function personCardHash(login: string): string {
+  return `#/users/${login.replace(/^@/, "").trim().toLowerCase()}`;
 }
 
 export function parseAppRoute(hash: string): AppRoute {
@@ -61,8 +62,10 @@ export function parseAppRoute(hash: string): AppRoute {
   if (value === "/my_graph") return { kind: "my_graph" };
   if (value === "/search") return { kind: "search" };
   if (value === "/user") return { kind: "user" };
-  const person = PERSON_ID.exec(value);
-  if (person) return { kind: "person", userId: person[1] };
+  const personUuid = PERSON_UUID.exec(value);
+  if (personUuid) return { kind: "person", login: personUuid[1] };
+  const personLogin = PERSON_LOGIN.exec(value);
+  if (personLogin) return { kind: "person", login: personLogin[1] };
   if (value === "/offer") return { kind: "offer" };
   if (value === "/queue") return { kind: "queue" };
   if (value === "/contribution") return { kind: "contribution" };

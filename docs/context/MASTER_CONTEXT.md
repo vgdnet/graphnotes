@@ -2,7 +2,14 @@
 
 Updated: 2026-09-12
 Status: canonical architecture baseline
-Aligned with PRODUCT_SPEC 2.95. Person card `#/users/{uuid}` is the same
+Aligned with PRODUCT_SPEC 2.97. Person card URL is `#/users/{login}`
+(`#/users/efimov`); UUID still resolves and canonicalizes to login.
+Website `.md`/ZIP upload buttons are
+**gone** (including Differ «Загрузить в личный слой»); the plugin writes
+the personal store. A future upload API must sync into that same local
+store. Last **30** file versions are kept for rollback (`card_revisions`);
+index, graph and Differ read **only the latest** working copy.
+Person card `#/users/{login}` is the same
 for guests and signed-in users (`store` counts + inviter; no foreign
 personal bodies). TZ 2.94: card history is **not** fetched
 with the card body. Button «История правок» loads `GET /api/cards/{path}/revisions`
@@ -89,9 +96,9 @@ forgot); reset lookup is login or email, mail only to stored inbox. App routes (
 shared not; same path in both layers = **stack** rhizome-top /
 personal-bottom + Differ offer — **shipped 2.59**); `/queue` = editor
 proposal queue; `/user` = **account settings** (not the public person
-card); `#/users/{uuid}` = **public person card** (TZ 2.60: achievements —
+card); `#/users/{login}` = **public person card** (TZ 2.60 / **2.97**: achievements —
 accepted notes/links, proposal count, shared created/edited events; feed
-names and proposal author open it; `GET /api/users/{id}/card`;
+names and proposal author open it; `GET /api/users/{login}/card` (UUID still resolves);
 TZ 2.87: «Приглашен %date% по приглашению от @user»
 from stored inviter UUID / login — omit if none); `/offer` = **my** proposals into the rhizome; `/graph` = shared
 rhizome canvas (fCoSE); `/search` = card search (SQL `note_index`,
@@ -513,7 +520,7 @@ Not needed for the initial MVP unless actual load/features justify them:
   `rhizome-test`** (TZ 2.89). Invite is an **email link**; no Register
   tab (Login / forgot password stay). Any active account may invite;
   store inviter UUID (one chain with vsepsy.ru). Person card and
-  `GET /api/users/{id}/card` show «Приглашен %date% по приглашению от
+  `GET /api/users/{login}/card` show «Приглашен %date% по приглашению от
   @user» (omit if no inviter). Cutover attributes existing accounts
   except `efimov` to that real row. No street register. No workspace.
   Do not promote this wave to production `rhizome` without a separate
@@ -675,10 +682,11 @@ Authentication / users:
 - `POST /api/author/withdraw`
 - `GET  /api/repository/status`
 
-Personal layer (connected git **or** upload without git):
+Personal layer (plugin write to the local store; git connector leftover):
 - `POST /api/personal/connect` (from account settings; requires author contract)
-- `DELETE /api/personal/connect` (unbind personal git; uploads remain)
-- `POST /api/personal/import-md` (`.md`/ZIP into the local personal store;
+- `DELETE /api/personal/connect` (unbind personal git; store files remain)
+- `POST /api/personal/import-md` (leftover TZ 2.96: no website button;
+  future upload must sync into the local store like the plugin;
   ZIP up to 10 000 members, else 400 `archive has too many files`;
   2 MiB compressed / 8 MiB unpacked / 256 KiB per file remain;
   white noise → 400 `content is not Markdown notes` + account lock)
@@ -703,7 +711,7 @@ Shared publication and Differ:
 - `GET  /api/admin/operator`
 - `PUT  /api/admin/operator` (persist public site URL for mail links)
 - `POST /api/admin/mail/test`
-- `GET  /api/users/{id}/card` (public person card / achievements; not a GitHub
+- `GET  /api/users/{login}/card` (public person card by login; UUID still resolves; not a GitHub
   profile; not personal or closed bodies)
 - `GET  /api/shared/notes` (public titles; not card bodies)
 - `GET  /api/shared/notes/{path}` (published shared card body; guest OK, TZ 2.64)

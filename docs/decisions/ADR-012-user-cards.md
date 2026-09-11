@@ -26,6 +26,13 @@ cards created in the published rhizome, and published text edits
 (`created` / `edited` on the shared interaction feed). Unpublished personal
 paths and the detailed contribution journal stay private.
 
-The in-app page is `#/users/{uuid}` (`GET /api/users/{id}/card`). It is not
-`/user` (account settings). Names in the rhizome-card feed and proposal
-author open that page for any signed-in viewer.
+The in-app page is `#/users/{login}` (`GET /api/users/{login}/card`).
+It is not `/user` (account settings). Names in the rhizome-card feed and
+proposal author open that page for any signed-in viewer.
+
+## Amendment 2026-09-12
+
+The public address is the GraphNotes **login**, not the internal UUID:
+`#/users/efimov`. `GET /api/users/{login}/card` looks up by username;
+a UUID in the same slot still resolves. The UI replaces a UUID hash with
+the login so later indexing keys people by login.

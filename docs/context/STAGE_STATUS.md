@@ -2,7 +2,12 @@
 
 Updated: 2026-09-12
 
-Product model TZ 2.95 (public person card for guests and signed-in:
+Product model TZ 2.97 (person card `#/users/{login}`, UUID still opens
+and canonicalizes) /
+2.96 (no website `.md`/ZIP upload, including Differ;
+plugin writes the store; last 30 versions for rollback; index / graph /
+Differ use latest only) /
+2.95 (public person card for guests and signed-in:
 inviter + personal/proposed store counts + proposed edit bytes) /
 2.94 (card «История правок» on demand: last 30
 revisions with who / when / what changed; Alembic `0021`; do not fetch

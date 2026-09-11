@@ -35,9 +35,10 @@ DELETE /api/users/me/integration-tokens/{id}
 GET  /api/repository/status
 
 POST /api/personal/connect          # from account settings, not the graph home
-POST /api/personal/import-md          # .md/ZIP into the local personal store;
-                                    # ZIP ≤ 10 000 files else 400 archive has too many files
-                                    # white noise → 400 content is not Markdown notes + lock (TZ 2.67)
+POST /api/personal/import-md          # leftover TZ 2.96: no website button;
+                                    # future upload must sync into the local store
+                                    # (same as plugin); ZIP ≤ 10 000 files;
+                                    # white noise → 400 + lock (TZ 2.67)
 GET  /api/personal/notes              # read-only index of the local personal store
 GET  /api/personal/notes/{id}
 PUT  /api/personal/notes/{path}       # plugin / API / TZ 2.66 stub; not website editor (TZ 2.93);
@@ -55,7 +56,8 @@ GET  /api/differ                      # one-way personal → published shared;
                                       # тем же маршрутом, не пишет в общую
 GET  /api/contributions/me            # author's notes, links, proposals, counts; derived
                                       # editor/admin also receive own review stats
-GET  /api/users/{id}/card             # public person card (guest + signed-in, TZ 2.95):
+GET  /api/users/{login}/card          # public person card (guest + signed-in, TZ 2.97):
+                                      # login is canonical (`efimov`); UUID still resolves;
                                       # inviter; store{personal_notes, personal_links,
                                       # proposed_notes, proposed_links, proposed_edit_bytes};
                                       # accepted notes list; not personal/closed bodies; not /user
