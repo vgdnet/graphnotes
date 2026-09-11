@@ -4,6 +4,7 @@ import json
 from datetime import UTC, datetime
 
 from sqlalchemy import delete, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
@@ -112,6 +113,63 @@ async def list_upload_events(database: AsyncSession, user: User) -> dict[str, ob
     }
 
 
+async def _upsert_personal_upload(
+    database: AsyncSession, user_id, path: str, text: str, content_hash: str
+) -> None:
+    current = await database.scalar(
+        select(PersonalUpload).where(
+            PersonalUpload.user_id == user_id, PersonalUpload.path == path
+        )
+    )
+    if current is None:
+        try:
+            async with database.begin_nested():
+                database.add(
+                    PersonalUpload(
+                        user_id=user_id,
+                        path=path,
+                        body=text,
+                        content_hash=content_hash,
+                    )
+                )
+                await database.flush()
+            return
+        except IntegrityError:
+            current = await database.scalar(
+                select(PersonalUpload).where(
+                    PersonalUpload.user_id == user_id, PersonalUpload.path == path
+                )
+            )
+            if current is None:
+                raise
+    if current.body != text:
+        current.body = text
+        current.content_hash = content_hash
+
+
+async def _upsert_shared_note(
+    database: AsyncSession, path: str, text: str, content_hash: str
+) -> None:
+    current = await database.scalar(select(SharedNote).where(SharedNote.path == path))
+    if current is None:
+        try:
+            async with database.begin_nested():
+                database.add(
+                    SharedNote(path=path, body=text, content_hash=content_hash)
+                )
+                await database.flush()
+            return
+        except IntegrityError:
+            current = await database.scalar(
+                select(SharedNote).where(SharedNote.path == path)
+            )
+            if current is None:
+                raise
+    if current.body != text:
+        current.body = text
+        current.content_hash = content_hash
+
+
 async def _uploads_for(database: AsyncSession, user_id) -> list[PersonalUpload]:
     return list(
         (
@@ -172,18 +230,10 @@ async def copy_git_into_personal_store(
     for path, text in fetched.items():
         parsed = parse_markdown(path, text)
         current = by_path.get(path)
-        if current is None:
-            database.add(
-                PersonalUpload(
-                    user_id=user_id,
-                    path=path,
-                    body=text,
-                    content_hash=parsed.content_hash,
-                )
+        if current is None or current.body != text:
+            await _upsert_personal_upload(
+                database, user_id, path, text, parsed.content_hash
             )
-        elif current.body != text:
-            current.body = text
-            current.content_hash = parsed.content_hash
     await database.commit()
     return True
 
@@ -224,13 +274,8 @@ async def copy_shared_git_into_store(
     for path, text in fetched.items():
         parsed = parse_markdown(path, text)
         current = by_path.get(path)
-        if current is None:
-            database.add(
-                SharedNote(path=path, body=text, content_hash=parsed.content_hash)
-            )
-        elif current.body != text:
-            current.body = text
-            current.content_hash = parsed.content_hash
+        if current is None or current.body != text:
+            await _upsert_shared_note(database, path, text, parsed.content_hash)
     stale = [item.path for item in existing if item.path not in fetched]
     if stale:
         await database.execute(delete(SharedNote).where(SharedNote.path.in_(stale)))

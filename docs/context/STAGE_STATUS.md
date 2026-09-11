@@ -345,6 +345,8 @@ TZ 2.5–2.7 on this branch (not merged to main; production
   `personal_uploads` / `shared_notes`; Differ and cards read the copies;
   disconnect keeps the personal store; search/graph still use `note_index`.
   Leftover: GitHub App merge/rollback live-read of proposal branches.
+  Live on `rhizome-test` 2026-09-11: SHA `10586d6fd178cbbcba58d8306225eb238e80e9b0`,
+  Alembic `0016_shared_notes`. Production `rhizome` not deployed.
 - leftover: rhizome access-level **entitlement tables** / payment
   gateway (ADR-016 + TZ 2.41 name the model and the «ризома автора»
   view; `closed_paths` already exists — not this slice); vsepsy
