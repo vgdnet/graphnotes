@@ -104,10 +104,19 @@ class UserCardNote(BaseModel):
     state: ContributionState
 
 
+class UserCardAchievements(BaseModel):
+    accepted_notes: int
+    accepted_links: int
+    proposals: int
+    created: int
+    edits: int
+
+
 class UserCardResponse(BaseModel):
     user: UserCardPerson
     self: bool
     stats: ContributionStats
+    achievements: UserCardAchievements
     notes: list[UserCardNote]
     review: ReviewStats | None = None
     closed_count: int | None = None

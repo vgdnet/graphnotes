@@ -1,14 +1,14 @@
 # Stage 4 ingest operations
 
 Published shared is **not** obtained by ZIP or product clone (TZ 2.5).
-ZIP / one `.md` **upload** is a personal-layer ingest: into connected personal
-git if bound, otherwise no-git staging for the same Differ (TZ 2.6). Upload
+ZIP / one `.md` **upload** copies into the local personal store
+(`personal_uploads`), including when git is connected (TZ 2.62). Upload
 is not a download of shared and not a write into published shared.
 
 `POST /api/personal/take-from-shared` is gone (HTTP 410): GraphNotes does not
-write published shared notes into the personal layer. Canonical **published**
-note bodies are not stored in PostgreSQL. Unpublished upload bytes may live in
-the owner's staging layer.
+write published shared notes into the personal layer. Published shared
+working copies live in `shared_notes` after copy-in; `note_index` is the
+search/graph index, not a second corpus.
 
 ## GitHub App permission
 

@@ -11,6 +11,7 @@ from app.models.comment import NoteComment
 from app.models.github import PersonalRepository, SharedRepository
 from app.models.graph import NoteIndex, NoteLayer, NoteLink, NoteTag, SyncJob, SyncJobStatus, Tag
 from app.models.personal_upload import PersonalUpload
+from app.models.shared_note import SharedNote
 from app.services.audit import record_audit_event
 from app.services.closed_corpus import all_closed_keys, matches_closed
 from app.services.github import GitHubAppClient, GitHubAppError
@@ -54,6 +55,18 @@ def _slug(path: str) -> str:
     return name[:180] or "note"
 
 
+async def _running_rebuild(
+    database: AsyncSession, layer: str, owner_id: uuid.UUID | None
+) -> SyncJob | None:
+    return await database.scalar(
+        select(SyncJob).where(
+            SyncJob.layer == layer,
+            SyncJob.owner_user_id == owner_id,
+            SyncJob.status == SyncJobStatus.RUNNING.value,
+        )
+    )
+
+
 async def rebuild_shared(
     database: AsyncSession,
     client: GitHubAppClient,
@@ -64,6 +77,22 @@ async def rebuild_shared(
     row = await database.get(SharedRepository, SHARED_SINGLETON_ID)
     if row is None or not row.observed_sha:
         raise IndexerError(409, "the shared rhizome is not connected")
+    if await _running_rebuild(database, NoteLayer.SHARED.value, None):
+        raise IndexerError(409, "index rebuild is already running")
+    from app.services.ingest import copy_shared_git_into_store
+
+    try:
+        synced = await copy_shared_git_into_store(
+            database, client, row, previous_sha=row.indexed_sha
+        )
+    except GitHubAppError as exc:
+        row.index_status = "error"
+        await database.commit()
+        raise IndexerError(502, exc.message) from exc
+    if not synced:
+        row.index_status = "error"
+        await database.commit()
+        raise IndexerError(502, "could not copy shared git")
     return await _rebuild(
         database,
         client,
@@ -91,6 +120,22 @@ async def rebuild_personal(
     )
     if row is None or not row.observed_sha:
         raise IndexerError(409, "connect your git first")
+    if await _running_rebuild(database, NoteLayer.PERSONAL.value, user_id):
+        raise IndexerError(409, "index rebuild is already running")
+    from app.services.ingest import copy_git_into_personal_store
+
+    try:
+        synced = await copy_git_into_personal_store(
+            database, user_id, client, row, previous_sha=row.indexed_sha
+        )
+    except GitHubAppError as exc:
+        row.index_status = "error"
+        await database.commit()
+        raise IndexerError(502, exc.message) from exc
+    if not synced:
+        row.index_status = "error"
+        await database.commit()
+        raise IndexerError(502, "could not copy personal git")
     return await _rebuild(
         database,
         client,
@@ -135,11 +180,10 @@ async def rebuild_derived_indexes(
     *,
     actor_user_id: uuid.UUID | None = None,
 ) -> None:
-    """Rebuild every git-backed derived store from current HEAD trees.
+    """Rebuild derived indexes from the local Markdown stores.
 
-    Search, graph, card lookup and comment targets all read ``note_index``
-    (plus ``personal_uploads`` when git is off). One rebuild must replace
-    shared and every personal layer so deleted git paths disappear together.
+    GitHub is copy-in only (TZ 2.63). Search and graph read ``note_index``;
+    cards read ``shared_notes`` / ``personal_uploads``.
     """
     from app.services.repository import refresh_personal, refresh_shared
 
@@ -194,12 +238,35 @@ async def purge_comments_for_missing_notes(database: AsyncSession) -> int:
             ).all()
         )
     live.update((await database.scalars(select(PersonalUpload.path))).all())
+    live.update((await database.scalars(select(SharedNote.path))).all())
     if not live:
         return 0
     result = await database.execute(
         delete(NoteComment).where(NoteComment.path.notin_(live))
     )
     return int(result.rowcount or 0)
+
+
+async def _store_texts_for_layer(
+    database: AsyncSession,
+    layer: str,
+    owner_id: uuid.UUID | None,
+) -> dict[str, str] | None:
+    """Working-copy Markdown for index rebuild (TZ 2.63). None = leftover GitHub."""
+    if layer == NoteLayer.SHARED.value:
+        rows = list((await database.scalars(select(SharedNote))).all())
+        return {row.path: row.body for row in rows}
+    if layer == NoteLayer.PERSONAL.value and owner_id is not None:
+        rows = list(
+            (
+                await database.scalars(
+                    select(PersonalUpload).where(PersonalUpload.user_id == owner_id)
+                )
+            ).all()
+        )
+        if rows:
+            return {row.path: row.body for row in rows}
+    return None
 
 
 async def _rebuild(
@@ -237,11 +304,31 @@ async def _rebuild(
     await database.flush()
 
     try:
-        blobs = await client.list_markdown_blobs(owner, name, revision)
-        listed = sorted(blobs)
+        if layer == NoteLayer.SHARED.value and isinstance(binding, SharedRepository):
+            from app.services.ingest import copy_shared_git_into_store
+
+            await copy_shared_git_into_store(
+                database, client, binding, previous_sha=binding.indexed_sha
+            )
+        elif layer == NoteLayer.PERSONAL.value and owner_id is not None and isinstance(
+            binding, PersonalRepository
+        ):
+            from app.services.ingest import copy_git_into_personal_store
+
+            await copy_git_into_personal_store(
+                database, owner_id, client, binding, previous_sha=binding.indexed_sha
+            )
+        texts = await _store_texts_for_layer(database, layer, owner_id)
+        if texts is not None:
+            listed = sorted(texts)
+            listed_set = set(listed)
+            blobs: dict[str, str] = {}
+        else:
+            blobs = await client.list_markdown_blobs(owner, name, revision)
+            listed = sorted(blobs)
+            listed_set = set(listed)
         if len(listed) > settings.index_max_notes:
             raise IndexerError(400, "too many notes to index")
-        listed_set = set(listed)
         existing = (
             await database.scalars(
                 select(NoteIndex).where(
@@ -257,12 +344,15 @@ async def _rebuild(
             fetch_paths = (listed_set & paths) | (listed_set - existing_paths)
         parsed: dict[str, ParsedNote] = {}
         for path in sorted(fetch_paths):
-            sha = blobs.get(path)
-            text = (
-                await client.get_blob(owner, name, sha)
-                if sha
-                else await client.get_file(owner, name, path, revision)
-            )
+            if texts is not None:
+                text = texts[path]
+            else:
+                sha = blobs.get(path)
+                text = (
+                    await client.get_blob(owner, name, sha)
+                    if sha
+                    else await client.get_file(owner, name, path, revision)
+                )
             parsed[path] = parse_markdown(path, text)
         unchanged = [note for note in existing if note.path in listed_set and note.path not in fetch_paths]
         parsed.update(await _parsed_from_existing(database, unchanged))

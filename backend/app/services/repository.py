@@ -79,6 +79,7 @@ def apply_snapshot(target: SharedRepository | PersonalRepository, snapshot: GitH
 def apply_error(target: SharedRepository | PersonalRepository, error: GitHubAppError) -> None:
     target.sync_status = error.status
     target.last_error = error.message[:255]
+    target.index_status = "error"
     target.observed_at = datetime.now(UTC)
 
 
@@ -139,6 +140,9 @@ async def connect_shared_repository(
     )
     await database.commit()
     await database.refresh(row)
+    from app.services.ingest import copy_shared_git_into_store
+
+    await copy_shared_git_into_store(database, client, row, previous_sha=None)
     return row
 
 
@@ -191,6 +195,9 @@ async def connect_personal_repository(
     )
     await database.commit()
     await database.refresh(row)
+    from app.services.ingest import copy_git_into_personal_store
+
+    await copy_git_into_personal_store(database, user.id, client, row, previous_sha=None)
     return row
 
 
@@ -212,9 +219,6 @@ async def disconnect_personal_repository(
         subject_username=user.username,
         details={"owner": row.owner, "name": row.name},
     )
-    from app.services.index import drop_personal_layer
-
-    await drop_personal_layer(database, user.id)
     await database.delete(row)
     await database.commit()
 
@@ -223,6 +227,7 @@ async def refresh_shared(database: AsyncSession, client: GitHubAppClient) -> Sha
     row = await database.get(SharedRepository, SHARED_SINGLETON_ID)
     if row is None:
         return None
+    previous_sha = row.observed_sha
     try:
         snapshot = await client.get_repository(row.owner, row.name)
         apply_snapshot(row, snapshot)
@@ -230,6 +235,13 @@ async def refresh_shared(database: AsyncSession, client: GitHubAppClient) -> Sha
         apply_error(row, exc)
     await database.commit()
     await database.refresh(row)
+    from app.services.ingest import copy_shared_git_into_store
+
+    try:
+        await copy_shared_git_into_store(database, client, row, previous_sha=previous_sha)
+    except GitHubAppError as exc:
+        apply_error(row, exc)
+        await database.commit()
     return row
 
 
@@ -243,6 +255,7 @@ async def refresh_personal(
     )
     if row is None:
         return None
+    previous_sha = row.observed_sha
     try:
         snapshot = await client.get_repository(row.owner, row.name)
         apply_snapshot(row, snapshot)
@@ -250,4 +263,13 @@ async def refresh_personal(
         apply_error(row, exc)
     await database.commit()
     await database.refresh(row)
+    from app.services.ingest import copy_git_into_personal_store
+
+    try:
+        await copy_git_into_personal_store(
+            database, user_id, client, row, previous_sha=previous_sha
+        )
+    except GitHubAppError as exc:
+        apply_error(row, exc)
+        await database.commit()
     return row

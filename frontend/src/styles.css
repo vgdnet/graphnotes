@@ -284,7 +284,14 @@ select { padding: .65rem .8rem; border: 1px solid var(--gn-input-border); border
 .workspace { grid-template-columns: minmax(0, 1fr) 19rem; }
 .profile-card { display: grid; gap: 1.2rem; padding: 1.5rem; }
 .profile-card div:nth-child(2) { display: grid; gap: .3rem; }
-.profile-card span { color: var(--gn-text-dim); font-size: .82rem; }
+.person-link {
+  color: inherit;
+  font-weight: 700;
+  text-decoration: none;
+}
+.person-link:hover {
+  text-decoration: underline;
+}
 .avatar { display: grid; width: 4rem; height: 4rem; place-items: center; border-radius: 1.1rem; background: var(--gn-avatar-bg); color: var(--gn-avatar-fg); font-size: 1.5rem; font-weight: 800; }
 .connect-form { display: grid; gap: .8rem; max-width: 28rem; margin-top: 1.5rem; }
 .connect-form .button { margin-top: 0; }

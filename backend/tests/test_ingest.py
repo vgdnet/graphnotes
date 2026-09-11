@@ -357,13 +357,23 @@ async def test_stale_revision_and_two_user_isolation(
     await _bind_shared(first, session_factory, "efimov")
     await _connect_pair(first, "vgdnet/guide_psy")
 
-    stale = await first.post(
+    uploaded = await first.post(
         "/personal/import-md",
         files={"file": ("fresh.md", b"# Fresh\n", "text/markdown")},
         data={"expected_sha": "not-the-head"},
     )
-    assert stale.status_code == 409
-    assert stale.json()["detail"] == "disconnect your git before uploading files"
+    assert uploaded.status_code == 200
+    assert "fresh.md" in uploaded.json()["accepted"]
+    mine = await first.get("/personal/notes")
+    paths = {item["path"] for item in mine.json()["notes"]}
+    assert "already.md" in paths
+    assert "fresh.md" in paths
+    gone = await first.delete("/personal/connect")
+    assert gone.status_code == 200
+    kept = await first.get("/personal/notes")
+    kept_paths = {item["path"] for item in kept.json()["notes"]}
+    assert "already.md" in kept_paths
+    assert "fresh.md" in kept_paths
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as second:
         await _register(second, "other-user")
@@ -705,7 +715,9 @@ async def test_put_personal_note_upload_and_git(
     )
     assert git_saved.status_code == 200
     assert git_saved.json()["source"] == "# Mine\nfrom app\n"
-    assert github.repos["vgdnet/guide_psy"].files["already.md"] == "# Mine\nfrom app\n"
+    assert github.repos["vgdnet/guide_psy"].files["already.md"] == "# Mine\n"
+    local = await client.get("/personal/notes/already.md")
+    assert local.json()["source"] == "# Mine\nfrom app\n"
     git_missing = await client.put(
         "/personal/notes/brand-new.md",
         json={"source": "# New file\n", "expected_hash": "deadbeef"},
@@ -736,3 +748,112 @@ async def test_put_personal_note_requires_author_contract(
         json={"source": "# No\n", "expected_hash": "deadbeef"},
     )
     assert denied.status_code == 403
+
+
+async def test_shared_github_copies_into_local_store(
+    auth_test_context: tuple[AsyncClient, async_sessionmaker[AsyncSession]],
+    monkeypatch: MonkeyPatch,
+) -> None:
+    from sqlalchemy import select
+
+    from app.models.shared_note import SharedNote
+
+    client, session_factory = auth_test_context
+    github = _install(monkeypatch, _github())
+    await _register(client, "admin-user")
+    await _bind_shared(client, session_factory, "admin-user")
+
+    async with session_factory() as database:
+        stored = {
+            row.path: row.body
+            for row in (await database.scalars(select(SharedNote))).all()
+        }
+    assert "card.md" in stored
+    assert "source.md" in stored
+
+    github.repos["vgdnet/rhizome"].files["card.md"] = "# Card\nupdated from source\n"
+    github.repos["vgdnet/rhizome"].sha = "shared-copy-2"
+    body = await client.get("/shared/notes/card.md")
+    assert body.status_code == 200
+    assert "updated from source" in body.json()["body"]
+
+    github.file_reads = 0
+    again = await client.get("/shared/notes/card.md")
+    assert again.status_code == 200
+    assert github.file_reads == 0
+
+    del github.repos["vgdnet/rhizome"].files["source.md"]
+    github.repos["vgdnet/rhizome"].sha = "shared-copy-3"
+    listed = await client.get("/shared/notes")
+    assert listed.status_code == 200
+    assert "source.md" not in {item["path"] for item in listed.json()["notes"]}
+    missing = await client.get("/shared/notes/source.md")
+    assert missing.status_code == 404
+
+
+async def test_git_copy_stays_after_disconnect(
+    auth_test_context: tuple[AsyncClient, async_sessionmaker[AsyncSession]],
+    monkeypatch: MonkeyPatch,
+) -> None:
+    client, session_factory = auth_test_context
+    _install(monkeypatch, _github())
+    await _register(client, "keep-copy")
+    await _bind_shared(client, session_factory, "keep-copy")
+    await _connect_pair(client, "vgdnet/guide_psy")
+    copied = await client.get("/personal/notes/already.md")
+    assert copied.status_code == 200
+    assert copied.json()["source"] == "# Mine\n"
+    gone = await client.delete("/personal/connect")
+    assert gone.status_code == 200
+    still = await client.get("/personal/notes/already.md")
+    assert still.status_code == 200
+    assert still.json()["source"] == "# Mine\n"
+    shared = await client.get("/shared/notes")
+    assert shared.status_code == 200
+    paths = {item["path"] for item in shared.json()["notes"]}
+    assert "card.md" in paths
+    differ = await client.get("/differ")
+    assert differ.status_code == 200
+    kinds = {item["path"]: item["kind"] for item in differ.json()["differences"]}
+    assert kinds.get("already.md") == "added"
+
+
+async def test_shared_github_copies_into_local_store(
+    auth_test_context: tuple[AsyncClient, async_sessionmaker[AsyncSession]],
+    monkeypatch: MonkeyPatch,
+) -> None:
+    from sqlalchemy import select
+
+    from app.models.shared_note import SharedNote
+
+    client, session_factory = auth_test_context
+    github = _install(monkeypatch, _github())
+    await _register(client, "admin-user")
+    await _bind_shared(client, session_factory, "admin-user")
+
+    async with session_factory() as database:
+        stored = {
+            row.path: row.body
+            for row in (await database.scalars(select(SharedNote))).all()
+        }
+    assert "card.md" in stored
+    assert "source.md" in stored
+
+    github.repos["vgdnet/rhizome"].files["card.md"] = "# Card\nupdated from source\n"
+    github.repos["vgdnet/rhizome"].sha = "shared-copy-2"
+    body = await client.get("/shared/notes/card.md")
+    assert body.status_code == 200
+    assert "updated from source" in body.json()["body"]
+
+    github.file_reads = 0
+    again = await client.get("/shared/notes/card.md")
+    assert again.status_code == 200
+    assert github.file_reads == 0
+
+    del github.repos["vgdnet/rhizome"].files["source.md"]
+    github.repos["vgdnet/rhizome"].sha = "shared-copy-3"
+    listed = await client.get("/shared/notes")
+    assert listed.status_code == 200
+    assert "source.md" not in {item["path"] for item in listed.json()["notes"]}
+    missing = await client.get("/shared/notes/source.md")
+    assert missing.status_code == 404

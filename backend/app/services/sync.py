@@ -19,7 +19,7 @@ async def refresh_caller_git(
     user_id: uuid.UUID,
     client: GitHubAppClient,
 ) -> PersonalRepository | None:
-    """Update stored HEADs from GitHub. Differ compares trees at this SHA."""
+    """Update stored HEADs from GitHub and copy .md into local stores."""
     await refresh_shared(database, client)
     return await refresh_personal(database, user_id, client)
 

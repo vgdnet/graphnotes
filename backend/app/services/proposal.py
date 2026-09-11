@@ -12,6 +12,7 @@ from app.core.config import settings
 from app.models.github import PersonalRepository, SharedRepository
 from app.models.personal_upload import PersonalUpload
 from app.models.proposal import Proposal, ProposalStatus
+from app.models.shared_note import SharedNote
 from app.models.user import User, UserRole
 from app.services.audit import record_audit_event
 from app.services.closed_corpus import closed_paths_for_user
@@ -62,21 +63,15 @@ async def _personal_layer_file(
     personal: PersonalRepository | None,
     path: str,
 ) -> str | None:
-    if personal is not None and personal.observed_sha:
-        try:
-            return await client.get_file(
-                personal.owner, personal.name, path, personal.observed_sha
-            )
-        except GitHubAppError as exc:
-            if exc.status != "not_found":
-                raise
     row = await database.scalar(
         select(PersonalUpload).where(
             PersonalUpload.user_id == user_id,
             PersonalUpload.path == path,
         )
     )
-    return None if row is None else row.body
+    if row is not None:
+        return row.body
+    return None
 
 
 def _is_editor(user: User) -> bool:
@@ -160,26 +155,22 @@ async def create_proposal(
     added: list[str] = []
     changed: list[str] = []
     files: dict[str, str] = {}
-    try:
-        shared_listed = set(
-            await client.list_markdown_files(shared.owner, shared.name, shared_ref)
+    shared_bodies = {
+        item.path: item.body
+        for item in (await database.scalars(select(SharedNote))).all()
+    }
+    for path in normalized:
+        text = await _personal_layer_file(
+            database, client, user.id, personal, path
         )
-        for path in normalized:
-            text = await _personal_layer_file(
-                database, client, user.id, personal, path
-            )
-            if text is None:
-                raise ProposalError(404, "note was not found")
-            files[path] = text
-            if path not in shared_listed:
-                added.append(path)
-                continue
-            current = await client.get_file(shared.owner, shared.name, path, shared_ref)
-            if current == text:
-                continue
+        if text is None:
+            raise ProposalError(404, "note was not found")
+        files[path] = text
+        if path not in shared_bodies:
+            added.append(path)
+            continue
+        if shared_bodies[path] != text:
             changed.append(path)
-    except GitHubAppError as exc:
-        raise _github(exc) from exc
     if not added and not changed:
         raise ProposalError(400, "those notes already match the shared rhizome")
     to_commit = {path: files[path] for path in added + changed}

@@ -1,7 +1,7 @@
 import json
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.audit_event import AuditEvent
@@ -9,6 +9,7 @@ from app.models.graph import NoteIndex, NoteLink, NoteLayer, NoteTag, Tag
 from app.models.github import PersonalRepository, SharedRepository
 from app.models.personal_upload import PersonalUpload
 from app.models.proposal import Proposal, ProposalStatus
+from app.models.rhizome_event import RhizomeEvent
 from app.models.user import User, UserRole
 from app.services.github import GitHubAppClient
 from app.services.index import ensure_personal_current, ensure_shared_current
@@ -88,6 +89,37 @@ def _empty_review() -> dict[str, object]:
         "returned": 0,
         "rolled_back": 0,
         "decisions": [],
+    }
+
+
+async def _public_achievements(
+    database: AsyncSession,
+    *,
+    user_id: UUID,
+    accepted_notes: int,
+    accepted_links: int,
+) -> dict[str, int]:
+    proposals = await database.scalar(
+        select(func.count()).select_from(Proposal).where(Proposal.author_user_id == user_id)
+    )
+    event_rows = (
+        await database.execute(
+            select(RhizomeEvent.kind, func.count())
+            .where(
+                RhizomeEvent.actor_user_id == user_id,
+                RhizomeEvent.owner_user_id.is_(None),
+                RhizomeEvent.kind.in_(("created", "edited")),
+            )
+            .group_by(RhizomeEvent.kind)
+        )
+    ).all()
+    by_kind = {kind: int(count) for kind, count in event_rows}
+    return {
+        "accepted_notes": accepted_notes,
+        "accepted_links": accepted_links,
+        "proposals": int(proposals or 0),
+        "created": by_kind.get("created", 0),
+        "edits": by_kind.get("edited", 0),
     }
 
 
@@ -474,6 +506,12 @@ async def get_user_card(
     closed_count = None
     if is_self:
         closed_count = len(await closed_paths_for_user(database, target.id))
+    achievements = await _public_achievements(
+        database,
+        user_id=target.id,
+        accepted_notes=len(accepted),
+        accepted_links=int(body["stats"]["links_accepted"]),
+    )
     return {
         "user": {
             "id": target.id,
@@ -487,6 +525,7 @@ async def get_user_card(
         },
         "self": is_self,
         "stats": stats,
+        "achievements": achievements,
         "notes": accepted if not is_self else [
             {"path": note["path"], "title": note["title"], "state": note["state"]}
             for note in body["notes"]

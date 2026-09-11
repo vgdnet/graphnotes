@@ -18,3 +18,14 @@ The owner of the card also sees their own TZ 2.7 stats, editorial review
 if they are editor/admin, and a **count** of closed paths (not bodies).
 
 No Git SHAs, branches or PR URLs. Closed bodies stay personal (ADR-011).
+
+## Amendment 2026-09-10
+
+Public face also includes **achievement counters**: proposals submitted,
+cards created in the published rhizome, and published text edits
+(`created` / `edited` on the shared interaction feed). Unpublished personal
+paths and the detailed contribution journal stay private.
+
+The in-app page is `#/users/{uuid}` (`GET /api/users/{id}/card`). It is not
+`/user` (account settings). Names in the rhizome-card feed and proposal
+author open that page for any signed-in viewer.

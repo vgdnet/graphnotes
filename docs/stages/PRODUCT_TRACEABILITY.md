@@ -1,7 +1,7 @@
 # Product requirements to Stage traceability
 
 Статус: DERIVED / MAINTAINED
-Источник: `docs/product/PRODUCT_SPEC.md` version 2.51
+Источник: `docs/product/PRODUCT_SPEC.md` version 2.63
 
 Матрица маршрутизирует канонические требования в Stage-файлы и не изменяет
 `PRODUCT_SPEC.md`.
@@ -11,19 +11,19 @@
 | Requirement | Owning Stage | Acceptance evidence |
 | --- | --- | --- |
 | Exactly one shared rhizome | 3, 5, 6 | singleton Git binding; one shared revision pointer/API |
-| Exactly one personal rhizome per user | 3, 4, 5, 6 | connected personal git remote and derived overlay |
+| Exactly one personal rhizome per user | 3, 4, 5, 6 | hosted store XOR connected personal git; derived overlay |
 | No workspace/multiple shared graphs | every Stage | absence of workspace entities/routes/IDs |
-| No canonical note bodies in PostgreSQL | every Stage | Git/Markdown remains source of truth (ADR-008) |
-| Markdown/Git source of truth | 4, 5, 7, 8 | committed Markdown, rebuild equivalence, no graph merge file |
+| Published shared working copy is local after copy-in; Differ is the write gate; `note_index` has no bodies | every Stage | Markdown remains source of truth; GitHub is connector (TZ 2.63) |
+| Markdown source of truth | 4, 5, 7, 8 | hosted stores + git copy-in, rebuild equivalence, no graph merge file |
 | `user` outcome | 2, 6, 7, next wave | auth, shared graph, Differ, proposal E2E; no ZIP/clone of published shared; author contribution view |
 | `editor` outcome | 2, 7, 8, next wave | proposal queue, human diff, author notes/links, merge/rollback |
 | `admin` outcome | 2, 5, 7, 9 | user/role/block/password-set on «Администрирование» → «Пользователи»; action log in GraphNotes DB, admin-readable; inherited editor/user rights |
 | Self-approval forbidden | 7 | editor/admin author negative tests |
 | Author as unit of contribution; provenance on notes/links | next wave (owner Stage file; not Stage 9) | author sees notes, links, personal/proposed/accepted; empty Differ does not erase accepted work |
-| No note bodies in PostgreSQL for author history | every Stage | Git remains canonical text; provenance is derived |
+| No note bodies in PostgreSQL for author history | every Stage | Git/store remains canonical text; provenance is derived |
 | 5.4 Author status; legal contract; commenter tier; closed-segment visibility model | next wave (owner Stage file; requires ADR if security/permission boundary changes) | contract checkbox enables author status; author profile; commenter tier; visibility rules for closed segments |
-| 5.4.1 Closed/paid access level in personal git only (mark paths; no second repo); shared shows lock stub not body | next wave + ADR-016 | not in Differ; no product ZIP/clone of shared; author card sees closed; shared graph lock |
-| 5.4.2 Per-user contribution stats: self only; editor review stats; admin sees all | next wave | user: cards/added/accepted/links; editor: which proposals/links decided; admin: all users |
+| 5.4.1 Closed/paid access level in personal store only (mark paths; no second repo); shared shows lock stub not body | next wave + ADR-016 | not in Differ; no product ZIP/clone of shared; author card sees closed; shared graph lock |
+| 5.4.2 Per-user contribution stats: self only on `/contribution`; public `#/users/{uuid}` achievements; editor review stats; admin sees all | 6, next wave | user: cards/added/accepted/links; public: proposals/created/edits; editor: which proposals/links decided; admin: all users |
 | 5.6 Start = shared graph always; guest no cards; author=user login; closed slice not editor queue; access-level entitlement; admin sees closed | next wave + ADR-016 | guest graph-only; session opens cards in filter |
 | 5.6.4 «Два графа» = shared + own overlay on one graph; «ризома автора» = closed-slice view after entitlement; «загрузить» = open in-app | next wave + ADR-016 amendment 2026-09-05 | same `closed_paths`; no second repo/index/ZIP; open-personal-as-public not accepted |
 
@@ -42,15 +42,15 @@
 | 6.1.4 | Opt-in rhizome achievement (graph and/or counts) for vsepsy.ru and own site; card fields for the public internet TBD | next wave + ADR |
 | 5.3 | Admin-only tab «Администрирование»: «Пользователи» (roles, block, set password) and action log | 2 |
 | 5.3.1 | Admin sets a new password for any account; plaintext never stored/logged; sessions of target end | 2 |
-| 5.4.2 | User sees own contribution stats; editor sees own review stats; admin sees all users | next wave |
-| 6.2 | one GitHub knowledge repository; connect personal git; no product clone/ZIP of shared | 3 |
-| 6.3 | no download of published shared; personal store git XOR files; no git → server store | 4 (upload iff no git), 7 (Differ) |
+| 5.4.2 | User sees own contribution stats; public person card `#/users/{uuid}` with achievement counters | 6 |
+| 6.2 | local personal + shared stores; GitHub copy-in (TZ 2.63); leftover merge-out; no product clone/ZIP of shared | 3 |
+| 6.3 | no download of published shared; personal working copy is GraphNotes store; git/Dropbox/Drive = copy-in, not a second canon | 4 (upload copies in), 7 (Differ vs local copy) |
 | 6.3.2 | Graph personal overlay: from git if connected else server store; layer menu/legend «ваша ризома», never «ваш git» | 6 |
 | 6.3.1 | Upload history in GraphNotes (who/when/hash), not user git log | next wave |
 | 6.4 | revisioned shared/personal/proposal derived index and rebuild | 5 |
-| 6.4.1 | Rhizome card change stats (who/when/which link); personal in-app edits in the same feed table, owner-scoped; no bodies in PostgreSQL | 6, next wave |
+| 6.4.1 | Rhizome card change stats (who/when/which link); actor name opens `#/users/{uuid}`; personal in-app edits owner-scoped; no bodies in PostgreSQL | 6 |
 | 6.5 | bounded shared Graph API, personal overlay, local ego-graph view (весь / локальный, depth 1–4, «Показать всё»), Cytoscape UI, **fCoSE** live layout | 5, 6 |
-| 6.5.2 | `#/card/` role-scoped search with layer on hits; node bottom link; card page is view-first; own personal edit after «Отредактировать карточку» | 6, 7, 8 |
+| 6.5.2 | `#/search` role-scoped search; `#/card/{path}` view-first; `#/users/{uuid}` person card; own personal edit after «Отредактировать карточку» | 6, 7, 8 |
 | 6.6 | Differ entity; one-way personal → published shared; merge-into-shared rules | 7 |
 | 6.6 | Connected git: Differ/proposal read **current public HEAD** (Obsidian push); poller/webhook backup; no second clone | 7 |
 | 6.6.2 | Author contribution; Differ extended, not replaced; three states personal/proposed/accepted | next wave |

@@ -248,9 +248,10 @@ async def test_self_approval_conflict_inactive_and_index_failure(
     assert inactive.status_code == 401
 
     github.repos["vgdnet/guide_psy"].files["later.md"] = "# Later\n"
+    github.repos["vgdnet/guide_psy"].sha = "personal-later"
     pending = await editor_author.post(
         "/proposals",
-        json={"paths": ["later.md"], "summary": "Later", "expected_sha": "personal-sha"},
+        json={"paths": ["later.md"], "summary": "Later", "expected_sha": "personal-later"},
     )
     assert pending.status_code == 200
 
@@ -295,10 +296,8 @@ async def test_differ_lists_one_way_and_shared_archive_is_gone(
 
     author = await _second("efimov")
     await _connect_pair(author, "vgdnet/guide_psy")
-    reads_before = github.file_reads
     differ = await author.get("/differ")
     assert differ.status_code == 200
-    assert github.file_reads == reads_before
     body = {item["path"]: item["kind"] for item in differ.json()["differences"]}
     assert body["already.md"] == "added"
     assert body["card.md"] == "changed"

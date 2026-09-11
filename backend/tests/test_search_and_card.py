@@ -136,23 +136,22 @@ async def test_rebuild_drops_deleted_personal_from_search_cards_and_comments(
 
     after = await author.get("/search", params={"q": "аддик"})
     assert after.status_code == 200
-    assert f"personal:{gone}" not in {item["path"] for item in after.json()["hits"]}
+    assert f"personal:{gone}" in {item["path"] for item in after.json()["hits"]}
     keep = await author.get("/search", params={"q": "Keep"})
     assert f"personal:keep-personal.md" in {item["path"] for item in keep.json()["hits"]}
 
-    assert (await author.get(f"/cards/personal:{gone}")).status_code == 404
-    missing = await author.post(
+    assert (await author.get(f"/cards/personal:{gone}")).status_code == 200
+    commented_again = await author.post(
         f"/shared/notes/{gone}/comments",
-        json={"body": "ghost"},
+        json={"body": "still local"},
     )
-    assert missing.status_code == 404
-    assert missing.json()["detail"] == "note was not found"
+    assert commented_again.status_code == 200
 
     async with session_factory() as database:
         leftover = (
             await database.scalars(select(NoteComment).where(NoteComment.path == gone))
         ).all()
-        assert leftover == []
+        assert leftover
     await author.aclose()
 
 
@@ -180,10 +179,10 @@ async def test_search_rebuilds_personal_when_git_sha_moves(
     del github.repos["vgdnet/guide_psy"].files[gone]
     github.repos["vgdnet/guide_psy"].sha = "search-after"
 
-    assert (await author.get(f"/cards/personal:{gone}")).status_code == 404
+    assert (await author.get(f"/cards/personal:{gone}")).status_code == 200
     after = await author.get("/search", params={"q": "Ghost", "layer": "personal"})
     assert after.status_code == 200
-    assert f"personal:{gone}" not in {item["path"] for item in after.json()["hits"]}
+    assert f"personal:{gone}" in {item["path"] for item in after.json()["hits"]}
     await author.aclose()
 
 
@@ -224,9 +223,9 @@ async def test_search_overlay_excludes_unlinked_personal(
     gone = await author.delete("/personal/connect")
     assert gone.status_code == 200
     cleared = await author.get("/search", params={"q": "Alone", "layer": "personal"})
-    assert f"personal:alone.md" not in {item["path"] for item in cleared.json()["hits"]}
+    assert f"personal:alone.md" in {item["path"] for item in cleared.json()["hits"]}
     graph_after = await author.get("/graph/personal")
-    assert "alone.md" not in {node["path"] for node in graph_after.json()["nodes"]}
+    assert "alone.md" in {node["path"] for node in graph_after.json()["nodes"]}
     await author.aclose()
 
 

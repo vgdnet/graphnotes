@@ -26,11 +26,11 @@ POST /api/users/me/author-contract/withdraw
 GET  /api/repository/status
 
 POST /api/personal/connect          # from account settings, not the graph home
-POST /api/personal/import-md          # .md/ZIP only if git is NOT connected; else 409
-GET  /api/personal/notes              # read-only index of connected git
+POST /api/personal/import-md          # .md/ZIP into the local personal store
+GET  /api/personal/notes              # read-only index of the local personal store
 GET  /api/personal/notes/{id}
 PUT  /api/personal/notes/{path}       # own personal only; source + expected_hash;
-                                    # git commit XOR upload store; author contract;
+                                    # local store; author contract;
                                     # existing path only (404 missing, 409 stale)
 GET  /api/personal/uploads            # upload history: who / when / path / hash
 
@@ -38,6 +38,8 @@ GET  /api/differ                      # one-way personal → published shared;
                                       # connected git: refresh public HEAD first
 GET  /api/contributions/me            # author's notes, links, proposals, counts; derived
                                       # editor/admin also receive own review stats
+GET  /api/users/{id}/card             # public person card: achievements + accepted notes;
+                                      # not personal/closed bodies; not /user settings
 GET  /api/admin/contributions         # admin only: same stats for every account
 GET  /api/admin/users                 # list/search/filter; last login, sessions
 POST /api/admin/users                 # admin creates an account

@@ -2,19 +2,21 @@
 
 Updated: 2026-09-11
 
-Product model TZ 2.63: local store holds `.md`; PostgreSQL `note_index` is
-the search/graph index, not a second canon. Personal export (if any) is
+Product model TZ 2.63: GitHub is copy-in only. Local stores hold `.md`
+(`personal_uploads`, `shared_notes`); PostgreSQL `note_index` is the
+search/graph index, not a second canon. Personal export (if any) is
 from the store, not synthesized from the index. Shared is not a product ZIP.
 TZ 2.62: personal working copy is always the GraphNotes local
 store. Connectors (git now; Dropbox / Drive later) copy `.md` in. Differ
 compares that copy to the shared rhizome. Copy-in on git connect/refresh is
 shipped. In-app save stays on the local store (no write-back to git).
-Disconnect keeps copied files. ADR-008 leftover «no hosted vault» vs hosted store.
+Disconnect keeps copied files (no `drop_personal_layer`). Alembic
+`0016_shared_notes`. ADR-008 leftover «no hosted vault» vs hosted store.
 In-app edit is **own personal cards only**
 (`#/card/personal:{path}`, hash may be `personal%3A`) after view-first
 «Отредактировать карточку» (MDXEditor; GraphNotes preview on read).
 TZ 2.54: `[[wikilink]]` inherits the open card layer (personal stays personal).
-Canonical **published shared** note bodies are not stored in PostgreSQL.
+Published shared working copies live in `shared_notes` after copy-in (TZ 2.63).
 Current implementation stage is Stage 8. ADR-009: Differ is one-way personal
 → published shared.
 TZ 2.59 shipped the 2.58 sitemap in the hash UI: `/card` start card
@@ -339,6 +341,10 @@ TZ 2.5–2.7 on this branch (not merged to main; production
   `/offer` = my proposals; `/queue` = editor queue; `/my_graph` =
   personal canvas; `/contribution` = Мой вклад. 2.57 person-card /
   combined-queue inferences withdrawn.
+- TZ 2.61–2.63 shipped on this branch: git/shared GitHub copy `.md` into
+  `personal_uploads` / `shared_notes`; Differ and cards read the copies;
+  disconnect keeps the personal store; search/graph still use `note_index`.
+  Leftover: GitHub App merge/rollback live-read of proposal branches.
 - leftover: rhizome access-level **entitlement tables** / payment
   gateway (ADR-016 + TZ 2.41 name the model and the «ризома автора»
   view; `closed_paths` already exists — not this slice); vsepsy

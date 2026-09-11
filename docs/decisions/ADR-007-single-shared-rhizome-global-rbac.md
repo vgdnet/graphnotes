@@ -93,3 +93,11 @@ that mix published and unpublished knowledge.
   retention/archival and measured optimization before adding infrastructure;
 - multiple shared rhizomes or workspace isolation require a future explicit
   product decision and a new ADR.
+
+## Amendment 2026-09-11 (TZ 2.61)
+
+One shared rhizome and one personal rhizome per user still hold. The personal
+rhizome is the GraphNotes hosted store **by default**, XOR optional git — not
+«must be a GitHub remote». The GitHub knowledge repository in Stage 3 remains
+leftover for shared merge in the current stack; it is not the user's disk and
+not a product clone/ZIP path.

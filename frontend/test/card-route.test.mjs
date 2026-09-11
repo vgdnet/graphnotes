@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import { cardApiUrl, cardHash, cardSearchHash, canonicalCardHash, parseCardRoute, pathFromCardHash, isOwnPersonalCard, canShowCardEditButton, normalizeCardPath, qualifyCardPath, wikiCardHash } from "../test-out/cardRoute.js";
-import { parseAppRoute, routeToView, viewHash } from "../test-out/appRoute.js";
+import { parseAppRoute, routeToView, viewHash, personCardHash } from "../test-out/appRoute.js";
 import { renderBlocks } from "../test-out/markdownRender.js";
 
 const UNICODE_PATH = "personal:вариант Б — конспекты/Паранойя (Б).md";
@@ -20,6 +20,13 @@ test("empty #/card/ is legacy search; #/card is the start card", () => {
   assert.equal(routeToView(parseAppRoute("#/user")), "settings");
   assert.equal(routeToView(parseAppRoute("#/my_graph")), "my_graph");
   assert.equal(routeToView(parseAppRoute("#/contribution")), "contribution");
+  assert.deepEqual(parseAppRoute("#/users/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"), {
+    kind: "person",
+    userId: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+  });
+  assert.equal(routeToView(parseAppRoute("#/users/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")), "person");
+  assert.equal(parseAppRoute("#/user").kind, "user");
+  assert.equal(personCardHash("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"), "#/users/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee");
   assert.equal(viewHash("graph"), "#/graph");
   assert.equal(canonicalCardHash("personal:notes/mine.md"), cardHash("notes/mine.md"));
   assert.match(canonicalCardHash("proposal:aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee:card.md"), /proposal/);

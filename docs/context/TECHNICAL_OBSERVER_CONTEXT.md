@@ -1,7 +1,7 @@
 # GraphNotes — канонический контекст Technical Observer
 
 Статус: ACTIVE
-Updated: 2026-09-11 (TZ 2.63: search = index, not bodies in PostgreSQL; personal export from local .md store)
+Updated: 2026-09-11 (TZ 2.63: GitHub copy-in only; local personal + shared stores)
 
 Этот файл задаёт рабочий регламент отдельного Technical Observer проекта
 GraphNotes. Его можно передать новому воркеру целиком. Он не заменяет
@@ -77,10 +77,10 @@ PostgreSQL, узлы, связи, теги, поисковый индекс и �
 производные и должны быть восстановимы.
 
 Запрещён второй канонический графовый файл, включая `graph.json`.
-Канонические тела **опубликованной общей** не кладут в PostgreSQL в обход
-Differ как второй корпус «для поиска». Личный hosted Markdown — продуктовый
-путь (ТЗ 2.62). Поиск — `note_index`, не full-text по складу «вместо
-индекса». Выгрузка своей — со склада `.md`, не из индекса (ТЗ 2.63).
+Рабочие тела **опубликованной общей** живут в `shared_notes` после copy-in
+(ТЗ 2.63) — это не обход Differ и не тела в `note_index` «для поиска».
+Личный hosted Markdown — продуктовый путь (ТЗ 2.62). Поиск — `note_index`.
+Выгрузка своей — со склада `.md`, не из индекса.
 
 ### Rhizome and RBAC model
 
@@ -88,8 +88,9 @@ Differ как второй корпус «для поиска». Личный ho
 - exactly one personal rhizome per user (GraphNotes local store; connectors
   copy `.md` in — TZ 2.62 / ADR-008 amendment);
 - no workspace/organization/team/community/multiple-shared entities;
-- no canonical **published shared** note bodies in PostgreSQL as a second
-  corpus; personal hosted Markdown is the product default (TZ 2.61);
+- published shared working copies live in `shared_notes` after GitHub
+  copy-in (TZ 2.63); Differ remains the write gate; `note_index` has no
+  bodies; personal hosted Markdown is the product default (TZ 2.61);
 - GraphNotes for authors is a Publish analog with rights and one shared
   rhizome (TZ 2.61), not a second Obsidian: thin
   in-app editor is **own personal cards only** after «Отредактировать

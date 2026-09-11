@@ -8,9 +8,10 @@ import type { GraphDiffResponse } from "./GraphDiffView";
 import { MarkdownBody } from "./MarkdownBody";
 import { CardSearch } from "./CardSearch";
 import { canShowCardEditButton, cardApiUrl, cardFilePath, cardHash, cardSearchHash, isOwnPersonalCard } from "./cardRoute";
-import { parseAppRoute, routeToView, viewHash, type ShellView } from "./appRoute";
+import { parseAppRoute, personCardHash, routeToView, viewHash, type ShellView } from "./appRoute";
 import { AuthPanel, type AuthMode } from "./AuthPanel";
 import { PersonalCardEditor } from "./PersonalCardEditor";
+import { ActorLink, PersonCardPage } from "./PersonCard";
 import { AdminPanel } from "./AdminPanel";
 import { ThemeSwitcher } from "./ThemeSwitcher";
 import {
@@ -219,6 +220,13 @@ type UserCard = {
   };
   self: boolean;
   stats: ContributionStats;
+  achievements: {
+    accepted_notes: number;
+    accepted_links: number;
+    proposals: number;
+    created: number;
+    edits: number;
+  };
   notes: { path: string; title: string; state: ContributionState }[];
   review: ReviewStats | null;
   closed_count: number | null;
@@ -311,8 +319,8 @@ function sharedLabel(status: RepositoryStatus | null): string {
 }
 
 function personalLabel(status: RepositoryStatus | null): string {
-  if (!status?.connected) return "Личный git не связан — можно загрузить .md в личный слой без git.";
-  if (status.has_content) return `Связан git ${status.owner}/${status.name}.`;
+  if (!status?.connected) return "Личный git не связан — можно загрузить .md в локальный склад.";
+  if (status.has_content) return `Связан git ${status.owner}/${status.name}. Файлы копируются в локальный склад.`;
   return `Git ${status.owner}/${status.name} связан, коммитов пока нет.`;
 }
 
@@ -409,6 +417,7 @@ export function App() {
   const [graphLayer, setGraphLayer] = useState<FilterKind>("all");
   const [authorContract, setAuthorContract] = useState<AuthorContract | null>(null);
   const [userCard, setUserCard] = useState<UserCard | null>(null);
+  const [personCard, setPersonCard] = useState<UserCard | null>(null);
   const [noteFeed, setNoteFeed] = useState<NoteFeedEvent[]>([]);
   const [noteComments, setNoteComments] = useState<NoteCommentItem[]>([]);
   const [commentDraft, setCommentDraft] = useState("");
@@ -783,7 +792,30 @@ export function App() {
 
   const appRoute = parseAppRoute(locationHash);
   const cardPath = appRoute.kind === "card" ? appRoute.path : null;
+  const personUserId = appRoute.kind === "person" ? appRoute.userId : null;
   const loadedCardRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!personUserId) {
+      setPersonCard(null);
+      return;
+    }
+    const controller = new AbortController();
+    setError("");
+    void fetch(`/api/users/${personUserId}/card`, { signal: controller.signal })
+      .then(async (response) => {
+        if (!response.ok) throw new Error(await readError(response));
+        return (await response.json()) as UserCard;
+      })
+      .then((body) => {
+        if (!controller.signal.aborted) setPersonCard(body);
+      })
+      .catch((requestError: unknown) => {
+        if (requestError instanceof DOMException && requestError.name === "AbortError") return;
+        setPersonCard(null);
+        setError(requestError instanceof Error ? requestError.message : "Не удалось открыть карточку человека");
+      });
+    return () => controller.abort();
+  }, [personUserId]);
   useEffect(() => {
     if (authChecking) return;
     const route = parseAppRoute(locationHash);
@@ -1439,20 +1471,6 @@ export function App() {
     }
   }
 
-  async function openUserCard(userId: string) {
-    setSubmitting(true);
-    setError("");
-    try {
-      const response = await fetch(`/api/users/${userId}/card`);
-      if (!response.ok) throw new Error(await readError(response));
-      setUserCard((await response.json()) as UserCard);
-    } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "Ошибка соединения");
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
   const canReview = user?.role === "editor" || user?.role === "admin";
   const scopedProposals = view === "offer"
     ? proposals.filter((item) => item.author.id === user?.id)
@@ -1652,7 +1670,7 @@ export function App() {
                           {noteFeed.map((item) => (
                             <li key={item.id}>
                               <span className="note-link">
-                                <strong>{item.actor?.display_name || "автор"}</strong>
+                                <ActorLink actor={item.actor} />
                                 <small>
                                   {feedKindLabel(item.kind)}
                                   {item.other_path ? ` · ${item.other_path}` : ""}
@@ -1671,7 +1689,7 @@ export function App() {
                         {noteComments.map((item) => (
                           <li key={item.id}>
                             <span className="note-link">
-                              <strong>{item.author.display_name}</strong>
+                              <strong><ActorLink actor={item.author} /></strong>
                               <small>{item.status} · {item.body}</small>
                             </span>
                             {canReview && item.status === "pending" && (
@@ -1722,7 +1740,7 @@ export function App() {
                         {personalFeed.map((item) => (
                           <li key={item.id}>
                             <span className="note-link">
-                              <strong>{item.actor?.display_name || "автор"}</strong>
+                              <ActorLink actor={item.actor} />
                               <small>
                                 {feedKindLabel(item.kind)}
                                 {item.created_at ? ` · ${new Date(item.created_at).toLocaleString("ru")}` : ""}
@@ -1840,10 +1858,10 @@ export function App() {
                       ) : (
                         "репозиторий"
                       )}
-                      . — загрузка файлов в личное хранилище выключена. Отключите git, чтобы снова грузить .md.
+                      . Git копирует `.md` в локальный склад. Загрузка файлов тоже пишет туда.
                     </p>
                     <p className="admin-panel__hint">
-                      Но помните: при отключении git хранилище переиндексируется в ноль.
+                      Отключение git не стирает уже скопированные файлы.
                     </p>
                     <div className="settings-actions">
                       <button className="button button--danger" type="button" disabled={submitting} onClick={() => void disconnectPersonal()}>
@@ -1961,17 +1979,15 @@ export function App() {
               >
                 Предложить в общую
               </button>
-              {!repository?.personal?.connected && (
               <form className="connect-form" onSubmit={(event) => void importFallback(event)}>
                 <label>
-                  Загрузка .md или ZIP без git
+                  Загрузка .md или ZIP в локальный склад
                   <input name="file" type="file" accept=".md,.zip,text/markdown,application/zip" required />
                 </label>
                 <button className="button button--quiet" type="submit" disabled={submitting}>
                   Загрузить в личный слой
                 </button>
               </form>
-              )}
               {report && (
                 <p className="ingest-report" role="status">
                   Принято: {report.accepted.length}. Пропущено: {report.skipped.length}. Конфликт: {report.conflicted.length}.
@@ -2044,7 +2060,7 @@ export function App() {
                         {noteFeed.map((item) => (
                           <li key={item.id}>
                             <span className="note-link">
-                              <strong>{item.actor?.display_name || "автор"}</strong>
+                              <ActorLink actor={item.actor} />
                               <small>
                                 {feedKindLabel(item.kind)}
                                 {item.other_path ? ` · ${item.other_path}` : ""}
@@ -2059,6 +2075,14 @@ export function App() {
                 </article>
               )}
             </section>
+          )}
+          {view === "person" && (
+            <PersonCardPage
+              card={personCard}
+              loading={Boolean(personUserId) && !personCard && !error}
+              error={error}
+              onOpenNote={(path) => goHash(cardHash(path))}
+            />
           )}
           {user && view === "contribution" && (
             <section className="notes-panel" aria-labelledby="contrib-heading">
@@ -2086,8 +2110,25 @@ export function App() {
                     {userCard.user.website ? ` · ${userCard.user.website}` : ""}
                     {userCard.user.phone ? ` · ${userCard.user.phone}` : ""}
                     {userCard.user.telegram ? ` · ${userCard.user.telegram}` : ""}
-                    {userCard.self ? "" : " Чужой подробный журнал недоступен."}
+                    {" "}
+                    <a className="person-link" href={personCardHash(userCard.user.id)}>Публичная карточка</a>
                   </p>
+                  {userCard.achievements && (
+                    <div className="stat-grid" aria-label="Публичные достижения">
+                      <div className="stat-card">
+                        <strong>{userCard.achievements.proposals}</strong>
+                        <span>Предложений</span>
+                      </div>
+                      <div className="stat-card">
+                        <strong>{userCard.achievements.created}</strong>
+                        <span>Создано в ризоме</span>
+                      </div>
+                      <div className="stat-card">
+                        <strong>{userCard.achievements.edits}</strong>
+                        <span>Правок в ризоме</span>
+                      </div>
+                    </div>
+                  )}
                   {userCard.notes.length > 0 && (
                     <ul className="note-list">
                       {userCard.notes.slice(0, 8).map((item) => (
@@ -2244,9 +2285,9 @@ export function App() {
               <article className="proposal-detail">
                 <h3>{openProposal.summary}</h3>
                 <p className="admin-panel__hint">
-                  <button className="note-link" type="button" onClick={() => void openUserCard(openProposal.author.id)}>
+                  <a className="person-link" href={personCardHash(openProposal.author.id)}>
                     {openProposal.author.display_name}
-                  </button>
+                  </a>
                   {" · "}{proposalStatusLabel(openProposal.status)}
                 </p>
                 {openProposal.reason && (openProposal.status === "rejected" || openProposal.status === "changes_requested") && (
@@ -2434,8 +2475,19 @@ export function App() {
             </div>
           </section>
         )}
+        {view === "person" && (
+          <PersonCardPage
+            card={personCard}
+            loading={Boolean(personUserId) && !personCard && !error}
+            error={error}
+            onOpenNote={(path) => {
+              setAuthOpen(true);
+              goHash(cardHash(path));
+            }}
+          />
+        )}
         {view === "about" && legalAboutPanel}
-        {view !== "card" && view !== "search" && view !== "about" && repository?.shared.connected && (
+        {view !== "card" && view !== "search" && view !== "about" && view !== "person" && repository?.shared.connected && (
           <section className="notes-panel notes-panel--graph" aria-labelledby="public-graph-heading">
             <div>
               <p className="eyebrow">Граф</p>

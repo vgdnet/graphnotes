@@ -165,7 +165,12 @@ async def _personal_hits(
         select(PersonalRepository).where(PersonalRepository.user_id == owner.id)
     )
     hits: list[dict[str, object]] = []
-    if personal is not None and personal.indexed_sha:
+    store_copy = (
+        await database.scalar(
+            select(PersonalUpload.id).where(PersonalUpload.user_id == owner.id).limit(1)
+        )
+    ) is not None
+    if personal is not None and personal.indexed_sha and not store_copy:
         rows = (
             await database.scalars(
                 _note_query(
@@ -456,7 +461,12 @@ async def _owner_tag_names(
     personal = await database.scalar(
         select(PersonalRepository).where(PersonalRepository.user_id == owner.id)
     )
-    if personal is not None and personal.indexed_sha:
+    store_copy = (
+        await database.scalar(
+            select(PersonalUpload.id).where(PersonalUpload.user_id == owner.id).limit(1)
+        )
+    ) is not None
+    if personal is not None and personal.indexed_sha and not store_copy:
         return await _layer_tag_names(
             database,
             layer=NoteLayer.PERSONAL.value,

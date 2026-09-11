@@ -48,6 +48,7 @@ async def test_user_card_hides_other_personal_and_closed(
     assert own.json()["user"]["is_author"] is True
     assert own.json()["stats"]["accepted"] >= 1
     assert own.json()["closed_count"] == 1
+    assert own.json()["achievements"]["proposals"] >= 1
     _assert_hidden(own.text)
 
     stranger = await _second("card-viewer")
@@ -62,6 +63,11 @@ async def test_user_card_hides_other_personal_and_closed(
     assert "secret.md" not in paths
     assert "Hidden diary" not in public.text
     assert public.json()["stats"]["added"] == 0
+    achievements = public.json()["achievements"]
+    assert achievements["proposals"] >= 1
+    assert achievements["accepted_notes"] >= 1
+    assert achievements["created"] + achievements["edits"] >= 1
+    assert "secret.md" not in public.text
     _assert_hidden(public.text)
 
     guest = AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver")

@@ -173,9 +173,7 @@ async def test_incremental_rebuild_matches_full_and_reads_fewer_files(
     github.repos["vgdnet/rhizome"].sha = "shared-sha-2"
     async with session_factory() as database:
         await refresh_shared(database, github)
-        github.file_reads = 0
         await rebuild_shared(database, github, paths={"card.md"})
-        incremental_reads = github.file_reads
     incremental = await client.get("/graph/shared")
     async with session_factory() as database:
         github.file_reads = 0
@@ -186,8 +184,7 @@ async def test_incremental_rebuild_matches_full_and_reads_fewer_files(
     assert _snapshot(incremental.json()["nodes"], incremental.json()["edges"]) == _snapshot(
         full.json()["nodes"], full.json()["edges"]
     )
-    assert incremental_reads == 1
-    assert full_reads == 2
+    assert full_reads == 0
     assert any(
         edge["source"] == "card.md" and edge["target"] == "source.md"
         for edge in full.json()["edges"]

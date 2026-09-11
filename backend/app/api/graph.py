@@ -8,6 +8,7 @@ from app.api.dependencies import CurrentAdmin, CurrentUser, DatabaseSession, Opt
 from app.core.config import settings
 from app.models.github import PersonalRepository, SharedRepository
 from app.models.graph import NoteLayer
+from app.models.personal_upload import PersonalUpload
 from app.schemas.graph import GraphDiffResponse, GraphResponse, RebuildRequest
 from app.schemas.search import SearchResponse
 from app.services.github import GitHubAppClient
@@ -42,6 +43,14 @@ def _raise(error: IndexerError) -> None:
 
 def _limit(limit: int) -> int:
     return max(1, min(limit, settings.graph_page_max))
+
+
+async def _has_uploads(database, user_id: UUID) -> bool:
+    return (
+        await database.scalar(
+            select(PersonalUpload.id).where(PersonalUpload.user_id == user_id).limit(1)
+        )
+    ) is not None
 
 
 @router.get("/search", response_model=SearchResponse)
@@ -107,14 +116,14 @@ async def personal_graph(
     personal = await database.scalar(
         select(PersonalRepository).where(PersonalRepository.user_id == user.id)
     )
-    if personal is None or not personal.indexed_sha:
-        uploads = await load_personal_from_uploads(
-            database,
-            owner_id=user.id,
-            limit=_limit(limit),
-            center=center,
-            depth=depth,
-        )
+    uploads = await load_personal_from_uploads(
+        database,
+        owner_id=user.id,
+        limit=_limit(limit),
+        center=center,
+        depth=depth,
+    )
+    if uploads.get("nodes") or personal is None or not personal.indexed_sha:
         return GraphResponse.model_validate(uploads)
     graph_center = center[len("personal:") :] if center and center.startswith("personal:") else center
     payload = await load_graph(
@@ -154,7 +163,12 @@ async def personal_overlay(
     personal = await database.scalar(
         select(PersonalRepository).where(PersonalRepository.user_id == user.id)
     )
-    personal_revision = personal.indexed_sha if personal is not None else None
+    use_uploads = await _has_uploads(database, user.id)
+    personal_revision = (
+        None
+        if use_uploads
+        else (personal.indexed_sha if personal is not None else None)
+    )
     seeds = await overlay_local_shared_seeds(
         database,
         owner_id=user.id,
@@ -175,7 +189,7 @@ async def personal_overlay(
     payload["index_status"] = index_status_label(
         shared.observed_sha, shared.indexed_sha, shared.index_status
     )
-    if personal is None or not personal.indexed_sha:
+    if personal is None or not personal.indexed_sha or use_uploads:
         overlay = await load_overlay_from_uploads(
             database,
             owner_id=user.id,

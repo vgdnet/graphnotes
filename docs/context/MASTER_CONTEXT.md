@@ -8,8 +8,9 @@ GitHub is a **source**: connectors copy `.md` in. Cards and Differ read copies.
 Git live-read of blobs for cards is leftover. Editor merge may still push GitHub
 then copy-in. Disconnect personal git does not wipe copied files. Do not rip the
 GitHub App this wave. Dropbox/Drive are not this wave.
-TZ 2.63: `/search` and the graph read `note_index`. Do not put note bodies
-in PostgreSQL «so search is faster». A personal export, if offered, is
+TZ 2.63: GitHub is copy-in only. `/search` and the graph read `note_index`
+(no bodies there «so search is faster»). Working copies live in
+`personal_uploads` / `shared_notes`. A personal export, if offered, is
 bytes from the local store, not rows synthesized from the index. Published
 shared is still not a product ZIP.
 Auth is one chrome (login / register /
@@ -48,15 +49,16 @@ proposal → `proposal:{id}:{file}`; already-prefixed targets stay. Shared and
 personal are not collapsed — the same git path can exist in both.
 Widget is MDXEditor
 rich+source + GraphNotes Markdown preview on read; `PUT /api/personal/notes/{path}`
-with `source` + `expected_hash`; write to connected git or the upload store;
+with `source` + `expected_hash`; write the GraphNotes local store;
 existing path only, 404 if missing, 409 if stale. In-app saves record `rhizome_events`
 (`edited` / `linked` / `unlinked`) with `owner_user_id` so they do not mix
 into the shared card feed for the same git path; no Markdown bodies in that
 table. `GET /api/cards/{path}/feed` is the card history. Shared / others'
-personal / proposal cards stay read-only; shared changes go through Differ. Do not
-store canonical **published shared** bodies in PostgreSQL as a second corpus
-that bypasses Differ. Personal hosted Markdown (upload store / in-app) is the
-product default (TZ 2.61–2.62). ADR-008 leftover: «no hosted vault» does not forbid
+personal / proposal cards stay read-only; shared changes go through Differ.
+Working copies of **published shared** Markdown live in `shared_notes` after
+copy-in (TZ 2.63); that is not a write path that bypasses Differ. Personal
+hosted Markdown (upload store / in-app) is the product default (TZ 2.61–2.63).
+ADR-008 leftover: «no hosted vault» does not forbid
 that store; «no in-app Obsidian» still forbids a second Obsidian-class editor.
 The Differ comparison screen chrome is
 **Отличающиеся** (tab and heading); API/entity remain Differ. Author-contract copy (version `2026-09-05`)
@@ -67,7 +69,8 @@ to the shared rhizome, and **AGPL-3.0 for the software** with developer
 credit (Юрий Ефимов, y@psychoanalyst.pro). Same Russian text in Settings →
 Договор автора and the guest-visible **О программе** footer. No second
 LICENSE file; `LICENSE` remains AGPL-3.0. Git in Settings is a **connector**
-(TZ 2.62): it copies `.md` into the local store. Disconnect does **not** wipe
+(TZ 2.62–2.63): it copies `.md` into the local store. Shared GitHub is the same:
+copy-in, not live read. Disconnect does **not** wipe
 copied files. Hint lives next to
 connect/disconnect in Settings, not on Differ. TZ 2.41 refines ADR-016 UX without a second
 repo: «два графа» is the shared start map plus the signed-in user's own
@@ -156,7 +159,7 @@ ZIP download of published shared is removed (TZ 2.5; ADR-009 amendment
 2026-09-11). **Rhizome access
 levels** (ADR-016 / TZ 2.31, UX 2.41): a paid level is a closed slice of
 content, not a «потребитель» role. Closed Markdown stays in the author's
-personal store (hosted XOR git; path/frontmatter mark); PostgreSQL holds a derived flag
+personal store (local copy; path/frontmatter mark); PostgreSQL holds a derived flag
 (`closed_paths` now, level id later). No second knowledge repository. The
 author view after entitlement is another screen of that flag, not a second
 remote. UUID entitlements and a payment gateway are later. SMTP login is
@@ -174,17 +177,18 @@ GraphNotes is a Markdown publisher with access rights and exactly one shared
 rhizome — analog of Obsidian Publish, not «knowledge lives on GitHub». Each
 user has their own graph (`/my_graph`). People author on the GraphNotes store
 (upload / thin in-app editor of own cards). External disks **copy** `.md` into
-that store (TZ 2.62). GraphNotes shows the one shared rhizome as a graph in the app (read-only
+that store (TZ 2.62). GitHub also copies published shared `.md` into the
+local shared store (TZ 2.63). GraphNotes shows the one shared rhizome as a graph in the app (read-only
 Markdown, cards). It does **not** offer ZIP download or a product clone of the
 published shared corpus. Differ is one-way **local personal copy** → published shared;
-editors merge selected differences. See ADR-008 amendment TZ 2.62, ADR-009,
-PRODUCT_SPEC 2.62.
+editors merge selected differences. See ADR-008 amendment TZ 2.63, ADR-009,
+PRODUCT_SPEC 2.63.
 
 Core data flow:
 
 ```text
-.md (upload / git connector / later Dropbox-Drive)
-  -> copy into GraphNotes personal store
+.md (upload / git connector / later Dropbox-Drive / shared GitHub source)
+  -> copy into GraphNotes local stores (personal + published shared)
       -> Parser
           -> PostgreSQL derived index
               -> Graph API
@@ -249,7 +253,8 @@ Technologies:
 ## 4. GitHub role in the product
 GitHub is **not** the user's knowledge store (TZ 2.61). Ordinary UX is hosted
 graph + cards on the installation (Publish analog). GitHub remains: (a) source
-delivery ADR-006; (b) optional personal git XOR; (c) leftover Git engine for
+delivery ADR-006; (b) optional personal git **connector** (copy-in, TZ 2.62);
+(c) leftover Git engine for
 **shared** Markdown merge in the current stack (Stage 3 GitHub App). Do not
 treat GitHub as the product disk. Do not add MinIO/S3/Gitea because of 2.61.
 
@@ -269,7 +274,7 @@ the product UI.
 GraphNotes should handle:
 - application users and permissions
 - the hosted personal store (`.md` / ZIP / in-app) as the **default** personal
-  rhizome; optional connected personal git remotes (XOR)
+  rhizome; optional connected personal git remotes (copy-in)
 - binding one shared knowledge repository in the current leftover stack
 - Differ (one-way personal layer → published shared; connected git is
   re-read at public HEAD on Differ/proposal)
@@ -305,7 +310,7 @@ GraphNotes should handle:
   (accepted contract); no button and no contract hint otherwise. After the
   button the widget is **MDXEditor** (rich + source); read stays the
   GraphNotes Markdown preview. Save is `PUT /api/personal/notes/{path}` with
-  `source` + `expected_hash`; git commit XOR upload store; existing path
+  `source` + `expected_hash`; local personal store; existing path
   only (404 if missing, 409 if hash stale). In-app saves record
   `rhizome_events` (`edited` / `linked` / `unlinked`) with `owner_user_id`;
   `GET /api/cards/{path}/feed` is that history (no Markdown bodies); personal
@@ -327,16 +332,17 @@ Do not replace writing on GraphNotes with a second Obsidian (live preview,
 writes **own personal** notes only after «Отредактировать карточку»
 (TZ 2.50 / MDXEditor, TZ 2.49): `PUT /api/personal/notes/{path}`
 (author contract; write the local store; leftover may still commit git;
-no new path from the card page). Do not store canonical **published shared**
-note bodies in PostgreSQL.
+no new path from the card page). Published shared working copies live in
+`shared_notes` after copy-in; Differ remains the write gate.
 
 Initial product store concept:
 
 ```text
 GraphNotes personal store             = always the working copy (TZ 2.62)
-git / later Dropbox / Google Drive    = connectors that copy .md into that store
-shared knowledge repo default branch  = leftover merge engine for approved shared
-.md / ZIP upload                      = copy into the same local store
+GraphNotes shared store               = working copy of published rhizome (TZ 2.63)
+git / later Dropbox / Google Drive    = connectors that copy .md into those stores
+shared knowledge repo                 = leftover merge-out after editor accept
+.md / ZIP upload                      = copy into the same local personal store
 proposal                              = selected Differ results, queued for editors
 Differ                                = local personal copy → published shared
 ```
@@ -499,15 +505,17 @@ This section is a technical verification contract: the exact storage schema and 
 
 Key product invariants that the technical architecture must preserve:
 
-- Personal layer inputs (TZ 2.62): GraphNotes **local store is always** the
-  working copy. Upload / in-app write that store. Git (and later Dropbox /
-  Google Drive) **copy** `.md` into it. One active connector; do not merge two
-  remotes. Differ is one-way local copy → published shared. Upload is not a
-  write into published shared. After editor accept, canon of those paths is
-  the published shared rhizome (leftover stack may still commit shared git).
-  Current git live-read without copy-in and in-app commit to GitHub are leftover vs 2.62.
-- Unpublished personal bytes live in the owner's GraphNotes store
-  (not published shared bodies in PostgreSQL). Upload history (who / when /
+- Personal and shared working copies (TZ 2.62–2.63): GraphNotes **local
+  stores are always** the working copy. Upload / in-app write personal.
+  GitHub (and later Dropbox / Google Drive) **copy** `.md` in. One active
+  personal connector; do not merge two remotes. Differ is one-way local
+  copy → published shared. Upload is not a write into published shared.
+  After editor accept, the published shared working copy is `shared_notes`
+  (leftover stack may still push shared git, then copy-in). Git live-read
+  without copy-in and in-app commit to GitHub are leftover vs 2.63.
+- Unpublished personal bytes live in the owner's GraphNotes store.
+  Published shared bodies in `shared_notes` are the serving copy, not a
+  Differ bypass. Upload history (who / when /
   path / hash / Differ/proposal outcome) is GraphNotes-derived, not git log.
 - Contribution states: `personal`, `proposed`, `accepted`. Closed corpus
   (ADR-011) is a derived `closed_paths` flag. **Paid access level** is the
@@ -560,12 +568,12 @@ Authentication / users:
 Personal layer (connected git **or** upload without git):
 - `POST /api/personal/connect` (from account settings; requires author contract)
 - `DELETE /api/personal/connect` (unbind personal git; uploads remain)
-- `POST /api/personal/import-md` (`.md`/ZIP only if git is not connected; else 409)
+- `POST /api/personal/import-md` (`.md`/ZIP into the local personal store)
 - `GET  /api/personal/notes` (read-only index of the caller's personal layer)
 - `GET  /api/personal/notes/{id}`
 - `PUT  /api/personal/notes/{path}` (TZ 2.50: own personal only after the
   card-page edit button; `source` + `expected_hash`; author contract;
-  git XOR upload; no new path; 409 stale; records owner-scoped feed events)
+  local store; no new path; 409 stale; records owner-scoped feed events)
 - `GET  /api/personal/uploads` (upload history: who / when / path / hash)
 - `GET  /api/personal/closed-paths`
 - `PUT  /api/personal/closed-paths`

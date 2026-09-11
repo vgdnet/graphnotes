@@ -8,7 +8,8 @@ stay directed. Hover highlights the closed neighborhood.
 `GET /api/graph/shared` is readable without login. Logged-in users get
 `GET /api/graph/personal-overlay`: the same bounded shared page plus **ваша
 часть ризомы** — personal notes that wikilink into the visible shared page
-(connected git, or server uploads if git is not connected). This is the
+(connected git, or server uploads if git is not connected — **default** store,
+TZ 2.61). This is the
 stitch/intersection, not the whole personal git. `GET /api/graph/personal`
 is **ваша личная ризома**: the full indexed personal tree (bounded). Both
 layers are computed from `note_index` / `note_links`; the user does not
@@ -28,7 +29,10 @@ read-only. In-app saves land in the card
 interaction feed (`GET /api/cards/{path}/feed`), not as note bodies.
 Shared, others' personal (`personal:{uuid}:…`), and proposal cards stay
 read-only (no edit button, no author-contract tease on the card). Comments
-stay on published shared. Guests do not receive card bodies.
+stay on published shared. Actor names in that feed open the public person
+card (`#/users/{uuid}`, TZ 2.60): achievement counters (proposals, created
+shared cards, published edits, accepted notes/links), not another vault.
+Guests do not receive rhizome card bodies.
 `[[wikilink]]` hrefs inherit the open card's layer (TZ 2.54): from
 `#/card/personal:{path}` a wiki target becomes `personal:{file}` (foreign
 personal keeps the owner UUID; proposal keeps the proposal id). The same

@@ -3,7 +3,8 @@
 Status: Accepted
 Accepted: 2026-08-19
 Refines: ADR-007 (personal rhizome location and ingest); ADR-003 (Git remains the merge engine)
-Partially superseded by: ADR-009 (Differ and ZIP download replace take-into-git)
+Partially superseded by: ADR-009 (Differ and ZIP download replace take-into-git);
+  TZ 2.61 / amendment 2026-09-11 (hosted personal store is the default; git XOR)
 
 ## Context
 
@@ -124,3 +125,44 @@ thin wrapper around GitHub PR vocabulary.
   later ADR explicitly reverses this decision.
 - ADR-007 still holds: one shared rhizome, global `user < editor < admin`,
   no workspaces, atomic publication, no self-approval.
+
+## Amendment 2026-09-11 (TZ 2.61)
+
+Owner decision: GraphNotes **does** host each person's Markdown as the default
+store. Product analog is [Obsidian Publish](https://publish.obsidian.md): hosted
+graph + cards, plus **access rights**, plus **exactly one** shared rhizome
+assembled through Differ → editor queue.
+
+The sentence «GraphNotes does not host a second personal vault» is leftover
+against this product. Hosting personal notes is the product. Becoming a
+**second Obsidian-class editor** (live preview + `[[ ]]` autocomplete +
+backlinks as the product) remains forbidden.
+
+Git ingest is an **optional XOR**, not primary. ZIP/MD upload and the thin
+in-app editor of **own personal cards** are the default path. Do not merge
+two stores. Do not copy published shared bodies into PostgreSQL as a second
+canon that bypasses Differ.
+
+«Two Gits» is leftover for the current shared-merge stack (ADR-003), not the
+user story. Source delivery `nord → GitHub → rhizome-test → rhizome` is
+unchanged (ADR-006). Do not add MinIO/S3/Gitea in this wave.
+
+## Amendment 2026-09-11 (TZ 2.62)
+
+Owner: the GraphNotes personal store is **always** the working copy.
+External disks (git now; Dropbox / Google Drive later) are **connectors**:
+they **copy** the user's `.md` into that store. Differ, graph and cards read
+the copy, not the remote live. XOR of two live stores is withdrawn. One
+active connector at a time; do not merge Dropbox+git without a new decision.
+Disconnecting a connector does not delete already copied files.
+Do not implement Dropbox/Drive in this wave. Current git live-read / wipe on
+disconnect / in-app commit to GitHub are leftover vs this amendment.
+
+## Amendment 2026-09-11 (TZ 2.63)
+
+GitHub is **only a source** for knowledge Markdown, including the published
+shared rhizome. GraphNotes always keeps the working copy locally
+(`personal_uploads`, `shared_notes`). Cards, Differ and shared index rebuild
+read those copies. Editor accept may still push via the GitHub App as leftover
+merge, then copy-in. «No hosted vault» does not forbid these local stores.
+Do not add MinIO/S3/Gitea. Do not rip the GitHub App this wave.

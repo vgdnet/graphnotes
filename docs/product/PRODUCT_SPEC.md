@@ -30,7 +30,7 @@
 | § | Файл | О чём |
 | --- | --- | --- |
 | 1 | этот файл | назначение и как читать ТЗ |
-| 2 | [vision.md](vision.md) | видение: публикатор MD (как Obsidian Publish) с правами и одной общей ризомой; локальный склад у нас; поиск из индекса, не из тел в таблицах (ТЗ 2.61–2.63) |
+| 2 | [vision.md](vision.md) | видение: публикатор MD (как Obsidian Publish) с правами и одной общей ризомой; GitHub только источник, рабочие копии у нас (ТЗ 2.61–2.63) |
 | 3 | [principles.md](principles.md) | неподвижные принципы |
 | 4 | [terms.md](terms.md) | термины |
 | 5 | [roles.md](roles.md) | роли `user` / `editor` / `admin`, статус автора, карточки, статистика |
@@ -38,7 +38,7 @@
 | **5.6** | **[access.md](access.md)** | **`/graph` = общий холст; `/my_graph` = личный слой; `/card` = стартовая карточка; `/` → `/graph`; уровни доступа** |
 | **6.1.3** | **[vsepsy-identity.md](vsepsy-identity.md)** | **учётка vsepsy.ru; ачивка ризомы (граф / счётчики) для витрины и своего сайта** |
 | **6.5.2** | **[search-and-card.md](search-and-card.md)** | **карта адресов 2.58–2.60: `/card` `/queue` `/user` `/users/{uuid}` `/offer` `/graph` `/search` `/my_graph` `/contribution` + `/differ`; стопка 2.55–2.56** |
-| 6 | [functional.md](functional.md) | функциональные требования (auth, склад у нас XOR git, Differ, граф, очередь) |
+| 6 | [functional.md](functional.md) | функциональные требования (auth, склад у нас, git copy-in, Differ, граф, очередь) |
 | 7 | [api.md](api.md) | черновой контракт API |
 | 8–9 | [acceptance-and-nfr.md](acceptance-and-nfr.md) | приёмка MVP и нефункциональные требования |
 | 10–15 | [roadmap-and-governance.md](roadmap-and-governance.md) | вне MVP, стадии, ADR, история ТЗ |

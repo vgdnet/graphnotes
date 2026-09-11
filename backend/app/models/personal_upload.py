@@ -8,7 +8,11 @@ from app.db.base import Base
 
 
 class PersonalUpload(Base):
-    """Unpublished personal-layer staging when the user has no connected git."""
+    """Local personal-store copy of a Markdown path (TZ 2.62 working copy).
+
+    Connectors (git now; Dropbox / Google Drive later) copy into these rows.
+    Live-git-as-store is leftover vs that TZ.
+    """
 
     __tablename__ = "personal_uploads"
     __table_args__ = (

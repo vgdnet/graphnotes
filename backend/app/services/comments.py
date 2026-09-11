@@ -2,8 +2,9 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.comment import NoteComment
-from app.models.github import PersonalRepository, SharedRepository
+from app.models.github import PersonalRepository
 from app.models.personal_upload import PersonalUpload
+from app.models.shared_note import SharedNote
 from app.models.user import User, UserRole
 from app.services.git_paths import PathError, normalize_git_path
 from app.services.github import GitHubAppClient, GitHubAppError
@@ -33,28 +34,27 @@ def _public(row: NoteComment, author: User) -> dict[str, object]:
 
 
 async def _published_paths(database: AsyncSession, client: GitHubAppClient) -> set[str]:
-    row = await database.get(SharedRepository, SHARED_SINGLETON_ID)
-    if row is None or not row.observed_sha:
-        return set()
-    try:
-        return set(await client.list_markdown_files(row.owner, row.name, row.observed_sha))
-    except GitHubAppError as exc:
-        raise CommentError(502, exc.message) from exc
+    await refresh_shared(database, client)
+    rows = (await database.scalars(select(SharedNote.path))).all()
+    return set(rows)
 
 
 async def _viewer_personal_paths(
     database: AsyncSession, user: User, client: GitHubAppClient
 ) -> set[str]:
+    await refresh_personal(database, user.id, client)
+    uploads = (
+        await database.scalars(
+            select(PersonalUpload.path).where(PersonalUpload.user_id == user.id)
+        )
+    ).all()
+    if uploads:
+        return set(uploads)
     row = await database.scalar(
         select(PersonalRepository).where(PersonalRepository.user_id == user.id)
     )
     if row is None or not row.observed_sha:
-        uploads = (
-            await database.scalars(
-                select(PersonalUpload.path).where(PersonalUpload.user_id == user.id)
-            )
-        ).all()
-        return set(uploads)
+        return set()
     try:
         return set(await client.list_markdown_files(row.owner, row.name, row.observed_sha))
     except GitHubAppError as exc:

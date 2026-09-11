@@ -108,3 +108,12 @@ the download path and not an in-app vault.
   comparison model.
 - GraphNotes must not require the user to understand branch, SHA or Pull
   Request to download, compare, propose or decide.
+
+## Amendment 2026-09-11 (TZ 2.61)
+
+Differ remains one-way personal → published shared. Personal «current» is the
+GraphNotes hosted store **or** optional git HEAD (XOR), not git-only.
+ZIP download of published shared stays not the product path (TZ 2.5).
+Upload is the **default** ingest when git is off, not a fallback into git.
+Markdown is still the source of truth (ADR-001); it does not have to live on
+GitHub for the user to have a graph.
