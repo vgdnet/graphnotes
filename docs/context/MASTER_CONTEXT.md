@@ -2,7 +2,21 @@
 
 Updated: 2026-09-12
 Status: canonical architecture baseline
-Aligned with PRODUCT_SPEC 2.92. TZ 2.85–2.87 / §17 **shipped on
+Aligned with PRODUCT_SPEC 2.95. Person card `#/users/{uuid}` is the same
+for guests and signed-in users (`store` counts + inviter; no foreign
+personal bodies). TZ 2.94: card history is **not** fetched
+with the card body. Button «История правок» loads `GET /api/cards/{path}/revisions`
+— last **30** snapshots + unified diff (who / when / what changed).
+Table `card_revisions` (Alembic `0021`); working copy stays in the store;
+this is not a second living canon. ADR-013 `rhizome_events` stay body-less
+for contribution counts; the card page does not auto-fetch `/feed`.
+TZ 2.93: the website Markdown editor is
+**off** (no «Отредактировать карточку», `PersonalCardEditor` unmounted)
+until reverse download / reverse sync exists; taking another participant’s
+card into one’s own rhizome later unlocks edit + reverse sync for those
+cards. Do not restore historical `take-from-shared` without a new decision.
+`PUT /api/personal/notes/{path}` stays for the plugin and TZ 2.66 stub
+create. TZ 2.85–2.87 / §17 **shipped on
 `rhizome-test`**: any active account may invite by email link; no
 Register tab; person card shows «Приглашен … по приглашению от @user»
 (inviter login). TZ 2.92: the same line is on `/user`, «Мой вклад»,
@@ -31,7 +45,7 @@ is kept for Bearer lookup. TZ 2.73–2.74:
 token access log on `/user` (who / IP / which token), ~6 months in the
 working DB, hard ceiling ~1 year; a separate logs database is later.
 Shared rhizome and Differ stay unchanged. TZ 2.67: personal ingest that hits the
-Markdown indexer (ZIP, one `.md`, in-app save, personal git copy-in) is
+Markdown indexer (ZIP, one `.md`, plugin write, personal git copy-in) is
 scanned for **white noise** (garbage, not notes). Combined signals — not
 one weak heuristic: invalid UTF-8 / binary `.md` (NUL), Shannon entropy
 ≥ ~7.5 or incompressible high-entropy printable, almost no letters
@@ -86,38 +100,35 @@ production deploy — ADR-015 / TZ 2.83); `/my_graph` = personal graph layer onl
 `/contribution` = Мой вклад. `/differ` stays Отличающиеся (compare /
 stack-offer target); do not invent `/accepted/differ`. `/` → `/graph`.
 TZ 2.57 wrongly inferred `/user` = person card and `/offer` = combined
-editor queue — withdrawn. Thin in-app edit is own personal only. The
+editor queue — withdrawn. Website in-app edit is **off** (TZ 2.93). The
 transitional own-personal class `#/card/personal:{path}` (hash encodes
-`:` as `%3A`) still mounts `PersonalCardEditor`. Shared stays read-only;
-admin does not in-place-edit published shared. For authors GraphNotes is a
-Markdown publisher with rights and one shared rhizome (TZ 2.61 / Publish
-analog), not a second Obsidian. Thin in-app edit
-is **own personal cards only** after **«Отредактировать карточку»** (card
-opens view-first; no button without author rights). The own-personal route
-is `#/card/personal:{path}` for **any** own file; the hash encodes `:` as
-`%3A` (`#/card/personal%3A…`). That class must mount `PersonalCardEditor`
-(MDXEditor after the button). It was broken on rhizome-test: the editor
-from TZ 2.48–2.50 was not wired/shipped on the card page, so
-`personal:` URLs rendered as shared read-only. Shared / `personal:{uuid}:`
-/ proposal stay read-only; admin does not in-place-edit published shared.
+`:` as `%3A`) is **read-only**; do not mount `PersonalCardEditor`. Shared
+stays read-only; admin does not in-place-edit published shared. For authors
+GraphNotes is a Markdown publisher with rights and one shared rhizome
+(TZ 2.61 / Publish analog), not a second Obsidian. Re-enable the thin
+in-app editor only with reverse download / reverse sync; taking another
+participant’s card into one’s rhizome later unlocks edit + reverse sync
+for those cards. Shared / `personal:{uuid}:` / proposal stay read-only.
 `[[wikilink]]` on a card inherits that card's layer (TZ 2.54 / `qualifyCardPath`):
 own personal → `personal:{file}`; foreign personal → `personal:{uuid}:{file}`;
 proposal → `proposal:{id}:{file}`; already-prefixed targets stay. Shared and
 personal are not collapsed — the same git path can exist in both.
-Widget is MDXEditor
-rich+source + GraphNotes Markdown preview on read; `PUT /api/personal/notes/{path}`
-with `source` + `expected_hash`; write the GraphNotes local store;
-existing path, or a **new** personal path from a missing-link page (TZ 2.66);
-409 if stale. In-app saves record `rhizome_events`
+Card page is GraphNotes Markdown preview only. `PUT /api/personal/notes/{path}`
+with `source` + `expected_hash` stays for the **plugin / API** and a **new**
+personal path from a missing-link page (TZ 2.66); 409 if stale. Plugin /
+upload / copy-in saves record `rhizome_events`
 (`edited` / `linked` / `unlinked`) with `owner_user_id` so they do not mix
 into the shared card feed for the same git path; no Markdown bodies in that
-table. `GET /api/cards/{path}/feed` is the card history. Shared / others'
+table. `GET /api/cards/{path}/revisions` is the on-demand card edit history
+(TZ 2.94, last 30). `GET /api/cards/{path}/feed` stays for contribution
+events and is not fetched when opening a card. Shared / others'
 personal / proposal cards stay read-only; shared changes go through Differ.
 Working copies of **published shared** Markdown live in `shared_notes` after
 copy-in (TZ 2.63); that is not a write path that bypasses Differ. Personal
-hosted Markdown (upload store / in-app) is the product default (TZ 2.61–2.63).
+hosted Markdown (upload store / plugin) is the product default (TZ 2.61–2.63).
 ADR-008 leftover: «no hosted vault» does not forbid
-that store; «no in-app Obsidian» still forbids a second Obsidian-class editor.
+that store; «no in-app Obsidian» forbids a second Obsidian-class editor;
+TZ 2.93 also keeps the thin website editor off until reverse sync.
 The Differ comparison screen chrome is
 **Отличающиеся** (tab and heading); API/entity remain Differ. Author-contract copy (version `2026-09-05`)
 is responsibility for notes/links offered to the shared rhizome, withdraw
@@ -246,7 +257,7 @@ in `docs/decisions/ADR-*.md`.
 GraphNotes is a Markdown publisher with access rights and exactly one shared
 rhizome — analog of Obsidian Publish, not «knowledge lives on GitHub». Each
 user has their own graph (`/my_graph`). People author on the GraphNotes store
-(upload / thin in-app editor of own cards). External disks **copy** `.md` into
+(upload / plugin; website editor off until reverse sync, TZ 2.93). External disks **copy** `.md` into
 that store (TZ 2.62). GitHub also copies published shared `.md` into the
 local shared store (TZ 2.63). GraphNotes shows the one shared rhizome as a graph in the app (read-only
 Markdown, cards). It does **not** offer ZIP download or a product clone of the
@@ -312,8 +323,8 @@ Technologies:
 - Nginx on target host
 - Cytoscape.js plus `cytoscape-fcose` for the shared graph, personal overlay
   and Graph Diff (layout coordinates are UI only)
-- MDXEditor for own-personal card edit after «Отредактировать карточку»
-  (rich + source); GraphNotes Markdown preview on read (TZ 2.49 / 2.50)
+- GraphNotes Markdown preview on the card page; MDXEditor leftover until
+  reverse download / reverse sync (TZ 2.93; was TZ 2.49 / 2.50)
 - Light/dark themes via CSS custom properties on `document.documentElement`
   (`data-theme`); graph stylesheets are rebuilt from those tokens when the
   theme changes. Preference is browser-local, not a user-profile field.
@@ -343,7 +354,7 @@ the product UI.
 
 GraphNotes should handle:
 - application users and permissions
-- the hosted personal store (`.md` / ZIP / in-app) as the **default** personal
+- the hosted personal store (`.md` / ZIP / plugin) as the **default** personal
   rhizome; optional connected personal git remotes (copy-in)
 - binding one shared knowledge repository in the current leftover stack
 - Differ (one-way personal layer → published shared; connected git is
@@ -376,18 +387,19 @@ GraphNotes should handle:
   they can open. Hits include `layer`. `layer=overlay` stays the graph
   stitch, not the card-search default. Proposal files are indexed on
   create and dropped when published; admin may open `personal:{uuid}:{path}`
-- own-personal write (TZ 2.48–2.50): card `#/card/{path}` opens **view-first**.
-  «Отредактировать карточку» exists only for the author's own personal card
-  (accepted contract); no button and no contract hint otherwise. After the
-  button the widget is **MDXEditor** (rich + source); read stays the
-  GraphNotes Markdown preview. Save is `PUT /api/personal/notes/{path}` with
-  `source` + `expected_hash`; local personal store; existing path,
-  or a new personal path from a missing wikilink (TZ 2.66, empty
-  `expected_hash`); 409 if hash stale. In-app saves record
-  `rhizome_events` (`edited` / `linked` / `unlinked`) with `owner_user_id`;
-  `GET /api/cards/{path}/feed` is that history (no Markdown bodies); personal
-  events do not mix into the shared feed for the same git path. Shared,
-  others' personal and proposal cards stay read-only on `GET /api/cards/{path}`.
+- own-personal **read** (TZ 2.93 withdraws 2.48–2.53 website edit): card
+  `#/card/{path}` is **read-only**. No «Отредактировать карточку», no
+  MDXEditor. `PUT /api/personal/notes/{path}` stays for plugin / API and
+  TZ 2.66 missing-wikilink create (empty `expected_hash`); 409 if hash stale.
+  Plugin / upload / copy-in record `rhizome_events` (`edited` / `linked` /
+  `unlinked`) with `owner_user_id` and a `card_revisions` snapshot (last 30,
+  TZ 2.94). `GET /api/cards/{path}/revisions` is on-demand history with the
+  text diff; `/feed` is contribution events (no bodies) and is not fetched
+  on card open. Personal events/revisions do not mix into the shared
+  card of the same git path. Shared, others' personal and proposal cards
+  stay read-only on `GET /api/cards/{path}`. Re-enable the thin editor only
+  with reverse download / reverse sync; taking another participant’s card
+  into one’s rhizome later unlocks edit + reverse sync for those cards.
   Entitlement tables / «ризома автора» payer view remain later (ADR-016)
 - Graph Diff as the structural view of Differ/proposal; derived
   process-local cache keyed by proposal id and base/head SHA (capped);
@@ -400,11 +412,10 @@ user take-away and not the user's disk (TZ 2.61).
 
 Do not build a custom Git/version/3-way-merge engine for the MVP.
 Do not replace writing on GraphNotes with a second Obsidian (live preview,
-`[[ ]]` autocomplete, backlinks as the product). A thin in-app card editor
-writes **own personal** notes only after «Отредактировать карточку»
-(TZ 2.50 / MDXEditor, TZ 2.49): `PUT /api/personal/notes/{path}`
-(author contract; write the local store; leftover may still commit git;
-no new path from the card page). Published shared working copies live in
+`[[ ]]` autocomplete, backlinks as the product). Do not mount the website
+Markdown editor (TZ 2.93) until reverse download / reverse sync exists.
+`PUT /api/personal/notes/{path}` remains for the plugin / API and TZ 2.66
+stub create. Published shared working copies live in
 `shared_notes` after copy-in; Differ remains the write gate.
 
 Initial product store concept:
@@ -596,7 +607,7 @@ This section is a technical verification contract: the exact storage schema and 
 Key product invariants that the technical architecture must preserve:
 
 - Personal and shared working copies (TZ 2.62–2.63): GraphNotes **local
-  stores are always** the working copy. Upload / in-app / Obsidian plugin
+  stores are always** the working copy. Upload / Obsidian plugin
   write personal (`personal_uploads`; attachments in `personal_assets`).
   GitHub (and later Dropbox / Google Drive) **copy** `.md` in. One active
   personal connector; do not merge two remotes. Differ is one-way local
@@ -629,9 +640,9 @@ Key product invariants that the technical architecture must preserve:
   and closed/paid corpus remain product will pending entitlement tables.
   Do not invent a second Markdown canon or a second knowledge repository
   to implement them (ADR-016).
-- Graph UI is visualization plus cards; thin in-app edit is own personal
-  only after view-first «Отредактировать карточку» (TZ 2.50, MDXEditor
-  TZ 2.49), not a vault replacement and not a shared-card editor.
+- Graph UI is visualization plus cards; website in-app edit is **off**
+  (TZ 2.93) until reverse sync; leftover then is own personal only, not a
+  vault replacement and not a shared-card editor.
 - Published shared is not downloadable as ZIP/clone UX (TZ 2.5).
 
 ## 12. MVP API surface (product contract)
@@ -699,7 +710,9 @@ Shared publication and Differ:
 - `GET  /api/cards/{path}` (published shared body is public; `personal:{path}`,
   admin `personal:{uuid}:{path}`, `proposal:{id}:{path}` need a session;
   write is PUT personal, not this route)
-- `GET  /api/cards/{path}/feed` (card history; shared `owner_user_id` null;
+- `GET  /api/cards/{path}/revisions` (TZ 2.94: last 30 snapshots + diff;
+  not fetched with the card; shared guest OK; personal needs a session)
+- `GET  /api/cards/{path}/feed` (contribution events; shared `owner_user_id` null;
   own personal = caller; admin `personal:{uuid}:` = that owner; proposal
   empty; in-app personal edits do not appear on the shared path feed; no bodies)
 - `GET  /api/shared/notes/{path}/feed` (login required; shared events only,
@@ -710,7 +723,9 @@ Shared publication and Differ:
 
 Removed from product surface (TZ 2.5 / 2.6):
 - `GET  /api/shared/archive` (ZIP of published shared — gone; do not restore as UX)
-- `POST /api/personal/take-from-shared` (write shared into personal git — gone)
+- `POST /api/personal/take-from-shared` (write shared into personal git — gone;
+  leftover TZ 2.93: a later “take another participant’s card into my rhizome”
+  is a new decision, not this route restored as-is)
 
 Graph visualization and Graph Diff (Stage-owned):
 - `GET  /api/graph/shared` (`/graph` canvas; no login; public published layer only)

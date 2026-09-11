@@ -113,6 +113,14 @@ class UserCardAchievements(BaseModel):
     edits: int
 
 
+class UserCardStore(BaseModel):
+    personal_notes: int = 0
+    personal_links: int = 0
+    proposed_notes: int = 0
+    proposed_links: int = 0
+    proposed_edit_bytes: int = 0
+
+
 class UserCardInviter(BaseModel):
     id: UUID
     username: str
@@ -128,3 +136,4 @@ class UserCardResponse(BaseModel):
     closed_count: int | None = None
     invited_at: datetime | None = None
     inviter: UserCardInviter | None = None
+    store: UserCardStore

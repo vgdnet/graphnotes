@@ -2,7 +2,16 @@
 
 Updated: 2026-09-12
 
-Product model TZ 2.92 (invite line on current-user cards: person,
+Product model TZ 2.95 (public person card for guests and signed-in:
+inviter + personal/proposed store counts + proposed edit bytes) /
+2.94 (card «История правок» on demand: last 30
+revisions with who / when / what changed; Alembic `0021`; do not fetch
+history with the card body) /
+2.93 (website Markdown editor **off**: no
+«Отредактировать карточку»; reverse download / reverse sync leftover
+re-enables it; taking another participant’s card into one’s rhizome later
+unlocks edit + reverse sync for those cards) /
+2.92 (invite line on current-user cards: person,
 contribution, settings, admin row; data still 2.89 cutover to `@efimov`) /
 2.89 (2.85–2.87 shipped on `rhizome-test`: any account
 may invite by email link; no Register tab; person card «Приглашен …
@@ -41,13 +50,13 @@ from the store, not synthesized from the index. Shared is not a product ZIP.
 TZ 2.62: personal working copy is always the GraphNotes local
 store. Connectors (git now; Dropbox / Drive later) copy `.md` in. Differ
 compares that copy to the shared rhizome. Copy-in on git connect/refresh is
-shipped. In-app save stays on the local store (no write-back to git).
+shipped. In-app save of the website editor is **off** (TZ 2.93); plugin / ZIP /
+copy-in stay on the local store (no write-back to git).
 Disconnect keeps copied files (no `drop_personal_layer`). Alembic
 `0017_obsidian_integration` (tokens, transfers, personal assets,
 `object_version`). ADR-008 leftover «no hosted vault» vs hosted store.
-In-app edit is **own personal cards only**
-(`#/card/personal:{path}`, hash may be `personal%3A`) after view-first
-«Отредактировать карточку» (MDXEditor; GraphNotes preview on read).
+Website in-app edit is **off** until reverse download / reverse sync
+(`#/card/personal:{path}` remains preview; hash may be `personal%3A`).
 TZ 2.54: `[[wikilink]]` inherits the open card layer (personal stays personal).
 Published shared working copies live in `shared_notes` after copy-in (TZ 2.63).
 Current implementation stage is Stage 8. ADR-009: Differ is one-way personal

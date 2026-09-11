@@ -481,6 +481,67 @@ async def get_contributions_me(
     }
 
 
+async def _public_store_stats(
+    database: AsyncSession,
+    *,
+    target: User,
+    body: dict[str, object],
+) -> dict[str, int]:
+    notes = list(body["notes"])
+    edges = list(body["edges"])
+    personal_notes = sum(1 for note in notes if note["state"] == "personal")
+    personal_links = sum(1 for edge in edges if edge["state"] == "personal")
+    uploads = list(
+        (
+            await database.scalars(
+                select(PersonalUpload).where(PersonalUpload.user_id == target.id)
+            )
+        ).all()
+    )
+    if personal_notes == 0:
+        personal_notes = len(uploads)
+    if personal_links == 0:
+        for row in uploads:
+            try:
+                personal_links += len(parse_markdown(row.path, row.body).links)
+            except ValueError:
+                continue
+    proposals = list(
+        (
+            await database.scalars(
+                select(Proposal).where(Proposal.author_user_id == target.id)
+            )
+        ).all()
+    )
+    proposed_paths: set[str] = set()
+    for row in proposals:
+        proposed_paths |= _parse_scope_paths(row.scope_paths)
+    body_by_path = {row.path: row.body for row in uploads}
+    proposed_links = 0
+    proposed_edit_bytes = 0
+    for path in proposed_paths:
+        text = body_by_path.get(path)
+        if not text:
+            continue
+        proposed_edit_bytes += len(text.encode("utf-8"))
+        try:
+            proposed_links += len(parse_markdown(path, text).links)
+        except ValueError:
+            continue
+    proposed_notes = len(proposed_paths)
+    if proposed_notes == 0:
+        proposed_notes = sum(1 for note in notes if note["state"] == "proposed")
+    if proposed_links == 0:
+        proposed_links = sum(1 for edge in edges if edge["state"] == "proposed")
+    return {
+        "personal_notes": personal_notes,
+        "personal_links": personal_links,
+        "proposed_notes": proposed_notes,
+        "proposed_links": proposed_links,
+        "proposed_edit_bytes": proposed_edit_bytes,
+    }
+
+
 async def get_user_card(
     database: AsyncSession,
     *,
@@ -519,6 +580,7 @@ async def get_user_card(
         if inviter_row is not None:
             invited_at = target.invited_at or target.created_at
             inviter = {"id": inviter_row.id, "username": inviter_row.username}
+    store = await _public_store_stats(database, target=target, body=body)
     return {
         "user": {
             "id": target.id,
@@ -542,6 +604,7 @@ async def get_user_card(
         "closed_count": closed_count,
         "invited_at": invited_at,
         "inviter": inviter,
+        "store": store,
     }
 
 

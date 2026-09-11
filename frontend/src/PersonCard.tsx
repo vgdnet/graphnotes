@@ -8,6 +8,14 @@ export type PersonAchievements = {
   edits: number;
 };
 
+export type PersonStore = {
+  personal_notes: number;
+  personal_links: number;
+  proposed_notes: number;
+  proposed_links: number;
+  proposed_edit_bytes: number;
+};
+
 export type PersonCardData = {
   user: {
     id: string;
@@ -21,10 +29,17 @@ export type PersonCardData = {
   };
   self: boolean;
   achievements: PersonAchievements;
+  store?: PersonStore;
   notes: { path: string; title: string; state: string }[];
   invited_at?: string | null;
   inviter?: { id: string; username: string } | null;
 };
+
+export function formatStoreBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} Б`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1).replace(/\.0$/, "")} КБ`;
+  return `${(bytes / (1024 * 1024)).toFixed(1).replace(/\.0$/, "")} МБ`;
+}
 
 const INVITE_MONTHS = [
   "января",
@@ -103,8 +118,8 @@ export function PersonCardPage({
         <p className="eyebrow">Человек</p>
         <h2 id="person-heading">{name}</h2>
         <p className="admin-panel__hint">
-          Публичный след вклада в ризому: счётчики и принятые карточки. Не GitHub-профиль
-          и не чужой личный git.
+          Карточка человека: гость и вошедший видят одни и те же счётчики. Тела чужих
+          личных файлов не открываются.
         </p>
       </div>
       {error && <p className="form-error" role="alert">{error}</p>}
@@ -131,26 +146,30 @@ export function PersonCardPage({
           {card.user.website ? (
             <p className="admin-panel__hint">{card.user.website}</p>
           ) : null}
-          <div className="stat-grid" aria-label="Достижения">
+          <div className="stat-grid" aria-label="Карточка пользователя">
+            <div className="stat-card">
+              <strong>{card.store?.personal_notes ?? 0}</strong>
+              <span>Карточек в личном складе</span>
+            </div>
+            <div className="stat-card">
+              <strong>{card.store?.personal_links ?? 0}</strong>
+              <span>Связей в личном складе</span>
+            </div>
+            <div className="stat-card">
+              <strong>{card.store?.proposed_notes ?? 0}</strong>
+              <span>Карточек предложено в ризому</span>
+            </div>
+            <div className="stat-card">
+              <strong>{card.store?.proposed_links ?? 0}</strong>
+              <span>Связей предложено в ризому</span>
+            </div>
+            <div className="stat-card">
+              <strong>{formatStoreBytes(card.store?.proposed_edit_bytes ?? 0)}</strong>
+              <span>Объём предложенных правок</span>
+            </div>
             <div className="stat-card">
               <strong>{card.achievements.accepted_notes}</strong>
-              <span>Принято карточек</span>
-            </div>
-            <div className="stat-card">
-              <strong>{card.achievements.accepted_links}</strong>
-              <span>Связей в общей</span>
-            </div>
-            <div className="stat-card">
-              <strong>{card.achievements.proposals}</strong>
-              <span>Предложений</span>
-            </div>
-            <div className="stat-card">
-              <strong>{card.achievements.created}</strong>
-              <span>Создано в ризоме</span>
-            </div>
-            <div className="stat-card">
-              <strong>{card.achievements.edits}</strong>
-              <span>Правок в ризоме</span>
+              <span>Принято в общую</span>
             </div>
           </div>
           {card.notes.length > 0 ? (

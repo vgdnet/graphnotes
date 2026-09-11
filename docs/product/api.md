@@ -40,7 +40,8 @@ POST /api/personal/import-md          # .md/ZIP into the local personal store;
                                     # white noise → 400 content is not Markdown notes + lock (TZ 2.67)
 GET  /api/personal/notes              # read-only index of the local personal store
 GET  /api/personal/notes/{id}
-PUT  /api/personal/notes/{path}       # own personal only; source + expected_hash;
+PUT  /api/personal/notes/{path}       # plugin / API / TZ 2.66 stub; not website editor (TZ 2.93);
+                                    # own personal only; source + expected_hash;
                                     # local store; author contract;
                                     # existing path (409 stale) or new personal
                                     # from a missing-link create (TZ 2.66)
@@ -54,9 +55,10 @@ GET  /api/differ                      # one-way personal → published shared;
                                       # тем же маршрутом, не пишет в общую
 GET  /api/contributions/me            # author's notes, links, proposals, counts; derived
                                       # editor/admin also receive own review stats
-GET  /api/users/{id}/card             # public person card: achievements + accepted notes;
-                                      # invited_at + inviter {id, username} as @user (TZ 2.87);
-                                      # omit if no inviter; not personal/closed bodies; not /user settings
+GET  /api/users/{id}/card             # public person card (guest + signed-in, TZ 2.95):
+                                      # inviter; store{personal_notes, personal_links,
+                                      # proposed_notes, proposed_links, proposed_edit_bytes};
+                                      # accepted notes list; not personal/closed bodies; not /user
 GET  /api/admin/contributions         # admin only: same stats for every account
 GET  /api/admin/users                 # list/search/filter; last login, sessions
 POST /api/admin/users                 # admin creates an account
@@ -78,9 +80,14 @@ GET  /api/cards/{path}                # published shared: guest may read the bod
                                       # personal:{path}, personal:{uuid}:{path} (admin),
                                       # proposal:{id}:{path} (author/editor/admin) need a session;
                                       # write is PUT /personal/notes/{path}, not this route
-GET  /api/cards/{path}/feed           # card history; shared = owner null; own personal
+GET  /api/cards/{path}/revisions      # TZ 2.94: last 30 content revisions + unified diff;
+                                      # not loaded with the card; shared = guest OK;
+                                      # personal = session; admin personal:{uuid}:;
+                                      # proposal empty
+GET  /api/cards/{path}/feed           # contribution events; shared = owner null; own personal
                                       # = caller; admin personal:{uuid}: = that owner;
-                                      # proposal empty; no Markdown bodies
+                                      # proposal empty; no Markdown bodies; card page does not
+                                      # fetch this on open
 GET  /api/graph/personal              # ваша личная ризома; caller's full indexed personal tree;
                                       # optional center+depth (personal:{path} stripped)
 GET  /api/graph/personal-overlay      # ваша часть ризомы: shared page + personal notes that wikilink into it;

@@ -74,4 +74,9 @@ async def test_user_card_hides_other_personal_and_closed(
     anon = await guest.get(f"/users/{author_id}/card")
     assert anon.status_code == 200
     assert "secret.md" not in anon.text
+    store = anon.json()["store"]
+    assert store["personal_notes"] >= 1
+    assert store["proposed_notes"] >= 1
+    assert store["proposed_edit_bytes"] >= 0
+    assert "Hidden diary" not in anon.text
     await guest.aclose()

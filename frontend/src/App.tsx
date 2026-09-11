@@ -5,12 +5,12 @@ import type { FilterKind, GraphResponse } from "./GraphView";
 import { graphRequestParams } from "./graphQuery";
 import { GraphDiffView } from "./GraphDiffView";
 import type { GraphDiffResponse } from "./GraphDiffView";
+import { CardHistory } from "./CardHistory";
 import { MarkdownBody } from "./MarkdownBody";
 import { CardSearch } from "./CardSearch";
-import { canShowCardEditButton, cardApiUrl, cardFilePath, cardHash, cardSearchHash, isOwnPersonalCard, missingNotePath, missingNoteTitle } from "./cardRoute";
+import { cardApiUrl, cardFilePath, cardHash, cardSearchHash, isOwnPersonalCard, missingNotePath, missingNoteTitle } from "./cardRoute";
 import { parseAppRoute, personCardHash, routeToView, viewHash, type ShellView } from "./appRoute";
 import { AuthPanel, type AuthMode } from "./AuthPanel";
-import { PersonalCardEditor } from "./PersonalCardEditor";
 import { ActorLink, InviteAttribution, PersonCardPage } from "./PersonCard";
 import { AdminPanel } from "./AdminPanel";
 import { ThemeSwitcher } from "./ThemeSwitcher";
@@ -214,15 +214,6 @@ type ContributionsResponse = {
   review: ReviewStats | null;
 };
 type ContributionUserRef = { id: string; username: string; display_name: string; role: string };
-type NoteFeedEvent = {
-  id: string;
-  kind: string;
-  path: string;
-  other_path: string | null;
-  proposal_id: string | null;
-  created_at: string;
-  actor: { id: string; username: string; display_name: string } | null;
-};
 type NoteCommentItem = {
   id: string;
   path: string;
@@ -253,6 +244,13 @@ type UserCard = {
     created: number;
     edits: number;
   };
+  store?: {
+    personal_notes: number;
+    personal_links: number;
+    proposed_notes: number;
+    proposed_links: number;
+    proposed_edit_bytes: number;
+  };
   notes: { path: string; title: string; state: ContributionState }[];
   review: ReviewStats | null;
   closed_count: number | null;
@@ -270,14 +268,6 @@ type UploadHistoryResponse = { events: UploadEventItem[] };
 function differKindLabel(kind: string): string {
   if (kind === "added") return "нет в общей";
   if (kind === "changed") return "отличается";
-  return kind;
-}
-
-function feedKindLabel(kind: string): string {
-  if (kind === "created") return "создана";
-  if (kind === "edited") return "правка";
-  if (kind === "linked") return "связь";
-  if (kind === "unlinked") return "снята связь";
   return kind;
 }
 
@@ -440,7 +430,6 @@ export function App() {
   const [openNote, setOpenNote] = useState<NoteDetail | null>(null);
   const [missingCard, setMissingCard] = useState<{ path: string; title: string } | null>(null);
   const [stackedPersonal, setStackedPersonal] = useState<NoteDetail | null>(null);
-  const [personalFeed, setPersonalFeed] = useState<NoteFeedEvent[]>([]);
   const [report, setReport] = useState<IngestReport | null>(null);
   const [uploadStamp, setUploadStamp] = useState(0);
   const [contributions, setContributions] = useState<ContributionsResponse | null>(null);
@@ -453,7 +442,6 @@ export function App() {
   const [authorContract, setAuthorContract] = useState<AuthorContract | null>(null);
   const [userCard, setUserCard] = useState<UserCard | null>(null);
   const [personCard, setPersonCard] = useState<UserCard | null>(null);
-  const [noteFeed, setNoteFeed] = useState<NoteFeedEvent[]>([]);
   const [noteComments, setNoteComments] = useState<NoteCommentItem[]>([]);
   const [commentDraft, setCommentDraft] = useState("");
   const [locationHash, setLocationHash] = useState(() => window.location.hash);
@@ -746,12 +734,6 @@ export function App() {
     return (await response.json()) as NoteDetail;
   }
 
-  async function loadCardFeed(path: string): Promise<NoteFeedEvent[]> {
-    const feed = await fetch(`${cardApiUrl(path)}/feed`);
-    if (!feed.ok) return [];
-    return ((await feed.json()) as { events: NoteFeedEvent[] }).events;
-  }
-
   async function createMissingCard(rawPath: string) {
     if (!user) {
       setAuthOpen(true);
@@ -793,8 +775,6 @@ export function App() {
     setMissingCard({ path: filePath, title: missingNoteTitle(filePath) });
     setOpenNote(null);
     setStackedPersonal(null);
-    setNoteFeed([]);
-    setPersonalFeed([]);
     setNoteComments([]);
     setError("");
     setSelectedCardPath(filePath);
@@ -807,8 +787,6 @@ export function App() {
     }
     if (path.startsWith("locked:")) {
       const title = path.slice("locked:".length);
-      setNoteFeed([]);
-      setPersonalFeed([]);
       setNoteComments([]);
       setStackedPersonal(null);
       setOpenNote({
@@ -849,8 +827,6 @@ export function App() {
         setOpenNote(shared);
         setStackedPersonal(personal);
         setSelectedCardPath(shared?.path || `personal:${filePath}`);
-        setNoteFeed(shared ? await loadCardFeed(filePath) : []);
-        setPersonalFeed(personal ? await loadCardFeed(`personal:${filePath}`) : []);
         if (shared) {
           const comments = await fetch(`/api/shared/notes/${encodeURI(filePath)}/comments`);
           if (comments.ok) setNoteComments(((await comments.json()) as { comments: NoteCommentItem[] }).comments);
@@ -868,8 +844,6 @@ export function App() {
       setOpenNote(detail);
       setSelectedCardPath(isPersonal ? path : detail.path);
       if (!detail.locked && !isProposal) {
-        setNoteFeed(await loadCardFeed(path));
-        setPersonalFeed([]);
         if (!isPersonal) {
           const comments = await fetch(`/api/shared/notes/${encodeURI(filePath)}/comments`);
           if (comments.ok) setNoteComments(((await comments.json()) as { comments: NoteCommentItem[] }).comments);
@@ -878,8 +852,6 @@ export function App() {
           setNoteComments([]);
         }
       } else {
-        setNoteFeed([]);
-        setPersonalFeed([]);
         setNoteComments([]);
       }
     } catch (requestError) {
@@ -922,6 +894,7 @@ export function App() {
       setAuthOpen(true);
       return;
     }
+    setAuthOpen(false);
     setView(routeToView(route));
     if (route.kind === "my_graph") {
       setGraphLayer("personal");
@@ -1347,9 +1320,6 @@ export function App() {
       const response = await fetch(`/api/personal/notes/${encodeURI(path)}`);
       if (!response.ok) throw new Error(await readError(response));
       const detail = (await response.json()) as NoteDetail;
-      const feed = await fetch(`${cardApiUrl(`personal:${path}`)}/feed`);
-      if (feed.ok) setNoteFeed(((await feed.json()) as { events: NoteFeedEvent[] }).events);
-      else setNoteFeed([]);
       setNoteComments([]);
       setOpenNote(detail);
     } catch (requestError) {
@@ -1915,59 +1885,15 @@ export function App() {
                 {openNote && (
                   <div className={stackedPersonal ? "card-stack__pane" : undefined}>
                     {stackedPersonal ? <h3 className="card-stack__label">Ризома</h3> : null}
-                    {isOwnPersonalCard(cardPath) && cardPath ? (
-                      <PersonalCardEditor
-                        note={openNote}
-                        cardPath={cardPath}
-                        nodes={sharedGraph?.nodes ?? []}
-                        theme={theme}
-                        canEdit={canShowCardEditButton(cardPath, user.is_author)}
-                        submitting={submitting}
-                        setSubmitting={setSubmitting}
-                        onSaved={(note) => {
-                          setOpenNote(note);
-                          setUploadStamp((value) => value + 1);
-                          void fetch(`${cardApiUrl(cardPath)}/feed`)
-                            .then((response) => (response.ok ? response.json() : null))
-                            .then((payload) => {
-                              if (payload && Array.isArray(payload.events)) {
-                                setNoteFeed(payload.events as NoteFeedEvent[]);
-                              }
-                            });
-                        }}
-                        onError={setError}
-                        signedIn
-                        onCreateMissing={(path) => void createMissingCard(path)}
-                      />
-                    ) : (
-                      <MarkdownBody
-                        body={openNote.body}
-                        note={openNote}
-                        nodes={sharedGraph?.nodes ?? []}
-                        cardPath={cardPath ?? openNote.path}
-                        signedIn
-                        onCreateMissing={(path) => void createMissingCard(path)}
-                      />
-                    )}
-                    {noteFeed.length > 0 && (
-                      <div>
-                        <p className="admin-panel__hint">Кто трогал карточку (не git log и не тела в PostgreSQL).</p>
-                        <ul className="note-list">
-                          {noteFeed.map((item) => (
-                            <li key={item.id}>
-                              <span className="note-link">
-                                <ActorLink actor={item.actor} />
-                                <small>
-                                  {feedKindLabel(item.kind)}
-                                  {item.other_path ? ` · ${item.other_path}` : ""}
-                                  {item.created_at ? ` · ${new Date(item.created_at).toLocaleString("ru")}` : ""}
-                                </small>
-                              </span>
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
+                    <MarkdownBody
+                      body={openNote.body}
+                      note={openNote}
+                      nodes={sharedGraph?.nodes ?? []}
+                      cardPath={cardPath ?? openNote.path}
+                      signedIn
+                      onCreateMissing={(path) => void createMissingCard(path)}
+                    />
+                    <CardHistory cardPath={cardPath ?? openNote.path} />
                     {openNote && !openNote.path.startsWith("personal:") && !openNote.path.startsWith("proposal:") ? (
                     <div>
                       <p className="admin-panel__hint">Комментарии: любой вошедший; editor принимает.</p>
@@ -2000,44 +1926,15 @@ export function App() {
                 {stackedPersonal && (
                   <div className="card-stack__pane">
                     <h3 className="card-stack__label">Ваша</h3>
-                    <PersonalCardEditor
+                    <MarkdownBody
+                      body={stackedPersonal.body}
                       note={stackedPersonal}
-                      cardPath={`personal:${cardFilePath(stackedPersonal.path)}`}
                       nodes={sharedGraph?.nodes ?? []}
-                      theme={theme}
-                      canEdit={canShowCardEditButton(`personal:${cardFilePath(stackedPersonal.path)}`, user.is_author)}
-                      submitting={submitting}
-                      setSubmitting={setSubmitting}
-                      onSaved={(note) => {
-                        setStackedPersonal(note);
-                        setUploadStamp((value) => value + 1);
-                        void fetch(`${cardApiUrl(`personal:${cardFilePath(note.path)}`)}/feed`)
-                          .then((response) => (response.ok ? response.json() : null))
-                          .then((payload) => {
-                            if (payload && Array.isArray(payload.events)) {
-                              setPersonalFeed(payload.events as NoteFeedEvent[]);
-                            }
-                          });
-                      }}
-                      onError={setError}
+                      cardPath={`personal:${cardFilePath(stackedPersonal.path)}`}
                       signedIn
                       onCreateMissing={(path) => void createMissingCard(path)}
                     />
-                    {personalFeed.length > 0 && (
-                      <ul className="note-list">
-                        {personalFeed.map((item) => (
-                          <li key={item.id}>
-                            <span className="note-link">
-                              <ActorLink actor={item.actor} />
-                              <small>
-                                {feedKindLabel(item.kind)}
-                                {item.created_at ? ` · ${new Date(item.created_at).toLocaleString("ru")}` : ""}
-                              </small>
-                            </span>
-                          </li>
-                        ))}
-                      </ul>
-                    )}
+                    <CardHistory cardPath={`personal:${cardFilePath(stackedPersonal.path)}`} />
                   </div>
                 )}
                 {openNote && stackedPersonal && user.is_author && (
@@ -2485,25 +2382,7 @@ export function App() {
                       signedIn
                       onCreateMissing={(path) => void createMissingCard(path)}
                     />
-                  )}
-                  {noteFeed.length > 0 && (
-                    <div>
-                      <p className="admin-panel__hint">Кто трогал карточку (не git log и не тела в PostgreSQL).</p>
-                      <ul className="note-list">
-                        {noteFeed.map((item) => (
-                          <li key={item.id}>
-                            <span className="note-link">
-                              <ActorLink actor={item.actor} />
-                              <small>
-                                {feedKindLabel(item.kind)}
-                                {item.other_path ? ` · ${item.other_path}` : ""}
-                                {item.created_at ? ` · ${new Date(item.created_at).toLocaleString("ru")}` : ""}
-                              </small>
-                            </span>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
+                    <CardHistory cardPath={cardPath ?? `personal:${cardFilePath(openNote.path)}`} />
                   )}
                 </article>
               )}
@@ -2902,7 +2781,10 @@ export function App() {
               setMailChallengeStartedAt(null);
             }}
             loginByMail={loginByMail}
-            onClose={() => { setAuthOpen(false); goHash(viewHash("graph")); }}
+            onClose={() => {
+              setAuthOpen(false);
+              if (parseAppRoute(locationHash).kind === "auth") goHash(viewHash("graph"));
+            }}
           />
         )}
         {view === "search" && (
@@ -2930,6 +2812,7 @@ export function App() {
             ) : openNote ? (
               <article className="note-read">
                 <MarkdownBody body={openNote.body} note={openNote} nodes={sharedGraph?.nodes ?? []} cardPath={cardPath ?? openNote.path} />
+                <CardHistory cardPath={cardPath ?? openNote.path} />
               </article>
             ) : missingCard ? (
               <p className="admin-panel__hint" role="status">Карточки пока нет</p>
