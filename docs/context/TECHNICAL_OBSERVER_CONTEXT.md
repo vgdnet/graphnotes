@@ -1,7 +1,10 @@
 # GraphNotes — канонический контекст Technical Observer
 
 Статус: ACTIVE
-Updated: 2026-09-12 (TZ 2.79 shipped 2.72–2.76. TZ 2.75: plugin key lives in the cabinet and is
+Updated: 2026-09-12 (TZ 2.81: Login tab mail-code / `#/auth/login-code`
+uses the existing SMTP contour. TZ 2.80: guest anti-scrape of published cards is
+product §16 — after `rhizome` prod only, not `rhizome-test`, ADR before
+code. TZ 2.79 shipped 2.72–2.76. TZ 2.75: plugin key lives in the cabinet and is
 copied into the plugin; revoke then mint/copy a new key. Hash-only /
 show-once is not the product. TZ 2.74: access log stays in the working
 DB for ~6 months, hard ceiling ~1 year; do not add a second logs

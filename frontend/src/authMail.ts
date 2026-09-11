@@ -30,6 +30,7 @@ export function remainingMailCodeMs(
 }
 
 export type ResetFormPhase = "request" | "set-password";
+export type LoginFormPhase = "password" | "request" | "enter-code";
 
 export function resetFormPhase(
   token: string,
@@ -42,4 +43,17 @@ export function resetFormPhase(
     return "request";
   }
   return "set-password";
+}
+
+export function loginFormPhase(
+  mailRequested: boolean,
+  startedAtMs: number | null,
+  ttlMinutes: number,
+  nowMs = Date.now(),
+): LoginFormPhase {
+  if (!mailRequested) return "password";
+  if (startedAtMs != null && !mailCodeExpired(startedAtMs, ttlMinutes, nowMs)) {
+    return "enter-code";
+  }
+  return "request";
 }

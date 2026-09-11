@@ -3,6 +3,7 @@ import { test } from "node:test";
 
 import {
   DEFAULT_MAIL_CODE_TTL_MINUTES,
+  loginFormPhase,
   mailCodeExpired,
   parseAuthHash,
   remainingMailCodeMs,
@@ -31,4 +32,12 @@ test("expired reset token returns the request-email form", () => {
   assert.equal(resetFormPhase("live-token", started, 30, started + 1_000), "set-password");
   assert.equal(resetFormPhase("live-token", started, 30, started + 30 * 60 * 1000), "request");
   assert.equal(resetFormPhase("", started, 30, started + 1_000), "request");
+});
+
+test("login-by-mail stays on the login tab and returns to request after expiry", () => {
+  const started = 1_000_000;
+  assert.equal(loginFormPhase(false, started, 30, started + 1_000), "password");
+  assert.equal(loginFormPhase(true, null, 30, started + 1_000), "request");
+  assert.equal(loginFormPhase(true, started, 30, started + 1_000), "enter-code");
+  assert.equal(loginFormPhase(true, started, 30, started + 30 * 60 * 1000), "request");
 });

@@ -408,6 +408,7 @@ export function App() {
   const [integrationTokens, setIntegrationTokens] = useState<IntegrationToken[]>([]);
   const [integrationAccess, setIntegrationAccess] = useState<IntegrationAccess[]>([]);
   const [mode, setMode] = useState<AuthMode>("login");
+  const [loginByMail, setLoginByMail] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [mailConfigured, setMailConfigured] = useState(false);
@@ -1321,15 +1322,25 @@ export function App() {
     setAuthOpen(false);
     setAuthNote("");
     setResetToken("");
+    setLoginByMail(false);
     setMailChallengeStartedAt(null);
     const route = parseAppRoute(window.location.hash);
     if (route.kind === "auth" || route.kind === "graph") goHash(viewHash("graph"));
   }
 
-  function expireMailChallenge(message: string) {
+  function expireMailChallenge(message: string, nextMode: AuthMode = mode) {
     setResetToken("");
     setMailChallengeStartedAt(null);
-    setMode("reset");
+    if (nextMode === "login") {
+      setMode("login");
+      setLoginByMail(true);
+    } else if (nextMode === "confirm") {
+      setMode("confirm");
+      setLoginByMail(false);
+    } else {
+      setMode("reset");
+      setLoginByMail(false);
+    }
     setAuthOpen(true);
     setAuthNote(message);
     goHash("#/auth");
@@ -1364,8 +1375,10 @@ export function App() {
       if (!response.ok) {
         const message = await readError(response);
         if (response.status === 401) {
-          setMode("confirm");
-          expireMailChallenge("Ссылка или код истекли. Запросите письмо снова.");
+          expireMailChallenge(
+            "Ссылка или код истекли. Запросите письмо снова.",
+            purpose === "login" ? "login" : "confirm",
+          );
         }
         throw new Error(message);
       }
@@ -1387,10 +1400,15 @@ export function App() {
     if (parsed.purpose === "reset") {
       setAuthOpen(true);
       setMode("reset");
+      setLoginByMail(false);
       setResetToken(parsed.token);
       setMailChallengeStartedAt(Date.now());
       setAuthNote("Введите новый пароль, чтобы завершить сброс.");
       return;
+    }
+    if (parsed.purpose === "login") {
+      setMode("login");
+      setLoginByMail(true);
     }
     void verifyEmailToken(parsed.purpose, parsed.token);
     // hash consume once on load / hash change
@@ -1465,6 +1483,37 @@ export function App() {
           body: JSON.stringify({ email, purpose: "confirm", code }),
         });
         if (!verified.ok) throw new Error(await readError(verified));
+        await finishSignedIn((await verified.json()) as User);
+        formElement.reset();
+        return;
+      }
+
+      if (mode === "login" && loginByMail) {
+        const identifier = String(form.get("identifier") || form.get("username") || "");
+        const code = String(form.get("code") || "").trim();
+        if (!code) {
+          const requested = await fetch("/api/auth/email/request", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ identifier, purpose: "login" }),
+          });
+          if (!requested.ok) throw new Error(await readError(requested));
+          setMailChallengeStartedAt(Date.now());
+          setAuthNote("Если такая учётка есть, письмо уже на её почте.");
+          return;
+        }
+        const verified = await fetch("/api/auth/email/verify", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ identifier, purpose: "login", code }),
+        });
+        if (!verified.ok) {
+          const message = await readError(verified);
+          if (verified.status === 401) {
+            expireMailChallenge("Ссылка или код истекли. Запросите письмо снова.", "login");
+          }
+          throw new Error(message);
+        }
         await finishSignedIn((await verified.json()) as User);
         formElement.reset();
         return;
@@ -2129,7 +2178,7 @@ export function App() {
             {settingsBlock === "integrations" && (
               <div className="settings-stack">
                 <p className="admin-panel__hint">
-                  Ключ живёт в кабинете: создайте и скопируйте в плагин. Плагин запомнит. Чужой вход — отзовите ключ здесь. Доступ вернули — новый ключ снова из кабинета в плагин. Общую ризому и Differ ключ не трогает.
+                  Ключ живёт в кабинете: создайте и скопируйте в плагин. Плагин запомнит. Срок по умолчанию 30 дней, не больше 90. Чужой вход — отзовите ключ здесь. Доступ вернули — новый ключ снова из кабинета в плагин. Общую ризому и Differ ключ не трогает.
                 </p>
                 <form className="connect-form" onSubmit={(event) => void createIntegrationToken(event)}>
                   <label>
@@ -2731,6 +2780,7 @@ export function App() {
             submitting={submitting}
             onMode={(next) => {
               setMode(next);
+              setLoginByMail(false);
               setError("");
               setAuthNote("");
               setResetToken("");
@@ -2738,6 +2788,13 @@ export function App() {
             }}
             onSubmit={(event) => void submitAuth(event)}
             onExpireReset={expireMailChallenge}
+            onLoginByMail={(next) => {
+              setLoginByMail(next);
+              setError("");
+              setAuthNote("");
+              setMailChallengeStartedAt(null);
+            }}
+            loginByMail={loginByMail}
             onClose={() => { setAuthOpen(false); goHash(viewHash("graph")); }}
           />
         )}

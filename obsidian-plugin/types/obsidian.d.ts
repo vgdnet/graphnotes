@@ -5,6 +5,7 @@ interface HTMLElement {
   createEl<K extends keyof HTMLElementTagNameMap>(tag: K, o?: string | { text?: string; cls?: string; type?: string; placeholder?: string; href?: string; attr?: Record<string, string>; value?: string }): HTMLElementTagNameMap[K];
   createEl(tag: string, o?: string | { text?: string; cls?: string; type?: string; placeholder?: string; href?: string; attr?: Record<string, string>; value?: string }): HTMLElement;
   createDiv(o?: string | { cls?: string; text?: string }): HTMLDivElement;
+  createSpan(o?: string | { cls?: string; text?: string }): HTMLSpanElement;
   setAttr(name: string, value: string): void;
   setText(text: string): void;
 }

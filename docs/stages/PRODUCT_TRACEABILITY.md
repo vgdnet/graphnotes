@@ -1,7 +1,7 @@
 # Product requirements to Stage traceability
 
 Статус: DERIVED / MAINTAINED
-Источник: `docs/product/PRODUCT_SPEC.md` version 2.76
+Источник: `docs/product/PRODUCT_SPEC.md` version 2.81
 
 Матрица маршрутизирует канонические требования в Stage-файлы и не изменяет
 `PRODUCT_SPEC.md`.
@@ -32,7 +32,7 @@
 | PRODUCT_SPEC section | Requirement group | Owning Stage |
 | --- | --- | --- |
 | 6.1 | UUID account, password hash, session, active state, global RBAC | 2 |
-| 6.1.2 | SMTP: register sends `#/auth/confirm?token=` + 6-digit code; no session until confirm | 2 |
+| 6.1.2 | SMTP: register sends `#/auth/confirm?token=` + 6-digit code; no session until confirm; Login tab «Войти письмом» (TZ 2.81) | 2 |
 | 5.5 | Account settings: required email; optional phone/Telegram; git; author contract; Obsidian plugin token; chrome: name in header opens settings, logout at bottom | next wave; email at register; token TZ 2.68–2.76 |
 | 5.5.4 | Light/dark Theme Switcher (sliding sun/moon pill, not text buttons); localStorage | 6 (graph UX) |
 | 5.6 | Start graph always; guest reads published shared cards + side local graph; closed slice not editor queue; access-level entitlement (ADR-016) | 6 |
@@ -52,6 +52,7 @@
 | 6.4.1 | Rhizome card change stats (who/when/which link); actor name opens `#/users/{uuid}`; personal in-app edits owner-scoped; no bodies in PostgreSQL | 6 |
 | 6.5 | bounded shared Graph API, personal overlay, local ego-graph view (весь / локальный, depth 1–4, «Показать всё»), Cytoscape UI, **fCoSE** live layout | 5, 6 |
 | 6.5.2 | `#/search` role-scoped search; `#/card/{path}` view-first; `#/users/{uuid}` person card; own personal edit after «Отредактировать карточку» | 6, 7, 8 |
+| 16 | Guest anti-scrape of published cards (1 IP → many unique paths); after `rhizome` prod only; not `rhizome-test` (TZ 2.80) | after first production deploy; ADR before code |
 | 6.6 | Differ entity; one-way personal → published shared; merge-into-shared rules | 7 |
 | 6.6 | Connected git: Differ/proposal read **current public HEAD** (Obsidian push); poller/webhook backup; no second clone | 7 |
 | 6.6.2 | Author contribution; Differ extended, not replaced; three states personal/proposed/accepted | next wave |

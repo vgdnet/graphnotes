@@ -1,6 +1,7 @@
 import type { FormEvent } from "react";
 import {
   DEFAULT_MAIL_CODE_TTL_MINUTES,
+  loginFormPhase,
   remainingMailCodeMs,
   resetFormPhase,
 } from "./authMail";
@@ -14,12 +15,14 @@ export function AuthPanel({
   mailChallengeStartedAt,
   mailChallengeClock,
   resetToken,
+  loginByMail,
   authNote,
   error,
   submitting,
   onMode,
   onSubmit,
   onExpireReset,
+  onLoginByMail,
   onClose,
 }: {
   mode: AuthMode;
@@ -28,21 +31,25 @@ export function AuthPanel({
   mailChallengeStartedAt: number | null;
   mailChallengeClock: number;
   resetToken: string;
+  loginByMail: boolean;
   authNote: string;
   error: string;
   submitting: boolean;
   onMode: (mode: AuthMode) => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   onExpireReset: (message: string) => void;
+  onLoginByMail: (next: boolean) => void;
   onClose: () => void;
 }) {
   const now = mailChallengeClock || Date.now();
   const resetPhase = resetFormPhase(resetToken, mailChallengeStartedAt, mailCodeTtlMinutes, now);
+  const loginPhase = loginFormPhase(loginByMail, mailChallengeStartedAt, mailCodeTtlMinutes, now);
   const remainingMin = mailChallengeStartedAt
     ? Math.ceil(remainingMailCodeMs(mailChallengeStartedAt, mailCodeTtlMinutes, now) / 60000)
     : 0;
 
   function switchMode(next: AuthMode) {
+    onLoginByMail(false);
     onMode(next);
   }
 
@@ -91,7 +98,7 @@ export function AuthPanel({
           )}
         </div>
         <form onSubmit={onSubmit}>
-          {mode === "login" && (
+          {mode === "login" && loginPhase === "password" && (
             <>
               <label>
                 Логин или почта
@@ -103,11 +110,56 @@ export function AuthPanel({
               </label>
               {mailConfigured && (
                 <p className="hint">
+                  <button className="auth-link" type="button" onClick={() => onLoginByMail(true)}>
+                    Войти письмом
+                  </button>
+                  {" · "}
                   <button className="auth-link" type="button" onClick={() => switchMode("reset")}>
                     Не помню пароль
                   </button>
                 </p>
               )}
+            </>
+          )}
+          {mode === "login" && loginPhase === "request" && (
+            <>
+              <label>
+                Логин или почта
+                <input name="identifier" minLength={3} maxLength={320} autoComplete="username" required />
+              </label>
+              <p className="hint">
+                Письмо уйдёт на почту учётки, не на случайный адрес. Код и ссылка действуют {mailCodeTtlMinutes} мин.
+              </p>
+              <p className="hint">
+                <button className="auth-link" type="button" onClick={() => onLoginByMail(false)}>
+                  Войти паролем
+                </button>
+              </p>
+            </>
+          )}
+          {mode === "login" && loginPhase === "enter-code" && (
+            <>
+              <label>
+                Логин или почта
+                <input name="identifier" minLength={3} maxLength={320} autoComplete="username" required />
+              </label>
+              <label>
+                Код из письма
+                <input name="code" inputMode="numeric" maxLength={6} autoComplete="one-time-code" />
+              </label>
+              <p className="hint">
+                Код действует {mailCodeTtlMinutes} мин.
+                {mailChallengeStartedAt ? ` Осталось ${remainingMin} мин.` : ""} Ссылка из письма тоже входит.
+              </p>
+              <p className="hint">
+                <button className="auth-link" type="button" onClick={() => onExpireReset("Запросите новое письмо.")}>
+                  Ссылка не работает? Запросить снова
+                </button>
+                {" · "}
+                <button className="auth-link" type="button" onClick={() => onLoginByMail(false)}>
+                  Войти паролем
+                </button>
+              </p>
             </>
           )}
           {mode === "register" && (
@@ -197,7 +249,11 @@ export function AuthPanel({
                   ? "Подтвердить"
                   : mode === "reset"
                     ? (resetPhase === "set-password" ? "Сменить пароль" : "Отправить письмо")
-                    : "Войти"}
+                    : loginPhase === "request"
+                      ? "Отправить письмо"
+                      : loginPhase === "enter-code"
+                        ? "Войти по коду"
+                        : "Войти"}
           </button>
           <p className="hint auth-switch">
             {mode === "login" && (

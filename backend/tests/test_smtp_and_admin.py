@@ -152,6 +152,44 @@ async def test_smtp_registration_confirm_and_email_login(
         assert "pending@example.com" not in serialized or "mail.confirmation_sent" in actions
 
 
+async def test_smtp_login_code_accepts_username_identifier(
+    auth_test_context: tuple[AsyncClient, async_sessionmaker[AsyncSession]],
+    monkeypatch: MonkeyPatch,
+) -> None:
+    client, _ = auth_test_context
+    sent = _enable_smtp(monkeypatch)
+    created = await client.post(
+        "/auth/register",
+        json={
+            "username": "mail-code",
+            "password": "a sufficiently long password",
+            "display_name": "Mail Code",
+            "email": "mail-code@example.com",
+        },
+    )
+    assert created.status_code == 201
+    token = sent[-1]["body"].split("token=", 1)[1].split()[0]
+    confirmed = await client.post(
+        "/auth/email/verify",
+        json={"purpose": "confirm", "token": token},
+    )
+    assert confirmed.status_code == 200
+    await client.post("/auth/logout")
+    asked = await client.post(
+        "/auth/email/request",
+        json={"identifier": "mail-code", "purpose": "login"},
+    )
+    assert asked.status_code == 204
+    code = sent[-1]["body"].split("Код: ", 1)[1].splitlines()[0].strip()
+    via_code = await client.post(
+        "/auth/email/verify",
+        json={"purpose": "login", "identifier": "mail-code", "code": code},
+    )
+    assert via_code.status_code == 200
+    assert via_code.json()["username"] == "mail-code"
+    assert client.cookies.get("graphnotes_session")
+
+
 async def test_smtp_registration_confirm_link_opens_session(
     auth_test_context: tuple[AsyncClient, async_sessionmaker[AsyncSession]],
     monkeypatch: MonkeyPatch,

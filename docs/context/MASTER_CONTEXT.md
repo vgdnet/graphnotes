@@ -2,7 +2,8 @@
 
 Updated: 2026-09-12
 Status: canonical architecture baseline
-Aligned with PRODUCT_SPEC 2.79. TZ 2.68–2.76 shipped (2.79) / §12.1: Obsidian plugin
+Aligned with PRODUCT_SPEC 2.81. TZ 2.81 ships login-by-mail on the Login
+tab (same SMTP contour as confirm/reset). TZ 2.68–2.76 shipped (2.79) / §12.1: Obsidian plugin
 **API** copies selected vault files into the owner's `personal_uploads` /
 `personal_assets`. Desktop **GraphNotes Publisher** lives in
 `obsidian-plugin/` (TZ 2.69). Token is a personal API key (TZ 2.75):
@@ -140,7 +141,11 @@ letter always goes to the **stored account email**, never a typed
 address that is not on file. HTTP 204 is generic (no enumeration).
 Username **or** email identifies
 the same UUID. Auth UI is one chrome: «Вход» / «Регистрация» /
-«Не помню пароль». Mail links use one **public site URL** per install
+«Не помню пароль». On «Вход», when SMTP is on, «Войти письмом»
+requests `purpose=login` (identifier = login or email; letter only to
+the stored inbox) and then accepts the 6-digit code or
+`#/auth/login-code?token=` (TZ 2.81). That is not a fourth tab.
+Mail links use one **public site URL** per install
 (default `https://rhizome.vsepsy.ru`), persisted in
 `installation_settings` and edited on Admin → Установка
 (`PUT /api/admin/operator`). `GRAPHNOTES_PUBLIC_BASE_URL` is bootstrap
@@ -465,6 +470,9 @@ Not needed for the initial MVP unless actual load/features justify them:
 - Kubernetes
 - a second PostgreSQL (or other store) just for logs — later; TZ 2.74
   keeps access history in the working DB with a 6–12 month prune
+- guest anti-scrape of published cards (TZ 2.80 / product §16): after
+  first `rhizome` production deploy only; do **not** implement on
+  `rhizome-test`. No Redis/WAF just for this. ADR before code.
 
 Start simple. Add infrastructure only for measured/observed needs.
 

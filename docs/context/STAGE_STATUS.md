@@ -2,7 +2,7 @@
 
 Updated: 2026-09-12
 
-Product model TZ 2.79 (2.72–2.76 shipped) / §6.3.4: Obsidian plugin **API** copies selected
+Product model TZ 2.81 (login-by-mail on the Login tab) / 2.79 (2.72–2.76 shipped) / §6.3.4: Obsidian plugin **API** copies selected
 vault files into the owner's existing personal store (`personal_uploads` +
 `personal_assets`). Desktop plugin **GraphNotes Publisher** lives in
 `obsidian-plugin/` (TZ 2.69). Token is a personal API key (TZ 2.75):
@@ -396,7 +396,16 @@ TZ 2.5–2.7 on this branch (not merged to main; production
   GraphNotes — Юрий Ефимов, Telegram links). Footer is the About
   button only — no WTFPL/AGPL one-liner, no author-contract control.
   Contract copy stays in Settings. Production `rhizome` not deployed.
-- leftover: separate **logs database** vs working PostgreSQL (TZ 2.74
+- TZ 2.81: Login tab «Войти письмом» (SMTP on) uses the same
+  `POST /auth/email/request` / `verify` contour as confirm/reset;
+  identifier is login or email; letter only to the stored inbox;
+  `#/auth/login-code?token=` still opens a session. Plugin manifest
+  credits Юрий Ефимов. Cabinet hint: token default 30 days, max 90.
+  Production `rhizome` not deployed.
+- leftover: TZ 2.80 / §16 guest anti-scrape (one IP → many unique
+  published cards) **after** first `rhizome` production deploy; do not
+  ship on `rhizome-test`; ADR before code;
+  separate **logs database** vs working PostgreSQL (TZ 2.74
   keeps `integration_token_access` in the working DB with prune);
   rhizome access-level **entitlement tables** / payment
   gateway (ADR-016 + TZ 2.41 name the model and the «ризома автора»

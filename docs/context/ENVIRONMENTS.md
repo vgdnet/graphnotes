@@ -98,6 +98,8 @@ Current deployment decision:
 - do not deploy GraphNotes to `rhizome` yet
 - all feature integration and destructive testing remains on `rhizome-test`
 - production deployment will happen only after a separate explicit owner decision
+- guest anti-scrape of published cards (TZ 2.80 / product §16) is a
+  **post-production** wave: do not enable it on `rhizome-test`
 
 Rules:
 - deploy only a revision already validated on `rhizome-test`

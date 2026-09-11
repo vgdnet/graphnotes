@@ -177,6 +177,11 @@ class GraphNotesSettingTab extends PluginSettingTab {
         });
       }
     }
+
+    const credit = containerEl.createEl('p', { cls: 'gn-muted' });
+    credit.createEl('span', { text: 'Разработчик: ' });
+    const site = credit.createEl('a', { text: 'Юрий Ефимов', href: 'https://psychoanalyst.pro/GraphNotes' });
+    site.setAttr('target', '_blank');
   }
 }
 
