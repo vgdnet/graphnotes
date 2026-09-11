@@ -1,7 +1,7 @@
 # Product requirements to Stage traceability
 
 Статус: DERIVED / MAINTAINED
-Источник: `docs/product/PRODUCT_SPEC.md` version 2.71
+Источник: `docs/product/PRODUCT_SPEC.md` version 2.76
 
 Матрица маршрутизирует канонические требования в Stage-файлы и не изменяет
 `PRODUCT_SPEC.md`.
@@ -33,7 +33,7 @@
 | --- | --- | --- |
 | 6.1 | UUID account, password hash, session, active state, global RBAC | 2 |
 | 6.1.2 | SMTP: register sends `#/auth/confirm?token=` + 6-digit code; no session until confirm | 2 |
-| 5.5 | Account settings: required email; optional phone/Telegram; git; author contract; Obsidian plugin token; chrome: name in header opens settings, logout at bottom | next wave; email at register; token TZ 2.68 |
+| 5.5 | Account settings: required email; optional phone/Telegram; git; author contract; Obsidian plugin token; chrome: name in header opens settings, logout at bottom | next wave; email at register; token TZ 2.68–2.76 |
 | 5.5.4 | Light/dark Theme Switcher (sliding sun/moon pill, not text buttons); localStorage | 6 (graph UX) |
 | 5.6 | Start graph always; guest reads published shared cards + side local graph; closed slice not editor queue; access-level entitlement (ADR-016) | 6 |
 | 5.6.4 | Two graphs = overlay filter; author view of closed slice; load = open in app; not a second repo | next wave |
@@ -45,7 +45,7 @@
 | 5.4.2 | User sees own contribution stats; public person card `#/users/{uuid}` with achievement counters | 6 |
 | 6.2 | local personal + shared stores; GitHub copy-in (TZ 2.63); leftover merge-out; no product clone/ZIP of shared | 3 |
 | 6.3 | no download of published shared; personal working copy is GraphNotes store; git/Dropbox/Drive = copy-in, not a second canon | 4 (upload copies in), 7 (Differ vs local copy) |
-| 6.3.4 / 5.5.7 | GraphNotes Publisher (this repo) + API copy selected vault files into the same personal store; token in Settings like an SSH key (hash on server, secret in plugin); not shared, not Differ | 8 (TZ 2.68–2.70) |
+| 6.3.4 / 5.5.7 | GraphNotes Publisher (this repo) + API copy selected vault files into the same personal store; personal API key stored and shown again in Settings, copied into plugin `data.json` (TZ 2.76); access log / revoke; not shared, not Differ | 8 (TZ 2.68–2.76) |
 | 6.3.2 | Graph personal overlay: from git if connected else server store; layer menu/legend «ваша ризома», never «ваш git» | 6 |
 | 6.3.1 | Upload history in GraphNotes (who/when/hash), not user git log | next wave |
 | 6.4 | revisioned shared/personal/proposal derived index and rebuild | 5 |
@@ -77,7 +77,7 @@
 | proposals, decisions, rollback | 7 |
 | proposal graph diff | 8 |
 | operational/release controls | 9 |
-| Obsidian plugin personal transfer (`/api/integrations/obsidian/v1`, token CRUD) | 8 (TZ 2.68–2.70); personal store only |
+| Obsidian plugin personal transfer (`/api/integrations/obsidian/v1`, token CRUD) | 8 (TZ 2.68–2.76); personal store only |
 
 ## MVP acceptance criteria
 

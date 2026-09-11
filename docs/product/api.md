@@ -22,8 +22,9 @@ GET  /api/author/contract           # public Russian copy (version, WTFPL/AGPL)
 GET  /api/users/me/author-contract  # same copy while signed in
 POST /api/users/me/author-contract  # accept current contract version
 POST /api/users/me/author-contract/withdraw
-POST /api/users/me/integration-tokens   # cookie session; secret once
-GET  /api/users/me/integration-tokens   # id, name, scopes, expiry; no secrets
+POST /api/users/me/integration-tokens   # cookie session; token stored and shown again
+GET  /api/users/me/integration-tokens   # id, name, token, scopes, expiry — token returned for later copy
+GET  /api/users/me/integration-tokens/access  # ~6 months, max ~1y; who / IP / token name; no key
 DELETE /api/users/me/integration-tokens/{id}
 
 GET  /api/repository/status
@@ -97,7 +98,7 @@ GET  /api/integrations/obsidian/v1/transfers/{id}
 DELETE /api/integrations/obsidian/v1/transfers/{id}   # cancel if not applying
 ```
 
-Плагин Obsidian (ТЗ 2.68–2.70 / §6.3.4) пишет **только** в личное хранилище
+Плагин Obsidian (ТЗ 2.68–2.76 / §6.3.4) пишет **только** в личное хранилище
 владельца токена — тот же склад, что `PUT /api/personal/notes/{path}` и
 `POST /api/personal/import-md`. Общую ризому, `shared_notes`, предложения и
 Differ эти методы не меняют.
@@ -106,8 +107,13 @@ Differ эти методы не меняют.
 берёт из токена; клиент **не** передаёт `user_id`, чтобы выбрать чужое
 хранилище. Scopes: `personal:read`, `personal:write`, опционально
 `personal:delete`. Управление токенами — cookie-сессия
-`/api/users/me/integration-tokens` (секрет один раз, дальше хеш; ошибки как у остального
-веб-API: `{detail}`).
+`/api/users/me/integration-tokens` (простой ключ `gnp_…` хранится в
+кабинете и снова отдаётся владельцу сессии, чтобы скопировать позже,
+ТЗ 2.76; ошибки как у остального веб-API: `{detail}`). Плагин помнит
+тот же ключ в `data.json`. История входов —
+`GET /api/users/me/integration-tokens/access` (кто, IP, User-Agent, имя
+и отпечаток токена, маршрут; без ключа; ~183 дня, потолок ~366).
+Отдельная база логов — не этот контракт.
 
 Ошибки префикса `/api/integrations/obsidian/v1` — конверт
 `{error:{code,message,request_id,retryable,details}}`. Коды: `invalid_token`,
