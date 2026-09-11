@@ -46,7 +46,9 @@ GET  /api/differ                      # one-way personal → published shared;
 GET  /api/contributions/me            # author's notes, links, proposals, counts; derived
                                       # editor/admin also receive own review stats
 GET  /api/users/{id}/card             # public person card: achievements + accepted notes;
-                                      # not personal/closed bodies; not /user settings
+                                      # after TZ 2.87 / prod: invited_at + inviter display
+                                      # («Приглашен %date% по приглашению от %@user%»);
+                                      # omit if no inviter; not personal/closed bodies; not /user settings
 GET  /api/admin/contributions         # admin only: same stats for every account
 GET  /api/admin/users                 # list/search/filter; last login, sessions
 POST /api/admin/users                 # admin creates an account

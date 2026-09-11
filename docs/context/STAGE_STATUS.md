@@ -2,8 +2,9 @@
 
 Updated: 2026-09-12
 
-Product model TZ 2.84 (invite-only register after first `rhizome` prod,
-not test; ADR before code) /
+Product model TZ 2.87 (person card invite line; email-link register after
+first `rhizome` prod; any account may invite; same on vsepsy.ru; not
+test; ADR before code) /
 2.83 (Elasticsearch iteration starts **only after the
 first approved rhizome production deploy**; SQL `/search` until then) /
 2.82 (plugin copies vault edits after save into the personal store; no
@@ -422,10 +423,11 @@ TZ 2.5–2.7 on this branch (not merged to main; production
   the first approved rhizome production deploy**; not this branch; SQL
   `/search` until then; §6.5.3 questions 1–9 unanswered; do not add ES
   to Compose;
-- leftover: TZ 2.84 / §17 invite-only register **after** first
-  `rhizome` production deploy (admin invites; own invites after 10
-  editor-accepted shared cards; inviter chain); do not ship on
-  `rhizome-test`; ADR before code;
+- leftover: TZ 2.86–2.87 / §17 invite email-link **after** first
+  `rhizome` production deploy (no Register tab; any account may invite;
+  inviter chain; person card «Приглашен %date% по приглашению от %@user%»;
+  same on vsepsy.ru); do not ship on `rhizome-test`;
+  ADR before code;
   TZ 2.80 / §16 guest anti-scrape (one IP → many unique
   published cards) **after** first `rhizome` production deploy; do not
   ship on `rhizome-test`; ADR before code;

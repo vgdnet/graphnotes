@@ -1,8 +1,11 @@
 # GraphNotes — канонический контекст Technical Observer
 
 Статус: ACTIVE
-Updated: 2026-09-12 (TZ 2.84 / §17: invite-only register after `rhizome`
-prod, not test; ADR before code. TZ 2.83: Elasticsearch iteration starts **only after
+Updated: 2026-09-12 (TZ 2.87 / §17: person card
+«Приглашен %date% по приглашению от %@user%». TZ 2.86 / §17: invite
+is an email link; no Register tab; any account may invite; after
+`rhizome` prod, not test; ADR before code.
+TZ 2.83: Elasticsearch iteration starts **only after
 the first approved rhizome production deploy**; SQL `/search` until then;
 do not add ES to Compose. TZ 2.82: plugin copies vault edits after save;
 no card picker; first dump «Отправить всё»; §6.6.3 marks/topics are site
@@ -133,7 +136,8 @@ PostgreSQL, узлы, связи, теги, поисковый индекс и �
 - app routes (TZ 2.58 / 2.60): `/card` start card (admin settings); `/card/{path}`
   card (2.55–2.56 stack + Differ offer); `/queue` editor queue; `/user`
   **settings** (not person card); `#/users/{uuid}` **public person card**
-  (`GET /api/users/{id}/card`, achievement counters, no unpublished paths);
+  (`GET /api/users/{id}/card`, achievement counters, no unpublished paths;
+  TZ 2.87 after prod: invited_at + inviter display, omit if none);
   `/offer` **my** proposals; `/graph`
   shared canvas; `/search` card search; `/my_graph` personal graph;
   `/contribution` Мой вклад; `/differ` stays Отличающиеся; `/` → `/graph`.

@@ -2,8 +2,11 @@
 
 Updated: 2026-09-12
 Status: canonical architecture baseline
-Aligned with PRODUCT_SPEC 2.84. TZ 2.84 / §17 invite-only register is
-after first `rhizome` prod, not test. TZ 2.83: the Elasticsearch iteration
+Aligned with PRODUCT_SPEC 2.87. TZ 2.87 / §17: person card shows
+Habr-style invite line. TZ 2.86 / §17: invite is an email link;
+no Register tab; any account may invite;
+purpose is the inviter chain (10-card gate removed). Same rule on
+vsepsy.ru. After first `rhizome` prod, not test. TZ 2.83: the Elasticsearch iteration
 (ADR-015) starts **only after the first approved rhizome production
 deploy**. Not this branch; do not add ES to Compose; SQL `/search` until
 then; §6.5.3 questions 1–9 stay unanswered for that later wave.
@@ -70,7 +73,9 @@ personal-bottom + Differ offer — **shipped 2.59**); `/queue` = editor
 proposal queue; `/user` = **account settings** (not the public person
 card); `#/users/{uuid}` = **public person card** (TZ 2.60: achievements —
 accepted notes/links, proposal count, shared created/edited events; feed
-names and proposal author open it; `GET /api/users/{id}/card`); `/offer` = **my** proposals into the rhizome; `/graph` = shared
+names and proposal author open it; `GET /api/users/{id}/card`;
+TZ 2.87 after prod: «Приглашен %date% по приглашению от %@user%»
+from stored inviter UUID — omit if none); `/offer` = **my** proposals into the rhizome; `/graph` = shared
 rhizome canvas (fCoSE); `/search` = card search (SQL `note_index`,
 `layer=visible`; Elasticsearch only after the first approved rhizome
 production deploy — ADR-015 / TZ 2.83); `/my_graph` = personal graph layer only;
@@ -152,7 +157,9 @@ letter always goes to the **stored account email**, never a typed
 address that is not on file. HTTP 204 is generic (no enumeration).
 Username **or** email identifies
 the same UUID. Auth UI is one chrome: «Вход» / «Регистрация» /
-«Не помню пароль». On «Вход», when SMTP is on, «Войти письмом»
+«Не помню пароль». After TZ 2.86 / first `rhizome` prod, drop the
+«Регистрация» tab: new accounts only via the invite email link (§17).
+On «Вход», when SMTP is on, «Войти письмом»
 requests `purpose=login` (identifier = login or email; letter only to
 the stored inbox) and then accepts the 6-digit code or
 `#/auth/login-code?token=` (TZ 2.81). That is not a fourth tab.
@@ -486,11 +493,13 @@ Not needed for the initial MVP unless actual load/features justify them:
 - guest anti-scrape of published cards (TZ 2.80 / product §16): after
   first `rhizome` production deploy only; do **not** implement on
   `rhizome-test`. No Redis/WAF just for this. ADR before code.
-- invite-only registration (TZ 2.84 / product §17): after first
-  `rhizome` production deploy; not on `rhizome-test`. Admin always
-  issues invites; a user issues their own after 10 editor-accepted
-  shared cards. Store inviter UUID. Open street register stays until
-  then. vsepsy-without-invite is an open ADR question. No workspace.
+- invite-only registration (TZ 2.86–2.87 / product §17): after first
+  `rhizome` production deploy; not on `rhizome-test`. Invite is an
+  **email link**; drop the Register tab (Login / forgot password stay).
+  Any existing account may invite; store inviter UUID (one chain with
+  vsepsy.ru). Person card and `GET /api/users/{id}/card` show
+  «Приглашен %date% по приглашению от %@user%» (omit if no inviter).
+  Street register stays until then. No workspace.
 
 Start simple. Add infrastructure only for measured/observed needs.
 

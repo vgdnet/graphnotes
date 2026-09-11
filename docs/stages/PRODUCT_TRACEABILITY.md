@@ -1,7 +1,7 @@
 # Product requirements to Stage traceability
 
 Статус: DERIVED / MAINTAINED
-Источник: `docs/product/PRODUCT_SPEC.md` version 2.84
+Источник: `docs/product/PRODUCT_SPEC.md` version 2.87
 
 Матрица маршрутизирует канонические требования в Stage-файлы и не изменяет
 `PRODUCT_SPEC.md`.
@@ -54,7 +54,7 @@
 | 6.5.2 | `#/search` role-scoped search; `#/card/{path}` view-first; `#/users/{uuid}` person card; own personal edit after «Отредактировать карточку» | 6, 7, 8 |
 | 6.5.3 | Elasticsearch next search (ADR-015); SQL until then; questions 1–9 unanswered (TZ 2.83) | **only after the first approved rhizome production deploy**; not this branch |
 | 16 | Guest anti-scrape of published cards (1 IP → many unique paths); after `rhizome` prod only; not `rhizome-test` (TZ 2.80) | after first production deploy; ADR before code |
-| 17 | Invite-only registration; admin always; own invites after 10 editor-accepted shared cards; inviter chain (TZ 2.84) | after first production deploy; ADR before code |
+| 17 | Invite email link; no Register tab; person card «Приглашен %date% по приглашению от %@user%»; same on vsepsy.ru (TZ 2.87) | after first production deploy; ADR before code |
 | 6.6 | Differ entity; one-way personal → published shared; merge-into-shared rules | 7 |
 | 6.6 | Connected git: Differ/proposal read **current public HEAD** (Obsidian push); poller/webhook backup; no second clone | 7 |
 | 6.6.2 | Author contribution; Differ extended, not replaced; three states personal/proposed/accepted | next wave |
