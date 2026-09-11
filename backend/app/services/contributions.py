@@ -5,7 +5,6 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.audit_event import AuditEvent
-from app.models.card_revision import CardRevision
 from app.models.graph import NoteIndex, NoteLink, NoteLayer, NoteTag, Tag
 from app.models.github import PersonalRepository, SharedRepository
 from app.models.personal_upload import PersonalUpload
@@ -549,21 +548,6 @@ async def _public_store_stats(
         proposed_paths |= _parse_scope_paths(row.scope_paths)
     if not proposed_paths:
         proposed_paths = {str(note["path"]) for note in notes if note["state"] == "proposed"}
-    if proposed_paths:
-        revision_rows = list(
-            (
-                await database.scalars(
-                    select(CardRevision)
-                    .where(
-                        CardRevision.owner_user_id == target.id,
-                        CardRevision.path.in_(proposed_paths),
-                    )
-                    .order_by(CardRevision.path, CardRevision.n.desc())
-                )
-            ).all()
-        )
-        for row in revision_rows:
-            body_by_path.setdefault(row.path, row.source)
     proposed_links = 0
     proposed_edit_bytes = 0
     for path in proposed_paths:
