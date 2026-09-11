@@ -30,6 +30,11 @@ class PersonalUpload(Base):
     path: Mapped[str] = mapped_column(String(180))
     body: Mapped[str] = mapped_column(Text)
     content_hash: Mapped[str] = mapped_column(String(64))
+    object_version: Mapped[str] = mapped_column(
+        String(64),
+        default=lambda: uuid.uuid4().hex,
+        onupdate=lambda: uuid.uuid4().hex,
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )

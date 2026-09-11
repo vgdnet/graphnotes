@@ -17,6 +17,14 @@ function escapeHtml(value: string): string {
     .replace(/"/g, "&quot;");
 }
 
+function missingNotePathFromTarget(target: string): string {
+  let text = target.replace(/\\/g, "/").trim().replace(/^\/+/, "");
+  if (text.startsWith("unresolved:")) text = text.slice("unresolved:".length);
+  if (!text) return "";
+  if (!text.toLowerCase().endsWith(".md")) text = `${text}.md`;
+  return text;
+}
+
 function linkKey(target: string): string {
   let text = target.replace(/\\/g, "/").trim().replace(/^\/+/, "");
   if (text.toLowerCase().endsWith(".md")) text = text.slice(0, -3);
@@ -32,13 +40,15 @@ function resolveWiki(
   raw: string,
   note: NoteLinks,
   nodes: WikiNode[],
-): { kind: "ok"; path: string; label: string } | { kind: "locked" | "missing"; label: string } {
+): { kind: "ok"; path: string; label: string } | { kind: "locked"; label: string } | { kind: "missing"; label: string; path: string } {
   const [targetPart, alias] = raw.split("|", 2);
   const target = (targetPart || "").split("#", 1)[0].trim();
   const label = (alias || target).trim() || raw;
-  if (!target) return { kind: "missing", label };
+  if (!target) return { kind: "missing", label, path: "" };
   if (hasKey(note.locked_links || [], target)) return { kind: "locked", label };
-  if (hasKey(note.unresolved_links, target)) return { kind: "missing", label };
+  if (hasKey(note.unresolved_links, target)) {
+    return { kind: "missing", label, path: missingNotePathFromTarget(target) };
+  }
   const key = linkKey(target);
   const found = nodes.find((node) => {
     const pathKey = linkKey(node.path);
@@ -49,7 +59,7 @@ function resolveWiki(
     const path = target.toLowerCase().endsWith(".md") ? target : `${target}.md`;
     return { kind: "ok", path, label };
   }
-  return { kind: "missing", label };
+  return { kind: "missing", label, path: missingNotePathFromTarget(target) };
 }
 
 function renderInline(
@@ -68,7 +78,8 @@ function renderInline(
     if (resolved.kind === "locked") {
       return `<span class="wiki-link wiki-link--locked">замок · ${escapeHtml(resolved.label)}</span>`;
     }
-    return `<span class="wiki-link wiki-link--missing">нет заметки · ${escapeHtml(resolved.label)}</span>`;
+    const href = resolved.path ? cardHash(resolved.path) : "#";
+    return `<a class="wiki-link wiki-link--missing" href="${href}" data-missing-path="${escapeHtml(resolved.path)}">${escapeHtml(resolved.label)}</a>`;
   });
   const withMdLinks = withWiki.replace(
     /\[([^\]]+)\]\((https?:[^)\s]+)\)/g,

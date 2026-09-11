@@ -1,7 +1,11 @@
 # GraphNotes — канонический контекст Technical Observer
 
 Статус: ACTIVE
-Updated: 2026-09-11 (TZ 2.67: white-noise personal ingest lock + admin
+Updated: 2026-09-11 (TZ 2.71 shipped: plugin token like SSH — SHA-256 on
+server, secret persisted in plugin `data.json`. TZ 2.68–2.70: Obsidian
+plugin → personal store API + desktop plugin in-repo. Alembic 0017,
+hashed tokens,
+no git copy-in on plugin apply. TZ 2.67: white-noise personal ingest lock + admin
 mail; existing notes kept. TZ 2.66: missing card page + personal create
 from dangling wikilink. TZ 2.65: ZIP ingest 10 000 files; zip-bomb
 size/ratio guards stay. TZ 2.63: GitHub copy-in only; local personal +
@@ -85,6 +89,12 @@ PostgreSQL, узлы, связи, теги, поисковый индекс и �
 (ТЗ 2.63) — это не обход Differ и не тела в `note_index` «для поиска».
 Личный hosted Markdown — продуктовый путь (ТЗ 2.62). Поиск — `note_index`.
 Выгрузка своей — со склада `.md`, не из индекса.
+
+Плагин Obsidian (ТЗ 2.68–2.70 / MASTER §12.1) — HTTP API в **тот же**
+`personal_uploads` / `personal_assets`. Не git copy-in при apply, не запись
+в `shared_notes`, не предложение, не обход Differ. Таблицы transfer не канон
+знания. Секрет токена на сервере не хранится (SHA-256 + `token_prefix`).
+Код плагина в `obsidian-plugin/` — клиент, не канон склада GraphNotes.
 
 ### Rhizome and RBAC model
 

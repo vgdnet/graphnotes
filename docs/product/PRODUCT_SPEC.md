@@ -1,7 +1,7 @@
 # GraphNotes — продуктовое ТЗ
 
 Статус: CANONICAL / LIVING DOCUMENT  
-Версия: 2.67  
+Версия: 2.71  
 Обновлено: 2026-09-11
 
 Это **оглавление**. Требования живут в связанных файлах, не в одной простыне.
@@ -34,11 +34,11 @@
 | 3 | [principles.md](principles.md) | неподвижные принципы |
 | 4 | [terms.md](terms.md) | термины |
 | 5 | [roles.md](roles.md) | роли `user` / `editor` / `admin`, статус автора, карточки, статистика |
-| **5.5** | **[user-settings.md](user-settings.md)** | **настройки на `/user`: имя в шапке; почта, контакты, git, договор, Theme Switcher; уведомления очереди; «Выйти» внизу** |
+| **5.5** | **[user-settings.md](user-settings.md)** | **настройки на `/user`: имя в шапке; почта, контакты, git, договор, токен Obsidian, Theme Switcher; уведомления очереди; «Выйти» внизу** |
 | **5.6** | **[access.md](access.md)** | **`/graph` = общий холст; `/my_graph` = личный слой; `/card` = стартовая карточка; `/` → `/graph`; уровни доступа** |
 | **6.1.3** | **[vsepsy-identity.md](vsepsy-identity.md)** | **учётка vsepsy.ru; ачивка ризомы (граф / счётчики) для витрины и своего сайта** |
 | **6.5.2** | **[search-and-card.md](search-and-card.md)** | **карта адресов 2.58–2.60: `/card` `/queue` `/user` `/users/{uuid}` `/offer` `/graph` `/search` `/my_graph` `/contribution` + `/differ`; стопка 2.55–2.56** |
-| 6 | [functional.md](functional.md) | функциональные требования (auth, склад у нас, git copy-in, Differ, граф, очередь) |
+| 6 | [functional.md](functional.md) | функциональные требования (auth, склад у нас, git copy-in, плагин Obsidian → личное, Differ, граф, очередь) |
 | 7 | [api.md](api.md) | черновой контракт API |
 | 8–9 | [acceptance-and-nfr.md](acceptance-and-nfr.md) | приёмка MVP и нефункциональные требования |
 | 10–15 | [roadmap-and-governance.md](roadmap-and-governance.md) | вне MVP, стадии, ADR, история ТЗ |
@@ -53,6 +53,7 @@
 - **Локальный склад у нас** (ТЗ 2.61–2.63): GitHub, git, позже Dropbox / Google Drive — только **источники**. Продукт **копирует** `.md` в локальное хранилище (личное и опубликованная общая). Граф, карточки и Differ читают копию. → [vision.md](vision.md), [principles.md](principles.md) §3.1–3.4, [functional.md](functional.md) §6.2–6.3
 - **ZIP загрузка (ТЗ 2.65):** до **10 000 файлов** в одном архиве (vault / git dump). ~120 файлов проходит. Свыше — HTTP 400, `archive has too many files`. Размер ZIP 2 МиБ / распаковка 8 МиБ / файл 256 КиБ и zip-бомба остаются. → [functional.md](functional.md) §6.3, [acceptance-and-nfr.md](acceptance-and-nfr.md) §9.1
 - **Белый шум (ТЗ 2.67):** мусор (не заметки) в личном ingest не индексируется; учётка блокируется (`is_active`); admin’ам письмо. Настоящие уже проиндексированные заметки не удаляются. → [functional.md](functional.md) §6.3, [acceptance-and-nfr.md](acceptance-and-nfr.md) §9.1
+- **Плагин Obsidian (ТЗ 2.68–2.71 / §6.3.4):** выбранные файлы vault копируются **в то же** личное хранилище UUID; не публикует в общую и не обходит Differ. **2.69:** desktop-плагин **GraphNotes Publisher** в этом продукте. **2.70:** токен как ключ SSH — генерируется один раз, у нас хеш/отпечаток, в плагине секрет запоминается. **2.71:** поставлено на `rhizome-test`. → [functional.md](functional.md) §6.3.4, [user-settings.md](user-settings.md) §5.5.7, [api.md](api.md)
 - **Публикатор, карточка и боковой граф** (ТЗ 2.64): клик по узлу и `[[wikilink]]` открывают `/card/{путь}`; сбоку локальный граф. Гость читает опубликованную общую. → [search-and-card.md](search-and-card.md), [access.md](access.md) §5.6, [functional.md](functional.md) §6.5.1
 - **Нет такой карточки (ТЗ 2.66):** гость — «карточки пока нет»; вошедший создаёт личную с этой страницы и из плашки при наведении на висячую ссылку. → [search-and-card.md](search-and-card.md)
 - **Настройки аккаунта (`/user`), договор, свой git (опция), почта, Theme Switcher светлая/тёмная** → [user-settings.md](user-settings.md)

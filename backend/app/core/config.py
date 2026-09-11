@@ -36,6 +36,17 @@ class Settings(BaseSettings):
     graph_diff_timeout_seconds: float = 30.0
     graph_diff_cache_max: int = 20
     personal_sync_interval_seconds: int = 300
+    integration_markdown_max_bytes: int = 1_048_576
+    integration_attachment_max_bytes: int = 26_214_400
+    integration_batch_max_operations: int = 500
+    integration_batch_max_bytes: int = 104_857_600
+    integration_manifest_page_max: int = 200
+    integration_personal_quota_bytes: int = 524_288_000
+    integration_token_default_days: int = 30
+    integration_token_max_days: int = 90
+    integration_plan_ttl_hours: int = 24
+    integration_result_ttl_days: int = 30
+    integration_rate_limit_per_minute: int = 120
     smtp_host: str = ""
     smtp_port: int = 587
     smtp_username: str = ""

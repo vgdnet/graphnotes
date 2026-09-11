@@ -6,6 +6,14 @@ from app.models.closed_path import ClosedPath
 from app.models.comment import NoteComment
 from app.models.github import GitHubWebhookDelivery, PersonalRepository, SharedRepository
 from app.models.graph import NoteIndex, NoteLink, NoteTag, SyncJob, Tag
+from app.models.integration import (
+    IntegrationBlob,
+    IntegrationIdempotency,
+    IntegrationSnapshot,
+    IntegrationToken,
+    IntegrationTransfer,
+    PersonalAsset,
+)
 from app.models.personal_upload import PersonalUpload, UploadEvent
 from app.models.shared_note import SharedNote
 from app.models.proposal import Proposal
@@ -20,9 +28,15 @@ __all__ = [
     "ClosedPath",
     "NoteComment",
     "GitHubWebhookDelivery",
+    "IntegrationBlob",
+    "IntegrationIdempotency",
+    "IntegrationSnapshot",
+    "IntegrationToken",
+    "IntegrationTransfer",
     "NoteIndex",
     "NoteLink",
     "NoteTag",
+    "PersonalAsset",
     "PersonalRepository",
     "PersonalUpload",
     "SharedNote",

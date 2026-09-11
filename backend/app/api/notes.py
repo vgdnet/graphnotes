@@ -8,6 +8,7 @@ from app.api.dependencies import (
     CurrentEditor,
     CurrentUser,
     DatabaseSession,
+    OptionalUser,
 )
 from app.core import multipart_limits as _multipart_limits  # noqa: F401
 from app.schemas.notes import (
@@ -143,7 +144,6 @@ async def moderate_shared_comment(
 async def shared_note(
     note_path: str,
     database: DatabaseSession,
-    _user: CurrentUser,
 ) -> NoteDetail:
     try:
         payload = await get_shared_note(database, note_path, _client())
@@ -175,16 +175,20 @@ async def rhizome_card_feed(
 async def rhizome_card(
     note_path: str,
     database: DatabaseSession,
-    user: CurrentUser,
+    user: OptionalUser,
 ) -> NoteDetail:
     layer, owner_id, proposal_id, path = parse_card_ref(note_path)
     if layer == "proposal" and proposal_id is not None:
+        if user is None:
+            raise HTTPException(status_code=401, detail="authentication required")
         try:
             payload = await get_proposal_card(database, user, proposal_id, path, _client())
         except ProposalError as exc:
             raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
         return NoteDetail.model_validate(payload)
     if layer == "personal":
+        if user is None:
+            raise HTTPException(status_code=401, detail="authentication required")
         try:
             payload = await get_personal_note(
                 database, user, path, _client(), owner_id=owner_id

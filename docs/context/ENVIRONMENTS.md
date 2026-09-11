@@ -48,6 +48,8 @@ Rules:
 - do not treat this environment or its working tree as canonical source
 - use `compose.yaml` together with `deploy/compose.rhizome-test.yaml`
 - expose frontend to `nord` at `http://172.16.13.14:8080`
+- plugin test origin may use **HTTP** to that URL (explicit test exception);
+  production GraphNotes is HTTPS; do not disable TLS verification
 - keep backend bound only to `127.0.0.1:8000`
 - do not publish a PostgreSQL host port
 - local `compose.override.yaml` files are non-canonical and must not be required

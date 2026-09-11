@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+import hashlib
 import uuid
 
 from sqlalchemy import delete, func, or_, select
@@ -474,6 +475,75 @@ async def _delete_layer(database: AsyncSession, layer: str, owner_id: uuid.UUID 
     await database.execute(
         delete(NoteIndex).where(NoteIndex.layer == layer, NoteIndex.owner_user_id == owner_id)
     )
+
+
+async def reindex_personal_uploads(database: AsyncSession, user_id: uuid.UUID) -> str:
+    """Rebuild the personal derived index from the local store only.
+
+    Must not copy git into personal_uploads: that would overwrite plugin writes.
+    """
+    if await _running_rebuild(database, NoteLayer.PERSONAL.value, user_id):
+        raise IndexerError(409, "index rebuild is already running")
+    texts = await _store_texts_for_layer(database, NoteLayer.PERSONAL.value, user_id) or {}
+    digest = hashlib.sha256()
+    for path in sorted(texts):
+        digest.update(path.encode("utf-8"))
+        digest.update(b"\0")
+        digest.update(hashlib.sha256(texts[path].encode("utf-8")).digest())
+    revision = digest.hexdigest()[:40] if texts else "empty"
+    parsed = {path: parse_markdown(path, text) for path, text in texts.items()}
+    lookup = notes_lookup_map(set(parsed))
+    await _delete_layer(database, NoteLayer.PERSONAL.value, user_id)
+    records: dict[str, NoteIndex] = {}
+    for path, note in parsed.items():
+        record = NoteIndex(
+            index_key=_index_key(NoteLayer.PERSONAL.value, user_id, None, revision, path),
+            layer=NoteLayer.PERSONAL.value,
+            revision_sha=revision,
+            path=path,
+            slug=_slug(path),
+            title=note.title,
+            content_hash=note.content_hash,
+            owner_user_id=user_id,
+        )
+        database.add(record)
+        records[path] = record
+    await database.flush()
+    for path, note in parsed.items():
+        record = records[path]
+        for tag_name in dict.fromkeys(note.tags):
+            normalized = tag_name.casefold()[:80]
+            tag = await database.scalar(select(Tag).where(Tag.name == normalized))
+            if tag is None:
+                tag = Tag(name=normalized)
+                database.add(tag)
+                await database.flush()
+            database.add(NoteTag(note_id=record.id, tag_id=tag.id))
+        seen_links: set[tuple[str, str]] = set()
+        for link in note.typed_links:
+            key = (link.kind, link.target)
+            if key in seen_links:
+                continue
+            seen_links.add(key)
+            target_path = resolve_link_target(link.target, lookup)
+            target_note = records.get(target_path) if target_path else None
+            database.add(
+                NoteLink(
+                    source_id=record.id,
+                    target_id=None if target_note is None else target_note.id,
+                    target_raw=link.target[:200],
+                    link_type=link.kind,
+                    unresolved=target_note is None,
+                )
+            )
+    binding = await database.scalar(
+        select(PersonalRepository).where(PersonalRepository.user_id == user_id)
+    )
+    if binding is not None:
+        binding.indexed_sha = revision
+        binding.index_status = "current"
+    await database.flush()
+    return revision
 
 
 async def _prune_sync_jobs(database: AsyncSession) -> None:

@@ -48,8 +48,12 @@ async def test_search_highlights_without_card_body_for_guest(
         assert "card.md" in {item["path"] for item in tagged.json()["hits"]}
         by_tag_text = await guest.get("/search", params={"q": "src"})
         assert "card.md" in {item["path"] for item in by_tag_text.json()["hits"]}
-        assert (await guest.get("/cards/card.md")).status_code == 401
-        assert (await guest.get("/shared/notes/card.md")).status_code == 401
+        opened = await guest.get("/cards/card.md")
+        assert opened.status_code == 200
+        assert "See [[missing]]" in opened.json()["body"]
+        assert (await guest.get("/shared/notes/card.md")).status_code == 200
+        absent = await guest.get("/cards/no-such-card.md")
+        assert absent.status_code == 404
 
     card = await admin.get("/cards/card.md")
     assert card.status_code == 200
@@ -300,3 +304,26 @@ async def test_visible_search_scopes_by_role_and_marks_layer(
     await author.aclose()
     await stranger.aclose()
     await editor.aclose()
+
+
+async def test_author_creates_personal_card_on_missing_path(
+    auth_test_context: tuple[AsyncClient, async_sessionmaker[AsyncSession]],
+    monkeypatch: MonkeyPatch,
+) -> None:
+    client, _ = auth_test_context
+    _install_graph(monkeypatch, _github())
+    await _register(client, "missing-create-author")
+    guest = AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver")
+    assert (await guest.get("/cards/Новая.md")).status_code == 404
+    created = await client.put(
+        "/personal/notes/Новая.md",
+        json={"source": "# Новая\n\n", "expected_hash": ""},
+    )
+    assert created.status_code == 200
+    assert created.json()["path"] == "Новая.md"
+    opened = await client.get("/cards/personal:Новая.md")
+    assert opened.status_code == 200
+    assert opened.json()["title"] == "Новая"
+    assert (await guest.get("/cards/Новая.md")).status_code == 404
+    assert (await guest.get("/cards/personal:Новая.md")).status_code == 401
+    await guest.aclose()

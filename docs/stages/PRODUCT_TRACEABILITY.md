@@ -1,7 +1,7 @@
 # Product requirements to Stage traceability
 
 Статус: DERIVED / MAINTAINED
-Источник: `docs/product/PRODUCT_SPEC.md` version 2.67
+Источник: `docs/product/PRODUCT_SPEC.md` version 2.71
 
 Матрица маршрутизирует канонические требования в Stage-файлы и не изменяет
 `PRODUCT_SPEC.md`.
@@ -11,7 +11,7 @@
 | Requirement | Owning Stage | Acceptance evidence |
 | --- | --- | --- |
 | Exactly one shared rhizome | 3, 5, 6 | singleton Git binding; one shared revision pointer/API |
-| Exactly one personal rhizome per user | 3, 4, 5, 6 | hosted store XOR connected personal git; derived overlay |
+| Exactly one personal rhizome per user | 3, 4, 5, 6 | hosted store; git/plugin copy-in; derived overlay |
 | No workspace/multiple shared graphs | every Stage | absence of workspace entities/routes/IDs |
 | Published shared working copy is local after copy-in; Differ is the write gate; `note_index` has no bodies | every Stage | Markdown remains source of truth; GitHub is connector (TZ 2.63) |
 | Markdown source of truth | 4, 5, 7, 8 | hosted stores + git copy-in, rebuild equivalence, no graph merge file |
@@ -33,7 +33,7 @@
 | --- | --- | --- |
 | 6.1 | UUID account, password hash, session, active state, global RBAC | 2 |
 | 6.1.2 | SMTP: register sends `#/auth/confirm?token=` + 6-digit code; no session until confirm | 2 |
-| 5.5 | Account settings: required email; optional phone/Telegram; git; author contract; chrome: name in header opens settings, logout at bottom; git XOR upload hint next to connect/disconnect, not Differ | next wave; email at register |
+| 5.5 | Account settings: required email; optional phone/Telegram; git; author contract; Obsidian plugin token; chrome: name in header opens settings, logout at bottom | next wave; email at register; token TZ 2.68 |
 | 5.5.4 | Light/dark Theme Switcher (sliding sun/moon pill, not text buttons); localStorage | 6 (graph UX) |
 | 5.6 | Start graph always; guest reads published shared cards + side local graph; closed slice not editor queue; access-level entitlement (ADR-016) | 6 |
 | 5.6.4 | Two graphs = overlay filter; author view of closed slice; load = open in app; not a second repo | next wave |
@@ -45,6 +45,7 @@
 | 5.4.2 | User sees own contribution stats; public person card `#/users/{uuid}` with achievement counters | 6 |
 | 6.2 | local personal + shared stores; GitHub copy-in (TZ 2.63); leftover merge-out; no product clone/ZIP of shared | 3 |
 | 6.3 | no download of published shared; personal working copy is GraphNotes store; git/Dropbox/Drive = copy-in, not a second canon | 4 (upload copies in), 7 (Differ vs local copy) |
+| 6.3.4 / 5.5.7 | GraphNotes Publisher (this repo) + API copy selected vault files into the same personal store; token in Settings like an SSH key (hash on server, secret in plugin); not shared, not Differ | 8 (TZ 2.68–2.70) |
 | 6.3.2 | Graph personal overlay: from git if connected else server store; layer menu/legend «ваша ризома», never «ваш git» | 6 |
 | 6.3.1 | Upload history in GraphNotes (who/when/hash), not user git log | next wave |
 | 6.4 | revisioned shared/personal/proposal derived index and rebuild | 5 |
@@ -58,6 +59,7 @@
 | 6.7 | proposal queue tabs New / In progress / Rejected; text and links first, then Graph Diff; reject/return with author comment | 7, 8 |
 | 6.7 | textual and graph impact before publication | 7, 8 |
 | 6.8 | Action log in GraphNotes DB (admin-readable); no passwords/tokens; history, idempotency, recovery | 2, 3, 5, 7, 9 |
+| 7 | API MVP surface including personal ingest and Obsidian plugin personal transfer | 2–8 |
 
 ## API ownership
 
@@ -75,6 +77,7 @@
 | proposals, decisions, rollback | 7 |
 | proposal graph diff | 8 |
 | operational/release controls | 9 |
+| Obsidian plugin personal transfer (`/api/integrations/obsidian/v1`, token CRUD) | 8 (TZ 2.68–2.70); personal store only |
 
 ## MVP acceptance criteria
 

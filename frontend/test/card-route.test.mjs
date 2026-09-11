@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { cardApiUrl, cardHash, cardSearchHash, canonicalCardHash, parseCardRoute, pathFromCardHash, isOwnPersonalCard, canShowCardEditButton, normalizeCardPath, qualifyCardPath, wikiCardHash } from "../test-out/cardRoute.js";
+import { cardApiUrl, cardHash, cardSearchHash, canonicalCardHash, parseCardRoute, pathFromCardHash, isOwnPersonalCard, canShowCardEditButton, normalizeCardPath, qualifyCardPath, wikiCardHash, missingNotePath, missingNoteTitle } from "../test-out/cardRoute.js";
 import { parseAppRoute, routeToView, viewHash, personCardHash } from "../test-out/appRoute.js";
 import { renderBlocks } from "../test-out/markdownRender.js";
 
@@ -105,6 +105,23 @@ test("wikilinks on a personal card keep the personal layer (same path can exist 
   );
   assert.match(html, /personal%3A/);
   assert.match(html, /%D1%87%D0%B0%D1%81%D1%8B/);
+});
+
+test("missing wikilink becomes a card hash and unresolved graph path is a file", () => {
+  assert.equal(missingNotePath("Ризома"), "Ризома.md");
+  assert.equal(missingNotePath("unresolved:Ризома"), "Ризома.md");
+  assert.equal(missingNotePath("folder/note.md"), "folder/note.md");
+  assert.equal(missingNoteTitle("unresolved:Ризома"), "Ризома");
+  const html = renderBlocks(
+    "See [[missing]]",
+    { links: [], unresolved_links: ["missing"] },
+    [],
+    cardHash,
+  );
+  assert.match(html, /wiki-link--missing/);
+  assert.match(html, /#\/card\//);
+  assert.match(html, /data-missing-path="missing.md"/);
+  assert.doesNotMatch(html, /нет заметки ·/);
 });
 
 test("hashtags and hash-only lines do not hang the markdown renderer", () => {

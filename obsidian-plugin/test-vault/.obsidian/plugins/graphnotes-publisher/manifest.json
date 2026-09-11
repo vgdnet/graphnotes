@@ -1,0 +1,10 @@
+{
+  "id": "graphnotes-publisher",
+  "name": "GraphNotes Publisher",
+  "version": "0.1.0",
+  "minAppVersion": "1.8.7",
+  "description": "Send selected notes and attachments to your personal GraphNotes store.",
+  "author": "GraphNotes contributors",
+  "authorUrl": "https://github.com/vgdnet/graphnotes",
+  "isDesktopOnly": true
+}

@@ -17,8 +17,9 @@ hand-curate which notes belong where. Cards and the change/diff record
 (search, card GET, Graph Diff, interaction feed) follow that same
 visibility. Another user's overlay cannot be selected by query.
 
-Opening a node for a signed-in viewer with access goes to the **card page**
-(`#/card/{path}`): rendered Markdown, not a raw `<pre>` dump. The card opens
+Opening a published shared node (guest or signed-in) goes to the **card page**
+(`#/card/{path}`): rendered Markdown, not a raw `<pre>` dump, with the local
+neighborhood graph beside the article (TZ 2.64). The card opens
 **view-first**. Own personal addresses are `#/card/personal:{path}` for any
 own file (hash may show `personal%3A` — same route). Those URLs mount
 `PersonalCardEditor` and show **«Отредактировать карточку»** only when the
@@ -32,7 +33,11 @@ read-only (no edit button, no author-contract tease on the card). Comments
 stay on published shared. Actor names in that feed open the public person
 card (`#/users/{uuid}`, TZ 2.60): achievement counters (proposals, created
 shared cards, published edits, accepted notes/links), not another vault.
-Guests do not receive rhizome card bodies.
+Guests may read published shared card bodies; personal, queue, feed and
+comments still need a session. A missing wikilink or unresolved node opens
+the card route without a body: guests see «карточки пока нет»; a signed-in
+author may create a personal card there or from the hover hint on the missing link
+(TZ 2.66). That create is not a shared write.
 `[[wikilink]]` hrefs inherit the open card's layer (TZ 2.54): from
 `#/card/personal:{path}` a wiki target becomes `personal:{file}` (foreign
 personal keeps the owner UUID; proposal keeps the proposal id). The same

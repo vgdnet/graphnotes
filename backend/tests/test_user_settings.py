@@ -117,6 +117,8 @@ async def test_guest_graph_has_no_note_bodies(
     async with guest:
         graph = await guest.get("/graph/shared")
         assert graph.status_code == 200
-        assert (await guest.get("/shared/notes/card.md")).status_code == 401
+        body = await guest.get("/shared/notes/card.md")
+        assert body.status_code == 200
+        assert "See [[missing]]" in body.json()["body"]
         assert (await guest.get("/shared/notes/card.md/feed")).status_code == 401
         assert (await guest.get("/shared/notes/card.md/comments")).status_code == 401

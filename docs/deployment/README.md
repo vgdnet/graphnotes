@@ -14,6 +14,7 @@ a product specification. Delivery path and merge rules:
 | 6 | [STAGE6_GRAPH.md](STAGE6_GRAPH.md) | Shared graph UI and personal overlay |
 | 7 | [STAGE7_PROPOSALS.md](STAGE7_PROPOSALS.md) | Differ (git or upload), editor queue; no shared ZIP |
 | 8 | [STAGE8_GRAPH_DIFF.md](STAGE8_GRAPH_DIFF.md) | Graph Diff of a proposal |
+| — | [OBSIDIAN_PLUGIN_API.md](OBSIDIAN_PLUGIN_API.md) | Obsidian plugin: tokens, capabilities, personal transfer |
 
 Keep secrets out of git. The GitHub App private key belongs in `.secrets/` on
 the host, never in this repository.

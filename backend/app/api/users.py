@@ -13,6 +13,7 @@ from app.schemas.auth import (
     UserResponse,
 )
 from app.schemas.contributions import UserCardResponse
+from app.schemas.integration import IntegrationTokenCreateRequest
 from app.services.audit import record_audit_event
 from app.services.author_contract import (
     AUTHOR_CONTRACT,
@@ -21,7 +22,14 @@ from app.services.author_contract import (
 )
 from app.services.contributions import get_user_card
 from app.services.github import GitHubAppClient
+from app.services.integration_errors import IntegrationError
+from app.services.integration_tokens import (
+    create_integration_token,
+    list_integration_tokens,
+    revoke_integration_token,
+)
 from app.services.mail import smtp_configured
+from app.services.obsidian_transfers import iso
 
 router = APIRouter(prefix="/users", tags=["users"])
 
@@ -125,6 +133,69 @@ async def withdraw_author_contract(
     await database.commit()
     await database.refresh(user)
     return user
+
+
+def _http_from_integration(exc: IntegrationError) -> HTTPException:
+    return HTTPException(status_code=exc.status_code, detail=exc.message)
+
+
+def _token_view(row, *, token: str | None = None) -> dict[str, object]:
+    payload: dict[str, object] = {
+        "id": str(row.id),
+        "name": row.name,
+        "token_prefix": row.token_prefix,
+        "scopes": list(row.scopes or []),
+        "expires_at": iso(row.expires_at),
+        "last_used_at": iso(row.last_used_at),
+        "created_at": iso(row.created_at),
+        "revoked_at": iso(row.revoked_at),
+    }
+    if token is not None:
+        payload["token"] = token
+    return payload
+
+
+@router.post("/me/integration-tokens", status_code=status.HTTP_201_CREATED)
+async def create_my_integration_token(
+    payload: IntegrationTokenCreateRequest,
+    user: CurrentUser,
+    database: DatabaseSession,
+) -> dict[str, object]:
+    try:
+        row, secret = await create_integration_token(
+            database,
+            user=user,
+            name=payload.name,
+            scopes=payload.scopes,
+            expires_at=payload.expires_at,
+        )
+    except IntegrationError as exc:
+        raise _http_from_integration(exc) from exc
+    return _token_view(row, token=secret)
+
+
+@router.get("/me/integration-tokens")
+async def list_my_integration_tokens(
+    user: CurrentUser,
+    database: DatabaseSession,
+) -> dict[str, object]:
+    rows = await list_integration_tokens(database, user=user)
+    return {"tokens": [_token_view(row) for row in rows]}
+
+
+@router.delete(
+    "/me/integration-tokens/{token_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def revoke_my_integration_token(
+    token_id: uuid.UUID,
+    user: CurrentUser,
+    database: DatabaseSession,
+) -> None:
+    try:
+        await revoke_integration_token(database, user=user, token_id=token_id)
+    except IntegrationError as exc:
+        raise _http_from_integration(exc) from exc
 
 
 @router.get("/{user_id}/card", response_model=UserCardResponse)

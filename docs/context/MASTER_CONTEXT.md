@@ -2,7 +2,13 @@
 
 Updated: 2026-09-11
 Status: canonical architecture baseline
-Aligned with PRODUCT_SPEC 2.67. TZ 2.67: personal ingest that hits the
+Aligned with PRODUCT_SPEC 2.71. TZ 2.68–2.71 / §12.1: Obsidian plugin
+**API** copies selected vault files into the owner's `personal_uploads` /
+`personal_assets`. Desktop **GraphNotes Publisher** lives in
+`obsidian-plugin/` (TZ 2.69). Token is an SSH-key analog (TZ 2.70):
+`gnp_` + `secrets.token_urlsafe(32)`, SHA-256 only on the server, secret
+persisted in the plugin `data.json`. Shared rhizome and Differ stay
+unchanged. TZ 2.67: personal ingest that hits the
 Markdown indexer (ZIP, one `.md`, in-app save, personal git copy-in) is
 scanned for **white noise** (garbage, not notes). Combined signals — not
 one weak heuristic: invalid UTF-8 / binary `.md` (NUL), Shannon entropy
@@ -373,6 +379,7 @@ GraphNotes shared store               = working copy of published rhizome (TZ 2.
 git / later Dropbox / Google Drive    = connectors that copy .md into those stores
 shared knowledge repo                 = leftover merge-out after editor accept
 .md / ZIP upload                      = copy into the same local personal store
+Obsidian plugin API + GraphNotes Publisher = copy selected vault files into that store (TZ 2.68–2.71)
 proposal                              = selected Differ results, queued for editors
 Differ                                = local personal copy → published shared
 ```
@@ -398,7 +405,8 @@ Stage 2 delivered:
   confirmed at registration)
 - author status (ADR-010): `is_author` plus contract version and
   accepted/withdrawn timestamps; contributing (personal git connect, upload
-  as contribution, Differ, propose) requires an accepted contract; editor
+  as contribution, Obsidian plugin write to the personal store, Differ, propose)
+  requires an accepted contract; editor
   review and admin user management do not
 
 Telegram as an **identity provider** remains future scope, linked to the
@@ -536,10 +544,12 @@ This section is a technical verification contract: the exact storage schema and 
 Key product invariants that the technical architecture must preserve:
 
 - Personal and shared working copies (TZ 2.62–2.63): GraphNotes **local
-  stores are always** the working copy. Upload / in-app write personal.
+  stores are always** the working copy. Upload / in-app / Obsidian plugin
+  write personal (`personal_uploads`; attachments in `personal_assets`).
   GitHub (and later Dropbox / Google Drive) **copy** `.md` in. One active
   personal connector; do not merge two remotes. Differ is one-way local
-  copy → published shared. Upload is not a write into published shared.
+  copy → published shared. Upload and the plugin are not a write into
+  published shared.
   After editor accept, the published shared working copy is `shared_notes`
   (leftover stack may still push shared git, then copy-in). Git live-read
   without copy-in and in-app commit to GitHub are leftover vs 2.63.
@@ -590,6 +600,9 @@ Authentication / users:
 - `GET  /api/users/me/author-contract`
 - `POST /api/users/me/author-contract`
 - `POST /api/users/me/author-contract/withdraw`
+- `POST /api/users/me/integration-tokens` (cookie session; secret once)
+- `GET  /api/users/me/integration-tokens` (no secrets)
+- `DELETE /api/users/me/integration-tokens/{id}`
 - `GET  /api/author/contract` (same text; settings aliases are canonical)
 - `POST /api/author/accept`
 - `POST /api/author/withdraw`
@@ -663,3 +676,80 @@ Proposals and editor workflow (Stage-owned):
 
 Reconciliation hook:
 - `POST /api/webhooks/github`
+
+### 12.1 Obsidian plugin → personal store (TZ 2.68–2.71)
+
+Product requirement: §6.3.4 / §5.5.7. Operator examples:
+`docs/deployment/OBSIDIAN_PLUGIN_API.md`. The desktop plugin
+(`obsidian-plugin/`, GraphNotes Publisher) is part of this product
+(TZ 2.69). GraphNotes owns the HTTP API and the personal store.
+
+Browser/plugin URLs use the `/api` prefix. FastAPI routes do **not**:
+Nginx `location /api/` strips it. Incompatible protocol → new prefix
+(`/integrations/obsidian/v2`), do not silently reshape v1 fields.
+
+**Auth.** Transfer APIs: `Authorization: Bearer`. Mint is
+`secrets.token_urlsafe(32)` with prefix `gnp_` (TZ 2.70, SSH-key analog).
+Secret is shown once on create (`POST /api/users/me/integration-tokens`,
+cookie session, `{detail}` errors like the rest of `/users/me`). Server
+stores SHA-256 of the secret in `integration_tokens`, never plaintext;
+the cabinet lists name, prefix fingerprint, scopes, expiry. The desktop
+plugin persists the secret in its `data.json` so Obsidian restart does
+not require pasting again. The server cannot re-export the secret.
+Scopes:
+`personal:read` (required), `personal:write`, optional `personal:delete`.
+Owner UUID is derived from the token; the client must not send `user_id`
+to pick a store. An admin-role user's token still sees only that user's
+personal files (foreign `transfer_id` → 404 `not_found`). Revoke, expiry
+and inactive account stop later requests and uncommitted apply. Commit
+re-checks author contract (`403 author_contract_required`) and activity.
+
+**Write policy.** `write_allowed` = active account + accepted author
+contract. Connected personal git does **not** set `write_disabled`
+(TZ 2.62: working copy is always the GraphNotes store).
+
+**Store.** Markdown upsert/delete applies to `personal_uploads` (same
+rows as in-app / ZIP ingest). Attachments live in `personal_assets`
+(BYTEA). Opaque `object_version` on both; compare version even when
+SHA-256 matches. Transfer / blob / idempotency / snapshot tables are
+**not** a knowledge canon. Apply must **not** call git copy-in
+(`copy_git_into_personal_store` / `rebuild_personal`): that would
+overwrite plugin writes. After files commit, reindex personal
+`note_index` **from uploads only**. Graph and search already read
+`personal_uploads` when the store has rows.
+
+**Transfer protocol (FastAPI paths):**
+- `GET  /integrations/obsidian/v1/capabilities`
+- `GET  /integrations/obsidian/v1/manifest`
+- `GET  /integrations/obsidian/v1/files/content` (raw bytes +
+  `X-GraphNotes-*` headers; path header is percent-encoded)
+- `POST /integrations/obsidian/v1/transfers` (`Idempotency-Key`)
+- `PUT  /integrations/obsidian/v1/transfers/{id}/blobs/{sha256}`
+  (`application/octet-stream`, 204)
+- `POST /integrations/obsidian/v1/transfers/{id}/commit` (202; 409 on
+  conflict)
+- `GET  /integrations/obsidian/v1/transfers/{id}`
+- `DELETE /integrations/obsidian/v1/transfers/{id}` (204 if not applying)
+
+Error envelope on this prefix only:
+`{error:{code,message,request_id,retryable,details}}`. Existing APIs keep
+`{detail}`.
+
+States: `awaiting_upload → ready → applying → indexing → succeeded`;
+also `conflict` / `failed` / `cancelled` / `expired`; `indexing_failed`
+then retry index only (`files_applied: true`). Whole batch is atomic.
+Same Idempotency-Key + body → same plan; different body → `409
+idempotency_mismatch`. Plan TTL 24h; result/key ≥ 30 days. One concurrent
+commit per user → `409 transfer_busy`.
+
+Limits (also in capabilities): 1 MiB Markdown, 25 MiB attachment, 500
+ops, 100 MiB batch, 200 manifest page, 500 MiB personal quota, path
+length/depth as ingest. Nginx `client_max_body_size` 32m on the frontend
+proxy. No Redis/S3/Celery.
+
+Audit: `integration.token_*`, `integration.transfer_*` with user UUID,
+token id, client_id, transfer_id, paths, versions, sizes, result. No
+secrets, passwords, or note bodies.
+
+Alembic: `0017_obsidian_integration`. Integration checks: `rhizome-test`
+only; do not apply on `rhizome` until an approved revision.

@@ -22,6 +22,9 @@ GET  /api/author/contract           # public Russian copy (version, WTFPL/AGPL)
 GET  /api/users/me/author-contract  # same copy while signed in
 POST /api/users/me/author-contract  # accept current contract version
 POST /api/users/me/author-contract/withdraw
+POST /api/users/me/integration-tokens   # cookie session; secret once
+GET  /api/users/me/integration-tokens   # id, name, scopes, expiry; no secrets
+DELETE /api/users/me/integration-tokens/{id}
 
 GET  /api/repository/status
 
@@ -83,7 +86,44 @@ POST /api/proposals/{id}/request-changes
 POST /api/proposals/{id}/rollback
 
 POST /api/webhooks/github
+
+GET  /api/integrations/obsidian/v1/capabilities
+GET  /api/integrations/obsidian/v1/manifest
+GET  /api/integrations/obsidian/v1/files/content?path=
+POST /api/integrations/obsidian/v1/transfers          # Idempotency-Key
+PUT  /api/integrations/obsidian/v1/transfers/{id}/blobs/{sha256}
+POST /api/integrations/obsidian/v1/transfers/{id}/commit
+GET  /api/integrations/obsidian/v1/transfers/{id}
+DELETE /api/integrations/obsidian/v1/transfers/{id}   # cancel if not applying
 ```
+
+Плагин Obsidian (ТЗ 2.68–2.70 / §6.3.4) пишет **только** в личное хранилище
+владельца токена — тот же склад, что `PUT /api/personal/notes/{path}` и
+`POST /api/personal/import-md`. Общую ризому, `shared_notes`, предложения и
+Differ эти методы не меняют.
+
+Авторизация передачи: `Authorization: Bearer <token>`. UUID склада сервер
+берёт из токена; клиент **не** передаёт `user_id`, чтобы выбрать чужое
+хранилище. Scopes: `personal:read`, `personal:write`, опционально
+`personal:delete`. Управление токенами — cookie-сессия
+`/api/users/me/integration-tokens` (секрет один раз, дальше хеш; ошибки как у остального
+веб-API: `{detail}`).
+
+Ошибки префикса `/api/integrations/obsidian/v1` — конверт
+`{error:{code,message,request_id,retryable,details}}`. Коды: `invalid_token`,
+`token_expired`, `insufficient_scope`, `author_contract_required`,
+`write_disabled`, `invalid_path`, `not_found` (в т.ч. чужой transfer), `version_conflict`,
+`resource_in_use`, `idempotency_mismatch`, `invalid_state`, `transfer_busy`,
+`quota_exceeded`, `snapshot_expired`, `transfer_expired`, `file_too_large`,
+`batch_too_large`, `unsupported_type`, `hash_mismatch`, `invalid_utf8`,
+`rate_limited`.
+
+`GET /capabilities` сообщает, можно ли писать (`write_allowed` /
+`write_block_reason`), лимиты и ссылки на личный граф и Differ.
+`write_allowed` — договор автора и активная учётка, не «git подключён».
+
+Пакет (`POST /transfers` … `commit`) применяется **целиком или никак** к
+личному складу. `expected_version: null` — создать, только если пути нет.
 
 Изменение API-контракта в ходе проектирования стадии допустимо без отдельного
 ADR, если не меняет продуктовую модель или внешние интеграционные обязательства.

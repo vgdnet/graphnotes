@@ -9,7 +9,7 @@ import {
   highlightNeighborhood,
   runFcoseLayout,
 } from "./cytoscapeFcose";
-import { cardHash } from "./cardRoute";
+import { cardHash, missingNotePath } from "./cardRoute";
 import { graphNodePath, LOCAL_GRAPH_DEPTHS } from "./graphQuery";
 import type { GraphScope } from "./graphQuery";
 import type { ThemeName } from "./theme";
@@ -91,6 +91,7 @@ export function GraphView({
   filterKind,
   onFilterKindChange,
   theme,
+  variant = "page",
 }: {
   graph: GraphResponse | null;
   loading?: boolean;
@@ -104,6 +105,7 @@ export function GraphView({
   filterKind?: FilterKind;
   onFilterKindChange?: (kind: FilterKind) => void;
   theme: ThemeName;
+  variant?: "page" | "aside";
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const cyRef = useRef<Core | null>(null);
@@ -163,7 +165,13 @@ export function GraphView({
   }, [query, searchLayer]);
 
   const focusPathRef = useRef<string | null>(null);
+  const personalLayerRef = useRef(personalLayer);
+  const canReadNotesRef = useRef(canReadNotes);
+  const onNeedAuthRef = useRef(onNeedAuth);
   focusPathRef.current = focusPath || selectedNodePath || localCenter || null;
+  personalLayerRef.current = personalLayer;
+  canReadNotesRef.current = canReadNotes;
+  onNeedAuthRef.current = onNeedAuth;
 
   useEffect(() => {
     if (matches[0]) setFocusPath(matches[0].path);
@@ -187,7 +195,29 @@ export function GraphView({
         setFocusPath(null);
         return;
       }
-      if (event.target.isNode()) setFocusPath(event.target.id());
+      if (!event.target.isNode()) return;
+      const path = event.target.id();
+      setFocusPath(path);
+      if (path.startsWith("locked:")) return;
+      if (path.startsWith("unresolved:")) {
+        const filePath = missingNotePath(path);
+        if (filePath) window.location.hash = cardHash(filePath);
+        return;
+      }
+      const node = {
+        path,
+        title: "",
+        tags: [],
+        isolated: false,
+        unresolved: false,
+      };
+      window.location.hash = cardHash(cardPathFor(node, personalLayerRef.current));
+      if (
+        !canReadNotesRef.current
+        && (path.startsWith("personal:") || path.startsWith("proposal:"))
+      ) {
+        onNeedAuthRef.current?.();
+      }
     };
     cy.on("tap", onTap);
     return () => {
@@ -297,7 +327,10 @@ export function GraphView({
       moveFocus(-1);
     } else if (event.key === "Enter") {
       const node = currentNode();
-      if (node && !node.unresolved) {
+      if (node?.unresolved) {
+        const filePath = missingNotePath(node.path);
+        if (filePath) window.location.hash = cardHash(filePath);
+      } else if (node) {
         window.location.hash = cardHash(cardPathFor(node, personalLayer));
         if (!canReadNotes) onNeedAuth?.();
       }
@@ -332,13 +365,18 @@ export function GraphView({
     return items;
   })();
 
+  const aside = variant === "aside";
+
   return (
-    <div className="graph-view">
+    <div className={aside ? "graph-view graph-view--aside" : "graph-view"}>
       <div className="graph-toolbar">
+        {!aside && (
         <label>
           Поиск
           <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="название или путь" />
         </label>
+        )}
+        {!aside && (
         <label>
           Слой
           <select
@@ -356,6 +394,8 @@ export function GraphView({
             {canReadNotes && <option value="personal">ваша личная ризома</option>}
           </select>
         </label>
+        )}
+        {!aside && (
         <label>
           Вид
           <select
@@ -374,11 +414,12 @@ export function GraphView({
             <option value="local">локальный граф</option>
           </select>
         </label>
+        )}
         <label>
           Глубина
           <select
             value={String(localDepth)}
-            disabled={graphScope !== "local"}
+            disabled={!aside && graphScope !== "local"}
             onChange={(event) => onLocalDepthChange?.(Number(event.target.value))}
           >
             {LOCAL_GRAPH_DEPTHS.map((value) => (
@@ -386,11 +427,14 @@ export function GraphView({
             ))}
           </select>
         </label>
+        {!aside && (
         <label>
           Тег
           <input value={tag} onChange={(event) => setTag(event.target.value)} placeholder="тег" />
         </label>
+        )}
       </div>
+      {!aside && (
       <p className="admin-panel__hint" role="status">
         Слой: {layerStatusLabel(graph?.layer, kind)}.
         {graphScope === "local" ? ` Локальный граф, глубина ${localDepth}.` : " Весь граф."}
@@ -401,6 +445,7 @@ export function GraphView({
         {query.trim() && matches.length > 0 ? ` Совпадений на графе: ${matches.length}.` : ""}
         {query.trim() && matches.length === 0 ? " Совпадений нет — граф на месте." : ""}
       </p>
+      )}
       {(!graph || graph.nodes.length === 0) && !loading ? (
         <p className="admin-panel__hint">Граф пока пуст.</p>
       ) : null}
@@ -412,12 +457,14 @@ export function GraphView({
         aria-label={personalLayer ? "Граф вашей личной ризомы" : "Граф общей ризомы"}
         onKeyDown={handleKey}
       />
+      {!aside && (
       <div className="graph-legend" aria-hidden="true">
         <span><i className="swatch swatch--shared" /> общая</span>
         <span><i className="swatch swatch--both" /> есть у вас</span>
         <span><i className="swatch swatch--personal" /> {personalLayer ? "ваша личная ризома" : "ваша часть ризомы"}</span>
         <span><i className="swatch swatch--missing" /> нет заметки</span>
       </div>
+      )}
       {query.trim() && remoteHits.length > 0 && (
         <ul className="search-hits">
           {remoteHits.slice(0, 8).map((hit) => (
@@ -434,7 +481,7 @@ export function GraphView({
           ))}
         </ul>
       )}
-      {selected && (
+      {selected && !aside && (
         <div className="graph-selection">
           <p>
             <strong>{selected.title}</strong>
@@ -461,7 +508,7 @@ export function GraphView({
               {neighbors.map((node) => (
                 <li key={node.path}>
                   {node.unresolved ? (
-                    <span>{node.title} · нет заметки</span>
+                    <a href={cardHash(missingNotePath(node.path))}>{node.title} · нет заметки</a>
                   ) : (
                     <a
                       href={cardHash(cardPathFor(node, personalLayer))}
@@ -476,7 +523,7 @@ export function GraphView({
               ))}
             </ul>
           )}
-          {!selected.unresolved && (
+          {!aside && !selected.unresolved && (
             <p className="graph-selection__link">
               <a
                 href={cardHash(cardPathFor(selected, personalLayer))}
@@ -484,7 +531,7 @@ export function GraphView({
                   if (!canReadNotes) onNeedAuth?.();
                 }}
               >
-                {canReadNotes ? `Открыть карточку · ${selected.title}` : "Войдите, чтобы открыть карточку"}
+                Открыть карточку · {selected.title}
               </a>
             </p>
           )}

@@ -34,6 +34,8 @@ export function PersonalCardEditor({
   onSaved,
   onError,
   setSubmitting,
+  signedIn = true,
+  onCreateMissing,
 }: {
   note: EditableNote;
   cardPath: string;
@@ -44,6 +46,8 @@ export function PersonalCardEditor({
   onSaved: (note: EditableNote) => void;
   onError: (message: string) => void;
   setSubmitting: (value: boolean) => void;
+  signedIn?: boolean;
+  onCreateMissing?: (path: string) => void;
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(note.source ?? note.body);
@@ -116,7 +120,14 @@ export function PersonalCardEditor({
           />
         </Suspense>
       ) : (
-        <MarkdownBody body={note.body} note={note} nodes={nodes} cardPath={cardPath} />
+        <MarkdownBody
+          body={note.body}
+          note={note}
+          nodes={nodes}
+          cardPath={cardPath}
+          signedIn={signedIn}
+          onCreateMissing={onCreateMissing}
+        />
       )}
     </div>
   );

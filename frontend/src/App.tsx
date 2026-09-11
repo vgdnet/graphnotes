@@ -7,7 +7,7 @@ import { GraphDiffView } from "./GraphDiffView";
 import type { GraphDiffResponse } from "./GraphDiffView";
 import { MarkdownBody } from "./MarkdownBody";
 import { CardSearch } from "./CardSearch";
-import { canShowCardEditButton, cardApiUrl, cardFilePath, cardHash, cardSearchHash, isOwnPersonalCard } from "./cardRoute";
+import { canShowCardEditButton, cardApiUrl, cardFilePath, cardHash, cardSearchHash, isOwnPersonalCard, missingNotePath, missingNoteTitle } from "./cardRoute";
 import { parseAppRoute, personCardHash, routeToView, viewHash, type ShellView } from "./appRoute";
 import { AuthPanel, type AuthMode } from "./AuthPanel";
 import { PersonalCardEditor } from "./PersonalCardEditor";
@@ -30,7 +30,7 @@ import {
 
 type HealthState = "checking" | "online" | "offline";
 type QueueTab = "new" | "in_progress" | "rejected";
-type SettingsBlock = "profile" | "git" | "contract";
+type SettingsBlock = "profile" | "git" | "contract" | "integrations";
 
 type User = {
   id: string;
@@ -62,6 +62,18 @@ type AuthorContract = {
   content_license: string;
   software_license: string;
   developer: string;
+};
+
+type IntegrationToken = {
+  id: string;
+  name: string;
+  token_prefix: string;
+  scopes: string[];
+  expires_at: string;
+  last_used_at: string | null;
+  created_at: string;
+  revoked_at: string | null;
+  token?: string;
 };
 
 const AUTHOR_CONTRACT_FALLBACK: Omit<AuthorContract, "version" | "title"> = {
@@ -381,6 +393,8 @@ export function App() {
   const [view, setView] = useState<ShellView>(() => routeToView(parseAppRoute(window.location.hash)));
   const [authOpen, setAuthOpen] = useState(false);
   const [settingsBlock, setSettingsBlock] = useState<SettingsBlock>("profile");
+  const [integrationTokens, setIntegrationTokens] = useState<IntegrationToken[]>([]);
+  const [createdIntegrationToken, setCreatedIntegrationToken] = useState<string | null>(null);
   const [mode, setMode] = useState<AuthMode>("login");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
@@ -404,6 +418,7 @@ export function App() {
   const [proposalDiffLoading, setProposalDiffLoading] = useState(false);
   const [decisionReason, setDecisionReason] = useState("");
   const [openNote, setOpenNote] = useState<NoteDetail | null>(null);
+  const [missingCard, setMissingCard] = useState<{ path: string; title: string } | null>(null);
   const [stackedPersonal, setStackedPersonal] = useState<NoteDetail | null>(null);
   const [personalFeed, setPersonalFeed] = useState<NoteFeedEvent[]>([]);
   const [report, setReport] = useState<IngestReport | null>(null);
@@ -662,16 +677,21 @@ export function App() {
       setSharedGraph(null);
       return;
     }
+    const routeNow = parseAppRoute(locationHash);
+    const viewingCard = routeNow.kind === "card" ? routeNow.path : null;
+    const cardIsPersonal = Boolean(viewingCard && isOwnPersonalCard(viewingCard));
+    const fetchCenter = viewingCard ? cardFilePath(viewingCard) : graphCenter;
+    const fetchPersonal = viewingCard ? cardIsPersonal : graphLayer === "personal";
     const controller = new AbortController();
     const params = new URLSearchParams(graphRequestParams({
-      scope: graphCenter ? "local" : "full",
-      center: graphCenter,
+      scope: fetchCenter ? "local" : "full",
+      center: fetchCenter,
       depth: graphDepth,
-      personalLayer: graphLayer === "personal",
+      personalLayer: fetchPersonal,
     }));
     const path = !user
       ? `/api/graph/shared?${params}`
-      : graphLayer === "personal"
+      : fetchPersonal
         ? `/api/graph/personal?${params}`
         : `/api/graph/personal-overlay?${params}`;
     setGraphLoading(true);
@@ -696,6 +716,7 @@ export function App() {
     graphCenter,
     graphDepth,
     graphLayer,
+    locationHash,
   ]);
 
   async function loadCardLayer(path: string): Promise<NoteDetail | null> {
@@ -711,8 +732,59 @@ export function App() {
     return ((await feed.json()) as { events: NoteFeedEvent[] }).events;
   }
 
+  async function createMissingCard(rawPath: string) {
+    if (!user) {
+      setAuthOpen(true);
+      goHash("#/auth");
+      return;
+    }
+    if (!user.is_author) {
+      setError("Чтобы создать карточку, примите договор автора в Настройках.");
+      goHash(viewHash("user"));
+      return;
+    }
+    const filePath = missingNotePath(rawPath);
+    if (!filePath) {
+      setError("Нельзя создать карточку с таким путём.");
+      return;
+    }
+    const title = missingNoteTitle(filePath);
+    setSubmitting(true);
+    setError("");
+    try {
+      const response = await fetch(`/api/personal/notes/${encodeURI(filePath)}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ source: `# ${title}\n\n`, expected_hash: "" }),
+      });
+      if (!response.ok) throw new Error(await readError(response));
+      setMissingCard(null);
+      setUploadStamp((value) => value + 1);
+      goHash(cardHash(`personal:${filePath}`));
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "Не удалось создать карточку");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  function showMissingCard(path: string) {
+    const filePath = missingNotePath(path);
+    setMissingCard({ path: filePath, title: missingNoteTitle(filePath) });
+    setOpenNote(null);
+    setStackedPersonal(null);
+    setNoteFeed([]);
+    setPersonalFeed([]);
+    setNoteComments([]);
+    setError("");
+    setSelectedCardPath(filePath);
+  }
+
   async function openGraphNote(path: string, origin: string) {
-    if (path.startsWith("unresolved:")) return;
+    if (path.startsWith("unresolved:")) {
+      showMissingCard(path);
+      return;
+    }
     if (path.startsWith("locked:")) {
       const title = path.slice("locked:".length);
       setNoteFeed([]);
@@ -741,15 +813,19 @@ export function App() {
     const stackable = !isPersonal && !isProposal;
     setSubmitting(true);
     setError("");
+    setMissingCard(null);
     setOpenNote(null);
     setStackedPersonal(null);
     try {
       if (stackable) {
         const [shared, personal] = await Promise.all([
           loadCardLayer(filePath),
-          loadCardLayer(`personal:${filePath}`),
+          user ? loadCardLayer(`personal:${filePath}`) : Promise.resolve(null),
         ]);
-        if (!shared && !personal) throw new Error("Карточка не найдена.");
+        if (!shared && !personal) {
+          showMissingCard(filePath);
+          return;
+        }
         setOpenNote(shared);
         setStackedPersonal(personal);
         setSelectedCardPath(shared?.path || `personal:${filePath}`);
@@ -765,7 +841,10 @@ export function App() {
         return;
       }
       const detail = await loadCardLayer(path);
-      if (!detail) throw new Error("Карточка не найдена.");
+      if (!detail) {
+        showMissingCard(filePath);
+        return;
+      }
       setOpenNote(detail);
       setSelectedCardPath(isPersonal ? path : detail.path);
       if (!detail.locked && !isProposal) {
@@ -858,7 +937,8 @@ export function App() {
       loadedCardRef.current = null;
       return;
     }
-    if (!user) {
+    const gated = route.path.startsWith("personal:") || route.path.startsWith("proposal:");
+    if (!user && gated) {
       loadedCardRef.current = null;
       setAuthOpen(true);
       setOpenNote(null);
@@ -991,6 +1071,67 @@ export function App() {
       setSubmitting(false);
     }
   }
+
+  async function loadIntegrationTokens() {
+    const response = await fetch("/api/users/me/integration-tokens");
+    if (!response.ok) throw new Error(await readError(response));
+    const body = (await response.json()) as { tokens: IntegrationToken[] };
+    setIntegrationTokens(body.tokens);
+  }
+
+  async function createIntegrationToken(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    const allowDelete = form.get("tokenDelete") === "on";
+    setSubmitting(true);
+    setError("");
+    setCreatedIntegrationToken(null);
+    try {
+      const response = await fetch("/api/users/me/integration-tokens", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: String(form.get("tokenName") || "Obsidian").trim() || "Obsidian",
+          scopes: allowDelete
+            ? ["personal:read", "personal:write", "personal:delete"]
+            : ["personal:read", "personal:write"],
+        }),
+      });
+      if (!response.ok) throw new Error(await readError(response));
+      const created = (await response.json()) as IntegrationToken;
+      if (created.token) setCreatedIntegrationToken(created.token);
+      await loadIntegrationTokens();
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "Ошибка соединения");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function revokeIntegrationToken(tokenId: string) {
+    if (!window.confirm("Отозвать этот токен? Плагин Obsidian перестанет писать в личное хранилище, пока не введёте новый.")) {
+      return;
+    }
+    setSubmitting(true);
+    setError("");
+    try {
+      const response = await fetch(`/api/users/me/integration-tokens/${tokenId}`, { method: "DELETE" });
+      if (!response.ok && response.status !== 204) throw new Error(await readError(response));
+      setCreatedIntegrationToken(null);
+      await loadIntegrationTokens();
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "Ошибка соединения");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  useEffect(() => {
+    if (view !== "settings" || settingsBlock !== "integrations" || !user) return;
+    void loadIntegrationTokens().catch((requestError: unknown) => {
+      setError(requestError instanceof Error ? requestError.message : "Ошибка соединения");
+    });
+  }, [view, settingsBlock, user]);
 
   function openDiffer() {
     if (!user) {
@@ -1617,10 +1758,11 @@ export function App() {
             />
           )}
           {view === "card" && (
-          <section className="notes-panel notes-panel--card" aria-labelledby="card-heading">
+          <section className="notes-panel notes-panel--card card-workspace" aria-labelledby="card-heading">
+            <div className="card-workspace__main">
             <div>
               <p className="eyebrow">Карточка</p>
-              <h2 id="card-heading">{openNote?.title || stackedPersonal?.title || "Карточка ризомы"}</h2>
+              <h2 id="card-heading">{openNote?.title || stackedPersonal?.title || missingCard?.title || "Карточка ризомы"}</h2>
             </div>
             <div className="graph-actions">
             <button className="button button--quiet" type="button" onClick={() => openCardSearch()}>
@@ -1659,9 +1801,18 @@ export function App() {
                             });
                         }}
                         onError={setError}
+                        signedIn
+                        onCreateMissing={(path) => void createMissingCard(path)}
                       />
                     ) : (
-                      <MarkdownBody body={openNote.body} note={openNote} nodes={sharedGraph?.nodes ?? []} cardPath={cardPath ?? openNote.path} />
+                      <MarkdownBody
+                        body={openNote.body}
+                        note={openNote}
+                        nodes={sharedGraph?.nodes ?? []}
+                        cardPath={cardPath ?? openNote.path}
+                        signedIn
+                        onCreateMissing={(path) => void createMissingCard(path)}
+                      />
                     )}
                     {noteFeed.length > 0 && (
                       <div>
@@ -1734,6 +1885,8 @@ export function App() {
                           });
                       }}
                       onError={setError}
+                      signedIn
+                      onCreateMissing={(path) => void createMissingCard(path)}
                     />
                     {personalFeed.length > 0 && (
                       <ul className="note-list">
@@ -1760,10 +1913,44 @@ export function App() {
                   </p>
                 )}
               </article>
+            ) : missingCard ? (
+              <div className="missing-card">
+                <p className="admin-panel__hint" role="status">Карточки пока нет</p>
+                {user ? (
+                  <button
+                    className="button button--primary"
+                    type="button"
+                    disabled={submitting}
+                    onClick={() => void createMissingCard(missingCard.path)}
+                  >
+                    Создать карточку
+                  </button>
+                ) : null}
+              </div>
             ) : error ? (
               <p className="admin-panel__hint" role="status">Карточка не загрузилась.</p>
             ) : (
               <p className="admin-panel__hint" role="status">Загружаем карточку…</p>
+            )}
+            </div>
+            {repository?.shared.connected && (
+              <aside className="card-workspace__graph" aria-label="Локальный граф карточки">
+                <p className="eyebrow">Рядом</p>
+                <h3>Граф</h3>
+                <GraphView
+                  variant="aside"
+                  graph={sharedGraph}
+                  loading={graphLoading}
+                  selectedPath={selectedCardPath || cardPath}
+                  localCenter={cardPath ? cardFilePath(cardPath) : null}
+                  localDepth={graphDepth}
+                  canReadNotes
+                  filterKind={cardPath && isOwnPersonalCard(cardPath) ? "personal" : graphLayer}
+                  onLocalCenterChange={() => undefined}
+                  onLocalDepthChange={setGraphDepth}
+                  theme={theme}
+                />
+              </aside>
             )}
           </section>
           )}
@@ -1777,7 +1964,7 @@ export function App() {
                 <strong>{user.username}</strong>
               </p>
               <p className="admin-panel__hint">
-                Здесь имя, почта, контакты, свой git и договор автора. Это не граф и не очередь.
+                Здесь имя, почта, контакты, свой git, договор автора и токены плагина Obsidian. Это не граф и не очередь.
               </p>
             </div>
             <div className="appearance-row">
@@ -1785,10 +1972,11 @@ export function App() {
               <ThemeSwitcher theme={theme} onToggle={toggleTheme} />
             </div>
             {error && <p className="form-error" role="alert">{error}</p>}
-            <div className="tabs tabs--three" role="tablist" aria-label="Блоки настроек">
+            <div className="tabs tabs--four" role="tablist" aria-label="Блоки настроек">
               <button className={settingsBlock === "profile" ? "tab tab--active" : "tab"} type="button" onClick={() => setSettingsBlock("profile")}>Личные данные</button>
               <button className={settingsBlock === "git" ? "tab tab--active" : "tab"} type="button" onClick={() => setSettingsBlock("git")}>Свой git</button>
               <button className={settingsBlock === "contract" ? "tab tab--active" : "tab"} type="button" onClick={() => setSettingsBlock("contract")}>Договор автора</button>
+              <button className={settingsBlock === "integrations" ? "tab tab--active" : "tab"} type="button" onClick={() => setSettingsBlock("integrations")}>Obsidian</button>
             </div>
             {settingsBlock === "profile" && (
               <form className="connect-form" onSubmit={(event) => void saveProfile(event)}>
@@ -1921,6 +2109,61 @@ export function App() {
                 </form>
               )
             )}
+            {settingsBlock === "integrations" && (
+              <div className="settings-stack">
+                <p className="admin-panel__hint">
+                  Токен как ключ SSH: создаёте один раз. У нас остаются хеш и отпечаток, сам секрет больше не показываем. Вставьте его в плагин — там он запоминается. Общую ризому и Differ токен не трогает.
+                </p>
+                {createdIntegrationToken && (
+                  <label>
+                    Секрет токена — скопируйте сейчас, повторно сервер его не покажет
+                    <input value={createdIntegrationToken} readOnly onFocus={(event) => event.currentTarget.select()} />
+                  </label>
+                )}
+                <form className="connect-form" onSubmit={(event) => void createIntegrationToken(event)}>
+                  <label>
+                    Имя
+                    <input name="tokenName" defaultValue="Obsidian" maxLength={80} required />
+                  </label>
+                  <label className="contract-check">
+                    <input name="tokenDelete" type="checkbox" />
+                    <span>Разрешить удаление файлов на сервере (personal:delete)</span>
+                  </label>
+                  <button className="button button--primary" type="submit" disabled={submitting}>
+                    Создать токен
+                  </button>
+                </form>
+                {integrationTokens.length === 0 ? (
+                  <p className="admin-panel__hint">Активных токенов нет.</p>
+                ) : (
+                  <ul className="note-list">
+                    {integrationTokens.map((item) => (
+                      <li key={item.id}>
+                        <div className="note-pick">
+                          <span className="note-link">
+                            <strong>{item.name}</strong>
+                            <small>
+                              {item.token_prefix}… · {item.scopes.join(", ")} · до {new Date(item.expires_at).toLocaleString("ru")}
+                              {item.revoked_at ? " · отозван" : ""}
+                            </small>
+                          </span>
+                          {item.revoked_at == null && (
+                            <button
+                              className="button button--danger"
+                              type="button"
+                              disabled={submitting}
+                              onClick={() => void revokeIntegrationToken(item.id)}
+                            >
+                              Отозвать
+                            </button>
+                          )}
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
             <div className="settings-session">
               <p className="admin-panel__hint">Сессия: {user.display_name} (@{user.username})</p>
               <button className="button button--quiet" type="button" onClick={() => void logout()} disabled={submitting}>
@@ -2051,6 +2294,8 @@ export function App() {
                       note={openNote}
                       nodes={sharedGraph?.nodes ?? []}
                       cardPath={cardPath ?? `personal:${cardFilePath(openNote.path)}`}
+                      signedIn
+                      onCreateMissing={(path) => void createMissingCard(path)}
                     />
                   )}
                   {noteFeed.length > 0 && (
@@ -2316,6 +2561,8 @@ export function App() {
                               unresolved_links: proposedLinks.filter((edge) => edge.source === item.path && edge.unresolved).map((edge) => edge.target),
                             }}
                             cardPath={`proposal:${openProposal.id}:${item.path}`}
+                            signedIn
+                            onCreateMissing={(path) => void createMissingCard(path)}
                           />
                         ) : (
                           <pre className="proposal-diff">{item.diff || item.path}</pre>
@@ -2386,7 +2633,7 @@ export function App() {
                 <p className="admin-panel__hint">
                   {graphLayer === "personal"
                     ? "Полный проиндексированный личный git (или загрузки). Слой считается сам: какие заметки входят в «вашу часть ризомы», решает пересечение с общей, не ручной список."
-                    : "Живой граф собирается из git. После пуша из Obsidian обновите страницу. Координаты раскладки — только отображение, не знание."}
+                    : "Клик по узлу или ссылке открывает карточку; сбоку будет её локальный граф. Координаты раскладки — только отображение, не знание."}
                 </p>
               </div>
               <div className="graph-actions">
@@ -2455,15 +2702,15 @@ export function App() {
           />
         )}
         {view === "search" && (
-          <CardSearch canReadNotes={false} onNeedAuth={() => { setAuthOpen(true); goHash("#/auth"); }}
+          <CardSearch canReadNotes onNeedAuth={() => { setAuthOpen(true); goHash("#/auth"); }}
           />
         )}
         {view === "card" && (
-          <section className="notes-panel notes-panel--card" aria-labelledby="guest-card-heading">
+          <section className="notes-panel notes-panel--card card-workspace" aria-labelledby="guest-card-heading">
+            <div className="card-workspace__main">
             <div>
               <p className="eyebrow">Карточка</p>
-              <h2 id="guest-card-heading">Карточка ризомы</h2>
-              <p className="admin-panel__hint" role="status">Войдите, чтобы открыть эту карточку.</p>
+              <h2 id="guest-card-heading">{openNote?.title || missingCard?.title || "Карточка ризомы"}</h2>
             </div>
             <div className="graph-actions">
             <button className="button button--quiet" type="button" onClick={() => openCardSearch()}>
@@ -2473,6 +2720,39 @@ export function App() {
               К графу
             </button>
             </div>
+            {error && <p className="form-error" role="alert">{error}</p>}
+            {openNote?.locked ? (
+              <p className="admin-panel__hint">Закрытая заметка. Тело не показывается.</p>
+            ) : openNote ? (
+              <article className="note-read">
+                <MarkdownBody body={openNote.body} note={openNote} nodes={sharedGraph?.nodes ?? []} cardPath={cardPath ?? openNote.path} />
+              </article>
+            ) : missingCard ? (
+              <p className="admin-panel__hint" role="status">Карточки пока нет</p>
+            ) : error ? (
+              <p className="admin-panel__hint" role="status">Карточка не загрузилась.</p>
+            ) : (
+              <p className="admin-panel__hint" role="status">Загружаем карточку…</p>
+            )}
+            </div>
+            {repository?.shared.connected && (
+              <aside className="card-workspace__graph" aria-label="Локальный граф карточки">
+                <p className="eyebrow">Рядом</p>
+                <h3>Граф</h3>
+                <GraphView
+                  variant="aside"
+                  graph={sharedGraph}
+                  loading={graphLoading}
+                  selectedPath={selectedCardPath || cardPath}
+                  localCenter={cardPath ? cardFilePath(cardPath) : null}
+                  localDepth={graphDepth}
+                  canReadNotes
+                  onLocalCenterChange={() => undefined}
+                  onLocalDepthChange={setGraphDepth}
+                  theme={theme}
+                />
+              </aside>
+            )}
           </section>
         )}
         {view === "person" && (
@@ -2480,10 +2760,7 @@ export function App() {
             card={personCard}
             loading={Boolean(personUserId) && !personCard && !error}
             error={error}
-            onOpenNote={(path) => {
-              setAuthOpen(true);
-              goHash(cardHash(path));
-            }}
+            onOpenNote={(path) => goHash(cardHash(path))}
           />
         )}
         {view === "about" && legalAboutPanel}
@@ -2493,7 +2770,7 @@ export function App() {
               <p className="eyebrow">Граф</p>
               <h2 id="public-graph-heading">Общая ризома</h2>
               <p className="admin-panel__hint">
-                Публичный граф без входа: узлы и связи. Карточки и Markdown — после входа.
+                Публичный граф: клик по узлу или ссылке открывает карточку.
               </p>
             </div>
             <GraphView
@@ -2502,7 +2779,7 @@ export function App() {
               selectedPath={selectedCardPath}
               localCenter={graphCenter}
               localDepth={graphDepth}
-              canReadNotes={false}
+              canReadNotes
               onNeedAuth={() => { setAuthOpen(true); goHash("#/auth"); }}
               onLocalCenterChange={setGraphCenter}
               onLocalDepthChange={setGraphDepth}

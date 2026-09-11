@@ -1,0 +1,233 @@
+# Obsidian plugin → GraphNotes personal store
+
+Handoff for the plugin author (Codex / separate tree). No secrets.
+
+**Canonical product:** `docs/product/PRODUCT_SPEC.md` §6.3.4 / §5.5.7,
+[api.md](../product/api.md). **Canonical architecture:**
+`docs/context/MASTER_CONTEXT.md` §12.1. The discussion file
+`docs/OBSIDIAN_PLUGIN_API_TZ.md` is not a second canon; if it conflicts,
+the files above win.
+
+Test origin is HTTP as an explicit exception (`ENVIRONMENTS.md`);
+production must use HTTPS. FastAPI itself has **no** `/api` prefix:
+Nginx `location /api/` strips it.
+
+| Where | Example |
+| --- | --- |
+| Browser / plugin base | `http://172.16.13.14:8080/api/integrations/obsidian/v1` |
+| FastAPI path | `/integrations/obsidian/v1` |
+| OpenAPI | `http://172.16.13.14:8080/api/openapi.json` |
+| Token UI | `http://172.16.13.14:8080/#/user` → tab **Obsidian** |
+
+`rhizome` (production) is not this API until an approved revision is
+promoted. Do not point the plugin at production while testing.
+
+## How to get a token
+
+1. Sign in on the test site (username/password). Cookie session is
+   `graphnotes_session`, HttpOnly, SameSite=Lax. There is no extra CSRF
+   header: token CRUD is same-origin Settings, like the rest of the web UI.
+2. Open **Настройки** (click the signed-in name) → **Obsidian**.
+3. Name the token, optionally allow `personal:delete`, create.
+4. Copy the secret **once**. It starts with `gnp_`. The server stores only
+   a SHA-256 hash and shows a prefix fingerprint in Settings. The cabinet
+   never re-exports the secret.
+5. Paste it into GraphNotes Publisher. The plugin keeps the secret in its
+   `data.json` (SSH-key analog, TZ 2.70). Restarting Obsidian does not
+   require pasting again.
+6. Default TTL 30 days, max 90. Revoke from the same tab.
+
+Web token routes (cookie session, errors `{ "detail": "..." }`):
+
+```http
+POST /api/users/me/integration-tokens
+Content-Type: application/json
+
+{"name":"Obsidian","scopes":["personal:read","personal:write"]}
+```
+
+201 body includes `token` once, plus `id`, `name`, `token_prefix`,
+`scopes`, `expires_at`, `created_at`. `GET` lists the same fields without
+`token`. `DELETE /api/users/me/integration-tokens/{id}` → 204.
+
+Plugin transfer APIs use `Authorization: Bearer <token>`. They never
+create tokens.
+
+## Ready methods
+
+All under `/api/integrations/obsidian/v1`. Auth: Bearer token.
+Personal data responses: `Cache-Control: no-store`. Errors:
+
+```json
+{
+  "error": {
+    "code": "version_conflict",
+    "message": "…",
+    "request_id": "uuid",
+    "retryable": false,
+    "details": [{"path": "Темы/Память.md", "current_version": "…"}]
+  }
+}
+```
+
+| Method | Status | Notes |
+| --- | --- | --- |
+| `GET /capabilities` | ready | `protocol_version` is `"1.0"` |
+| `GET /manifest?cursor&limit` | ready | snapshot + `next_cursor`; 410 `snapshot_expired` |
+| `GET /files/content?path=` | ready | **raw bytes**, not JSON |
+| `POST /transfers` | ready | optional `Idempotency-Key`; 201 plan |
+| `PUT /transfers/{id}/blobs/{sha256}` | ready | `application/octet-stream`; 204 |
+| `POST /transfers/{id}/commit` | ready | 202 on run/replay; 409 on conflict |
+| `GET /transfers/{id}` | ready | state, results, remaining_blobs, index_revision |
+| `DELETE /transfers/{id}` | ready | 204 cancel; 409 if applying |
+
+`write_allowed` is **author contract + active account**. A connected
+personal git does **not** set `write_disabled` (canonical TZ 2.62: the
+working copy is always the GraphNotes store).
+
+## GET /files/content
+
+TZ asked for current bytes and version. Representation:
+
+- Body: exact stored bytes
+- `Content-Type`: `text/markdown; charset=utf-8` or the attachment MIME
+- `X-GraphNotes-Path`: percent-encoded POSIX path (HTTP headers are Latin-1)
+- `X-GraphNotes-Kind`: `markdown` / `png` / `jpeg` / `gif` / `webp` / `pdf`
+- `X-GraphNotes-SHA256`
+- `X-GraphNotes-Version`
+- `X-GraphNotes-Size`
+
+If the plugin needs a JSON envelope instead, that is a contract change:
+agree before switching.
+
+## Examples
+
+Capabilities (abridged):
+
+```http
+GET /api/integrations/obsidian/v1/capabilities
+Authorization: Bearer gnp_…
+```
+
+```json
+{
+  "protocol_version": "1.0",
+  "api_prefix": "/api/integrations/obsidian/v1",
+  "user": {"id": "uuid", "username": "alice", "display_name": "Alice"},
+  "write_allowed": true,
+  "write_block_reason": null,
+  "scopes": ["personal:read", "personal:write"],
+  "formats": ["md", "png", "jpeg", "gif", "webp", "pdf"],
+  "limits": {
+    "markdown_max_bytes": 1048576,
+    "attachment_max_bytes": 26214400,
+    "batch_max_operations": 500,
+    "batch_max_bytes": 104857600,
+    "manifest_page_max": 200,
+    "path_max_length": 180,
+    "path_max_depth": 8
+  },
+  "quota": {
+    "personal_max_bytes": 524288000,
+    "personal_used_bytes": 0,
+    "personal_remaining_bytes": 524288000
+  },
+  "links": {
+    "personal_graph": "http://172.16.13.14:8080/#/my_graph",
+    "differ": "http://172.16.13.14:8080/#/differ"
+  }
+}
+```
+
+`write_block_reason` is `null`, `author_contract_required`, or
+`account_inactive`.
+
+Minimal send of one note:
+
+```http
+POST /api/integrations/obsidian/v1/transfers
+Authorization: Bearer gnp_…
+Idempotency-Key: 550e8400-e29b-41d4-a716-446655440000
+Content-Type: application/json
+
+{
+  "client_id": "11111111-1111-1111-1111-111111111111",
+  "operations": [
+    {
+      "op": "upsert",
+      "path": "Темы/Память.md",
+      "kind": "markdown",
+      "expected_version": null,
+      "sha256": "64 lowercase hex chars of the exact bytes",
+      "size": 21
+    }
+  ]
+}
+```
+
+201:
+
+```json
+{
+  "transfer_id": "uuid",
+  "state": "awaiting_upload",
+  "files_applied": false,
+  "expires_at": "2026-09-12T00:00:00Z",
+  "required_blobs": [{"sha256": "…", "size": 21}],
+  "remaining_blobs": [{"sha256": "…", "size": 21}],
+  "results": [],
+  "errors": [],
+  "index_revision": null,
+  "client_id": "11111111-1111-1111-1111-111111111111"
+}
+```
+
+```http
+PUT /api/integrations/obsidian/v1/transfers/{transfer_id}/blobs/{sha256}
+Authorization: Bearer gnp_…
+Content-Type: application/octet-stream
+
+<exact file bytes>
+```
+
+204. Then:
+
+```http
+POST /api/integrations/obsidian/v1/transfers/{transfer_id}/commit
+Authorization: Bearer gnp_…
+```
+
+202 `state: succeeded`, `files_applied: true`, `results[].version` for
+the comparison DB. Replay commit returns the same transfer. Same
+Idempotency-Key + same body returns the same plan; different body →
+409 `idempotency_mismatch`.
+
+Delete needs `personal:delete` and a current `expected_version` (not
+null). Rename = upsert new path + delete old path in one batch or two
+confirmed steps.
+
+## Limits and ops
+
+Nginx `client_max_body_size` on the test frontend is **32m** so 25 MiB
+attachments fit. In-process rate limit: 120 requests / minute / user
+(429 `rate_limited`, `Retry-After: 60`). One concurrent commit per user
+→ 409 `transfer_busy`.
+
+White-noise Markdown is rejected as 415 `unsupported_type` on this
+plugin path **without** the ZIP-ingest account lock (TZ 2.67 lock stays
+on `POST /api/personal/import-md`).
+
+Indexing after apply reads `personal_uploads` only; it does not copy git
+over plugin writes. `indexing_failed` keeps `files_applied: true`;
+re-commit retries index only.
+
+## Operator
+
+- Alembic: `0017_obsidian_integration` (`object_version` on
+  `personal_uploads`, token/transfer/blob/snapshot tables, `personal_assets`).
+- Audit actions: `integration.token_created` / `token_revoked` /
+  `transfer_created` / `transfer_applied` / `transfer_indexed` /
+  `transfer_index_failed` / `transfer_conflict` / `transfer_cancelled`.
+  No token secrets, passwords, or note bodies.
+- Uncommitted blobs are dropped on success, cancel, or plan expiry (24h).
+  Transfer rows and idempotency keys stay ≥ 30 days.

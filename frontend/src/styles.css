@@ -257,6 +257,7 @@ button { color: inherit; }
 .auth-card { padding: clamp(1.5rem, 4vw, 2.4rem); }
 .tabs { display: grid; grid-template-columns: 1fr 1fr; margin-bottom: 2rem; padding: .25rem; border-radius: .75rem; background: var(--gn-tab-bg); }
 .tabs--three { grid-template-columns: 1fr 1fr 1fr; }
+.tabs--four { grid-template-columns: 1fr 1fr 1fr 1fr; }
 .tab { padding: .75rem; border: 0; border-radius: .58rem; background: transparent; color: var(--gn-text-faint); cursor: pointer; }
 .tab--active { background: var(--gn-tab-active); color: var(--gn-text-strong); }
 .auth-link { padding: 0; border: 0; background: none; color: var(--gn-accent); cursor: pointer; font: inherit; text-decoration: underline; }
@@ -322,6 +323,27 @@ select { padding: .65rem .8rem; border: 1px solid var(--gn-input-border); border
 .notes-panel { width: min(100%, 72rem); margin: 0 auto 3rem; padding: 1.5rem; border: 1px solid var(--gn-border); border-radius: 1.3rem; background: var(--gn-surface); }
 .notes-panel h2, .notes-panel h3 { margin: 0 0 .75rem; }
 .notes-panel--graph { width: min(100%, 96rem); padding: 1.15rem 1.25rem 1.4rem; }
+.notes-panel--card.card-workspace { width: min(100%, 96rem); }
+.card-workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 1.25rem;
+  align-items: start;
+}
+@media (min-width: 960px) {
+  .card-workspace {
+    grid-template-columns: minmax(0, 1.35fr) minmax(18rem, 0.9fr);
+  }
+}
+.card-workspace__graph {
+  position: sticky;
+  top: 1rem;
+  display: grid;
+  gap: .6rem;
+}
+.card-workspace__graph h3 { margin: 0; }
+.graph-view--aside .graph-canvas { height: min(52vh, 28rem); }
+.graph-view--aside .graph-selection { margin: 0; }
 .notes-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
 .note-list { list-style: none; margin: 0 0 1rem; padding: 0; display: grid; gap: .55rem; max-height: 22rem; overflow: auto; }
 .note-list label, .note-link { display: flex; flex-direction: column; gap: .25rem; align-items: flex-start; width: 100%; padding: .7rem .8rem; border: 1px solid var(--gn-border); border-radius: .7rem; background: var(--gn-bg-mid); color: inherit; text-align: left; cursor: pointer; }
@@ -392,6 +414,32 @@ select { padding: .65rem .8rem; border: 1px solid var(--gn-input-border); border
 }
 .wiki-link { color: var(--gn-wiki); }
 .wiki-link--missing, .wiki-link--locked { color: var(--gn-warn); }
+.wiki-link--missing { text-decoration: underline dotted; }
+.missing-card { display: grid; gap: .75rem; justify-items: start; }
+.wiki-missing-hint {
+  position: fixed;
+  z-index: 20;
+  transform: translate(-50%, calc(-100% - .55rem));
+  padding: .55rem 1.1rem;
+  border: 1px solid var(--gn-border);
+  border-radius: 999px;
+  background: var(--gn-surface);
+  color: var(--gn-text);
+  box-shadow: 0 .35rem 1rem rgb(0 0 0 / 14%);
+  font-size: .88rem;
+  line-height: 1.3;
+  white-space: nowrap;
+  pointer-events: auto;
+}
+.wiki-missing-hint__action {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
 .search-hits { display: flex; flex-wrap: wrap; gap: .5rem 1rem; list-style: none; margin: 0; padding: 0; color: var(--gn-quiet-text); font-size: .84rem; }
 .search-hits a { color: var(--gn-wiki); }
 .notes-panel--search { width: min(100%, 52rem); }

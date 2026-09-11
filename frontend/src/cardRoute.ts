@@ -127,6 +127,23 @@ export function wikiCardHash(sourceCardPath: string | undefined, targetPath: str
   return cardHash(qualifyCardPath(sourceCardPath, targetPath));
 }
 
+/** Wikilink / unresolved graph node → Markdown path for a missing card. */
+export function missingNotePath(raw: string): string {
+  let text = normalizeCardPath(raw).replace(/\\/g, "/").trim().replace(/^\/+/, "");
+  if (text.startsWith("unresolved:")) text = text.slice("unresolved:".length);
+  if (text.startsWith("locked:")) text = text.slice("locked:".length);
+  text = cardFilePath(text);
+  if (!text) return "";
+  if (!text.toLowerCase().endsWith(".md")) text = `${text}.md`;
+  return text;
+}
+
+export function missingNoteTitle(path: string): string {
+  const file = missingNotePath(path);
+  const name = file.split("/").pop() || file;
+  return name.toLowerCase().endsWith(".md") ? name.slice(0, -3) : name;
+}
+
 /** Keep `/` unescaped so FastAPI `{note_path:path}` receives nested Markdown paths. */
 export function cardApiUrl(path: string): string {
   return `/api/cards/${encodeURI(path)}`;
