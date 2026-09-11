@@ -1,7 +1,7 @@
 # GraphNotes — канонический контекст Technical Observer
 
 Статус: ACTIVE
-Updated: 2026-09-07 (TZ 2.59: sitemap shipped, unified auth, card stack; Elasticsearch and payment still later)
+Updated: 2026-09-11 (TZ 2.63: search = index, not bodies in PostgreSQL; personal export from local .md store)
 
 Этот файл задаёт рабочий регламент отдельного Technical Observer проекта
 GraphNotes. Его можно передать новому воркеру целиком. Он не заменяет
@@ -70,29 +70,40 @@ ADR. Глобальное изменение должно быть явно пр
 
 ### Markdown — источник истины
 
-Каноническое знание хранится в Markdown/Git. PostgreSQL, узлы, связи, теги,
-поисковый индекс и визуальный граф являются производными и должны быть
-восстановимы.
+Каноническое знание хранится в Markdown. Склад личного — **всегда**
+локальная копия GraphNotes (загрузки / in-app / копия с коннектора). Git,
+позже Dropbox / Google Drive — ingest copy-in, не второй канон.
+PostgreSQL, узлы, связи, теги, поисковый индекс и визуальный граф —
+производные и должны быть восстановимы.
 
 Запрещён второй канонический графовый файл, включая `graph.json`.
+Канонические тела **опубликованной общей** не кладут в PostgreSQL в обход
+Differ как второй корпус «для поиска». Личный hosted Markdown — продуктовый
+путь (ТЗ 2.62). Поиск — `note_index`, не full-text по складу «вместо
+индекса». Выгрузка своей — со склада `.md`, не из индекса (ТЗ 2.63).
 
 ### Rhizome and RBAC model
 
 - exactly one shared rhizome per installation;
-- exactly one personal rhizome per user (the user's git remote; ADR-008);
+- exactly one personal rhizome per user (GraphNotes local store; connectors
+  copy `.md` in — TZ 2.62 / ADR-008 amendment);
 - no workspace/organization/team/community/multiple-shared entities;
-- no canonical note bodies in PostgreSQL;
-- GraphNotes for authors is a shared multi-Obsidian (TZ 2.47–2.54): thin
+- no canonical **published shared** note bodies in PostgreSQL as a second
+  corpus; personal hosted Markdown is the product default (TZ 2.61);
+- GraphNotes for authors is a Publish analog with rights and one shared
+  rhizome (TZ 2.61), not a second Obsidian: thin
   in-app editor is **own personal cards only** after «Отредактировать
   карточку» (`PUT /api/personal/notes/{path}`,
   `source` + `expected_hash`, author contract, git XOR upload, no new path,
   409 if stale);
   in-app history is `rhizome_events.owner_user_id` (no bodies);
   shared / others' personal / proposal stay read-only; do not ship a
-  vault-replacing second Obsidian; ADR-008 leftover vs this TZ;
-- app routes (TZ 2.58): `/card` start card (admin settings); `/card/{path}`
+  vault-replacing second Obsidian; ADR-008 leftover «no hosted vault» vs TZ 2.61;
+- app routes (TZ 2.58 / 2.60): `/card` start card (admin settings); `/card/{path}`
   card (2.55–2.56 stack + Differ offer); `/queue` editor queue; `/user`
-  **settings** (not person card); `/offer` **my** proposals; `/graph`
+  **settings** (not person card); `#/users/{uuid}` **public person card**
+  (`GET /api/users/{id}/card`, achievement counters, no unpublished paths);
+  `/offer` **my** proposals; `/graph`
   shared canvas; `/search` card search; `/my_graph` personal graph;
   `/contribution` Мой вклад; `/differ` stays Отличающиеся; `/` → `/graph`.
   Do not invent `/accepted/differ`. TZ 2.57 `/user`=person and
@@ -104,7 +115,7 @@ ADR. Глобальное изменение должно быть явно пр
   a third folder; hash `#/card/personal:` is transitional;
 - global hierarchical roles `user < editor < admin`;
 - rhizome **access levels** (ADR-016 / TZ 2.41) are not a fourth role:
-  closed/paid slices stay in the author's personal git, marked in Markdown;
+  closed/paid slices stay in the author's personal store (hosted XOR git), marked in Markdown;
   derived `closed_paths` (later level id); entitlements UUID↔slice later;
   no second knowledge repository; «ризома автора» after entitlement is a
   view of that flag (graph + cards), not a second remote, index, or ZIP;
@@ -221,8 +232,8 @@ nord -> GitHub -> rhizome-test -> approved revision -> rhizome
 
 Канонический stack: FastAPI/Python, React/TypeScript, PostgreSQL, SQLAlchemy 2.x
 async, Alembic, Docker/Compose, host Nginx; Cytoscape.js — UI общего графа,
-personal overlay и Graph Diff (Stage 6+). GitHub App — Git-движок knowledge
-repositories (Stage 3).
+personal overlay и Graph Diff (Stage 6+). GitHub App — leftover Git-движок
+общей ризомы (Stage 3), не диск пользователя (ТЗ 2.61).
 
 Без отдельного принятого решения нельзя преждевременно добавлять Neo4j,
 Elasticsearch, Redis, Celery, RabbitMQ, MinIO/S3, Gitea/GitLab или Kubernetes.

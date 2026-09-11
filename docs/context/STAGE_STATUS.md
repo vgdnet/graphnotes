@@ -1,13 +1,20 @@
 # GraphNotes - Stage Status
 
-Updated: 2026-09-07
+Updated: 2026-09-11
 
-Product model ADR-008 leftover vs TZ 2.59: GraphNotes is a multi-Obsidian
-for authors, not a vault clone. In-app edit is **own personal cards only**
+Product model TZ 2.63: local store holds `.md`; PostgreSQL `note_index` is
+the search/graph index, not a second canon. Personal export (if any) is
+from the store, not synthesized from the index. Shared is not a product ZIP.
+TZ 2.62: personal working copy is always the GraphNotes local
+store. Connectors (git now; Dropbox / Drive later) copy `.md` in. Differ
+compares that copy to the shared rhizome. Copy-in on git connect/refresh is
+shipped. In-app save stays on the local store (no write-back to git).
+Disconnect keeps copied files. ADR-008 leftover «no hosted vault» vs hosted store.
+In-app edit is **own personal cards only**
 (`#/card/personal:{path}`, hash may be `personal%3A`) after view-first
 «Отредактировать карточку» (MDXEditor; GraphNotes preview on read).
 TZ 2.54: `[[wikilink]]` inherits the open card layer (personal stays personal).
-Canonical **published** note bodies are not stored in PostgreSQL.
+Canonical **published shared** note bodies are not stored in PostgreSQL.
 Current implementation stage is Stage 8. ADR-009: Differ is one-way personal
 → published shared.
 TZ 2.59 shipped the 2.58 sitemap in the hash UI: `/card` start card
