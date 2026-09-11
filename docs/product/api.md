@@ -28,11 +28,13 @@ GET  /api/repository/status
 POST /api/personal/connect          # from account settings, not the graph home
 POST /api/personal/import-md          # .md/ZIP into the local personal store;
                                     # ZIP ≤ 10 000 files else 400 archive has too many files
+                                    # white noise → 400 content is not Markdown notes + lock (TZ 2.67)
 GET  /api/personal/notes              # read-only index of the local personal store
 GET  /api/personal/notes/{id}
 PUT  /api/personal/notes/{path}       # own personal only; source + expected_hash;
                                     # local store; author contract;
-                                    # existing path only (404 missing, 409 stale)
+                                    # existing path (409 stale) or new personal
+                                    # from a missing-link create (TZ 2.66)
 GET  /api/personal/uploads            # upload history: who / when / path / hash
 
 GET  /api/differ                      # one-way personal → published shared;
@@ -57,9 +59,10 @@ GET  /api/public/embed/{user_id}      # opt-in achievement: graph snippet and/or
 GET  /api/search                      # default layer=visible: role-scoped corpus;
                                       # hits include layer (shared/personal/proposal);
                                       # overlay/personal/shared remain for graph highlight;
-                                      # guest = public hits, no bodies
-GET  /api/cards/{path}                # card GET; personal:{path}, personal:{uuid}:{path}
-                                      # (admin), proposal:{id}:{path} (author/editor/admin);
+                                      # guest = public hits, no snippets in the hit list
+GET  /api/cards/{path}                # published shared: guest may read the body;
+                                      # personal:{path}, personal:{uuid}:{path} (admin),
+                                      # proposal:{id}:{path} (author/editor/admin) need a session;
                                       # write is PUT /personal/notes/{path}, not this route
 GET  /api/cards/{path}/feed           # card history; shared = owner null; own personal
                                       # = caller; admin personal:{uuid}: = that owner;

@@ -2,11 +2,33 @@
 
 Updated: 2026-09-11
 Status: canonical architecture baseline
-Aligned with PRODUCT_SPEC 2.65. ZIP personal ingest accepts **10 000**
+Aligned with PRODUCT_SPEC 2.67. TZ 2.67: personal ingest that hits the
+Markdown indexer (ZIP, one `.md`, in-app save, personal git copy-in) is
+scanned for **white noise** (garbage, not notes). Combined signals — not
+one weak heuristic: invalid UTF-8 / binary `.md` (NUL), Shannon entropy
+≥ ~7.5 or incompressible high-entropy printable, almost no letters
+(Unicode `L*`, including Cyrillic/CJK) vs symbols, control-char soup.
+YAML frontmatter and fenced code are stripped before soft scores; short
+stubs skip soft checks. Normal Markdown, fences, CJK/Cyrillic, stubs and
+wikilinks do not lock. Zip-bomb size/ratio/10 000-file guards stay (TZ
+2.65). On hit: do not write or index the payload; HTTP 400
+`content is not Markdown notes`; set `is_active=false` (same as admin
+lock; drop sessions); audit `ingest.white_noise_lock`. Already-indexed
+real notes stay. Last active admin is not locked; ingest is still
+rejected. Mail every active `admin` with a confirmed email (or
+`notify_queue_email`); SMTP from / public URL from installation
+settings. SMTP off or send failure must not undo the lock. Shared
+copy-in is not this gate.
+Missing wikilink hover shows a Publish-like
+hint: guests «карточки пока нет»; signed-in authors «Создать карточку»
+(personal store, not shared). TZ 2.65: ZIP personal ingest accepts **10 000**
 files per archive (Obsidian vault / git dump); ~120 files succeed. Over the
 cap is HTTP 400 `archive has too many files`. Zip-bomb guards stay: 2 MiB
 compressed, 8 MiB unpacked, 256 KiB per file, compression ratio, no
-symlinks/encryption/odd compression. Knowledge Markdown **always** lives in GraphNotes
+symlinks/encryption/odd compression. Graph node tap and `[[wikilink]]` open
+`/card/{path}`; the card page shows a local neighborhood graph beside the
+article. Guests may read published shared cards (not personal, queue, or
+comments). Knowledge Markdown **always** lives in GraphNotes
 local stores (personal `personal_uploads`, published shared `shared_notes`).
 GitHub is a **source**: connectors copy `.md` in. Cards and Differ read copies.
 Git live-read of blobs for cards is leftover. Editor merge may still push GitHub
@@ -54,7 +76,8 @@ personal are not collapsed — the same git path can exist in both.
 Widget is MDXEditor
 rich+source + GraphNotes Markdown preview on read; `PUT /api/personal/notes/{path}`
 with `source` + `expected_hash`; write the GraphNotes local store;
-existing path only, 404 if missing, 409 if stale. In-app saves record `rhizome_events`
+existing path, or a **new** personal path from a missing-link page (TZ 2.66);
+409 if stale. In-app saves record `rhizome_events`
 (`edited` / `linked` / `unlinked`) with `owner_user_id` so they do not mix
 into the shared card feed for the same git path; no Markdown bodies in that
 table. `GET /api/cards/{path}/feed` is the card history. Shared / others'
@@ -154,8 +177,9 @@ personal Markdown. Light and dark UI themes (TZ 2.19 / 2.22 /
 sun/moon pill, `role="switch"`), not generic text buttons. Cytoscape labels
 use CSS theme tokens, not hardcoded washed-out fills. Landing `/` is `/graph`
 (shared canvas) for guests and signed-in users (TZ 2.14 / 2.58). `/my_graph`
-is the personal layer only. Guests see published nodes/edges only;
-card bodies, feed and comments require a session. Account settings
+is the personal layer only. Guests see published nodes/edges and may
+open published shared card bodies (TZ 2.64); feed, comments, personal
+and queue still require a session. Account settings
 (§5.5 / TZ 2.13 / 2.58) live at **`/user`** (name in header opens it):
 required unique email, optional phone/Telegram contacts (not login), git
 connect/disconnect and author contract — not the public person card.
@@ -304,7 +328,8 @@ GraphNotes should handle:
   proposed card text and links first, then Graph Diff; reject and
   return require a comment the author can read
 - `/search` is role-scoped over `note_index` (`layer=visible`
-  default): guest = published shared hits, no card body; user = shared ∪
+  default): guest = published shared hits and may open those card bodies;
+  user = shared ∪
   own personal; editor = that ∪ reviewable proposals; admin = every card
   they can open. Hits include `layer`. `layer=overlay` stays the graph
   stitch, not the card-search default. Proposal files are indexed on
@@ -314,8 +339,9 @@ GraphNotes should handle:
   (accepted contract); no button and no contract hint otherwise. After the
   button the widget is **MDXEditor** (rich + source); read stays the
   GraphNotes Markdown preview. Save is `PUT /api/personal/notes/{path}` with
-  `source` + `expected_hash`; local personal store; existing path
-  only (404 if missing, 409 if hash stale). In-app saves record
+  `source` + `expected_hash`; local personal store; existing path,
+  or a new personal path from a missing wikilink (TZ 2.66, empty
+  `expected_hash`); 409 if hash stale. In-app saves record
   `rhizome_events` (`edited` / `linked` / `unlinked`) with `owner_user_id`;
   `GET /api/cards/{path}/feed` is that history (no Markdown bodies); personal
   events do not mix into the shared feed for the same git path. Shared,
@@ -574,7 +600,8 @@ Personal layer (connected git **or** upload without git):
 - `DELETE /api/personal/connect` (unbind personal git; uploads remain)
 - `POST /api/personal/import-md` (`.md`/ZIP into the local personal store;
   ZIP up to 10 000 members, else 400 `archive has too many files`;
-  2 MiB compressed / 8 MiB unpacked / 256 KiB per file remain)
+  2 MiB compressed / 8 MiB unpacked / 256 KiB per file remain;
+  white noise → 400 `content is not Markdown notes` + account lock)
 - `GET  /api/personal/notes` (read-only index of the caller's personal layer)
 - `GET  /api/personal/notes/{id}`
 - `PUT  /api/personal/notes/{path}` (TZ 2.50: own personal only after the
@@ -599,10 +626,10 @@ Shared publication and Differ:
 - `GET  /api/users/{id}/card` (public person card / achievements; not a GitHub
   profile; not personal or closed bodies)
 - `GET  /api/shared/notes` (public titles; not card bodies)
-- `GET  /api/shared/notes/{path}` (card body; login required, TZ 2.14)
-- `GET  /api/cards/{path}` (card GET; `personal:{path}`, admin
-  `personal:{uuid}:{path}`, `proposal:{id}:{path}`; write is PUT personal,
-  not this route)
+- `GET  /api/shared/notes/{path}` (published shared card body; guest OK, TZ 2.64)
+- `GET  /api/cards/{path}` (published shared body is public; `personal:{path}`,
+  admin `personal:{uuid}:{path}`, `proposal:{id}:{path}` need a session;
+  write is PUT personal, not this route)
 - `GET  /api/cards/{path}/feed` (card history; shared `owner_user_id` null;
   own personal = caller; admin `personal:{uuid}:` = that owner; proposal
   empty; in-app personal edits do not appear on the shared path feed; no bodies)
@@ -621,8 +648,8 @@ Graph visualization and Graph Diff (Stage-owned):
 - `GET  /api/graph/personal` (`/my_graph`; ваша личная ризома; caller’s full indexed tree or uploads)
 - `GET  /api/graph/personal-overlay` (ваша часть ризомы; shared page + automatic wikilink stitch)
 - `GET  /api/search` (`layer=visible|overlay|personal|shared`; visible is
-  the `/search` default; guest = public hits, no bodies; overlay/personal
-  remain for graph highlight; hits include layer)
+  the `/search` default; guest = public hits, no snippets in the list;
+  overlay/personal remain for graph highlight; hits include layer)
 - `GET  /api/graph/diff?proposal_id=...` (Stage 8 structural view of Differ/proposal; same derived index)
 
 Proposals and editor workflow (Stage-owned):

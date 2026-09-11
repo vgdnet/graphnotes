@@ -17,6 +17,7 @@ from app.services.mail import (
     send_plaintext_mail,
     smtp_configured,
     telegram_configured,
+    white_noise_lock_mail,
 )
 
 
@@ -151,4 +152,81 @@ async def notify_new_proposal(
                 "telegramed": telegramed,
                 "failed": failed,
             },
+        )
+
+
+async def list_admin_mail_recipients(
+    database: AsyncSession,
+    *,
+    exclude_user_id=None,
+) -> list[User]:
+    """Active admins with a usable inbox (confirmed, or queue-notify on)."""
+    rows = (
+        await database.scalars(
+            select(User).where(
+                User.is_active.is_(True),
+                User.role == UserRole.ADMIN.value,
+            )
+        )
+    ).all()
+    recipients: list[User] = []
+    for user in rows:
+        if exclude_user_id is not None and user.id == exclude_user_id:
+            continue
+        if not user.email or not user.email.strip():
+            continue
+        confirmed = user.email_verified_at is not None
+        if confirmed or user.notify_queue_email:
+            recipients.append(user)
+    return recipients
+
+
+async def notify_admins_white_noise(
+    database: AsyncSession,
+    *,
+    username: str,
+    locked_email: str,
+    when: str,
+    reasons: list[str],
+    paths: list[str],
+    locked: bool,
+    exclude_user_id=None,
+) -> None:
+    if not smtp_configured():
+        return
+    recipients = await list_admin_mail_recipients(
+        database, exclude_user_id=exclude_user_id
+    )
+    if not recipients:
+        return
+    public_base = await resolve_public_base_url(database)
+    emailed = 0
+    failed = 0
+    for recipient in recipients:
+        subject, body = white_noise_lock_mail(
+            recipient,
+            username=username,
+            locked_email=locked_email,
+            when=when,
+            reasons=reasons,
+            paths=paths,
+            locked=locked,
+            public_base_url=public_base,
+        )
+        try:
+            await run_in_threadpool(
+                send_plaintext_mail,
+                to_address=recipient.email,
+                subject=subject,
+                body=body,
+            )
+            emailed += 1
+        except (MailNotConfiguredError, MailDeliveryError):
+            failed += 1
+    if emailed or failed:
+        record_audit_event(
+            database,
+            action="notify.white_noise_sent" if emailed else "notify.white_noise_failed",
+            subject_username=username,
+            details={"emailed": emailed, "failed": failed, "locked": locked},
         )

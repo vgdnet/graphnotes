@@ -3,11 +3,12 @@ from __future__ import annotations
 import json
 from datetime import UTC, datetime
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
+from app.models.auth_session import AuthSession
 from app.models.github import PersonalRepository, SharedRepository
 from app.models.personal_upload import PersonalUpload, UploadEvent
 from app.models.shared_note import SharedNote
@@ -27,6 +28,11 @@ from app.services.github import GitHubAppClient, GitHubAppError
 from app.services.index import IndexerError, ensure_personal_current, ensure_shared_current
 from app.services.markdown import parse_markdown, unresolved_links
 from app.services.provenance import record_personal_edit_events
+from app.services.noise import (
+    WhiteNoiseContentError,
+    inspect_markdown_text,
+)
+from app.services.notify import notify_admins_white_noise
 from app.services.repository import (
     SHARED_SINGLETON_ID,
     refresh_personal,
@@ -39,6 +45,85 @@ class IngestError(Exception):
         super().__init__(detail)
         self.status_code = status_code
         self.detail = detail
+
+
+CONTENT_NOT_NOTES = "content is not Markdown notes"
+
+
+async def _active_admin_count(database: AsyncSession) -> int:
+    count = await database.scalar(
+        select(func.count())
+        .select_from(User)
+        .where(User.role == UserRole.ADMIN.value, User.is_active.is_(True))
+    )
+    return int(count or 0)
+
+
+async def lock_for_white_noise(
+    database: AsyncSession,
+    user: User,
+    *,
+    paths: list[str],
+    reasons: list[str],
+    source: str,
+) -> bool:
+    """Reject noise: lock the account (not the last admin), audit, mail admins.
+
+    Already-indexed notes stay. Mail failure must not undo the lock.
+    """
+    locked = False
+    if user.is_active:
+        last_admin = (
+            user.role == UserRole.ADMIN.value and await _active_admin_count(database) <= 1
+        )
+        if not last_admin:
+            user.is_active = False
+            locked = True
+            await database.execute(delete(AuthSession).where(AuthSession.user_id == user.id))
+    when = datetime.now(UTC).isoformat()
+    record_audit_event(
+        database,
+        action="ingest.white_noise_lock",
+        actor_user_id=user.id,
+        target_user_id=user.id,
+        subject_username=user.username,
+        details={
+            "paths": paths,
+            "reasons": reasons,
+            "source": source,
+            "locked": locked,
+        },
+    )
+    await database.commit()
+    try:
+        await notify_admins_white_noise(
+            database,
+            username=user.username,
+            locked_email=user.email,
+            when=when,
+            reasons=reasons,
+            paths=paths,
+            locked=locked,
+            exclude_user_id=user.id,
+        )
+        await database.commit()
+    except Exception:
+        await database.rollback()
+    return locked
+
+
+async def _reject_white_noise(
+    database: AsyncSession,
+    user: User,
+    *,
+    paths: list[str],
+    reasons: list[str],
+    source: str,
+) -> None:
+    await lock_for_white_noise(
+        database, user, paths=paths, reasons=reasons, source=source
+    )
+    raise IngestError(400, CONTENT_NOT_NOTES)
 
 
 def _http_status(error: GitHubAppError) -> int:
@@ -217,6 +302,7 @@ async def copy_git_into_personal_store(
         to_fetch = list(current_paths)
 
     fetched: dict[str, str] = {}
+    noise_hits: list[tuple[str, tuple[str, ...]]] = []
     for path in to_fetch:
         try:
             fetched[path] = await client.get_file(
@@ -225,7 +311,26 @@ async def copy_git_into_personal_store(
         except GitHubAppError as exc:
             if exc.status in {"unavailable", "rate_limited"}:
                 raise
+            if exc.message == "file is not UTF-8 Markdown":
+                noise_hits.append((path, ("invalid_utf8",)))
+                continue
             return False
+
+    for path, text in fetched.items():
+        verdict = inspect_markdown_text(text)
+        if verdict.is_noise:
+            noise_hits.append((path, verdict.reasons))
+    if noise_hits:
+        owner = await database.get(User, user_id)
+        if owner is not None:
+            await lock_for_white_noise(
+                database,
+                owner,
+                paths=[path for path, _ in noise_hits],
+                reasons=sorted({reason for _, reasons in noise_hits for reason in reasons}),
+                source="git",
+            )
+        return False
 
     for path, text in fetched.items():
         parsed = parse_markdown(path, text)
@@ -421,6 +526,15 @@ async def save_personal_note(
     encoded = source.encode("utf-8")
     if len(encoded) > settings.ingest_max_file_bytes:
         raise IngestError(400, "file is too large")
+    verdict = inspect_markdown_text(source)
+    if verdict.is_noise:
+        await _reject_white_noise(
+            database,
+            user,
+            paths=[normalized],
+            reasons=list(verdict.reasons),
+            source="editor",
+        )
     try:
         parsed = parse_markdown(normalized, source)
     except ValueError as exc:
@@ -527,7 +641,32 @@ async def _save_personal_upload(
         )
     )
     if upload is None:
-        raise IngestError(404, "note was not found")
+        database.add(
+            PersonalUpload(
+                user_id=user.id,
+                path=path,
+                body=source,
+                content_hash=parsed_hash,
+            )
+        )
+        database.add(UploadEvent(user_id=user.id, path=path, content_hash=parsed_hash))
+        await record_personal_edit_events(
+            database,
+            user=user,
+            path=path,
+            before_text="",
+            after_text=source,
+        )
+        record_audit_event(
+            database,
+            action="notes.create_personal",
+            actor_user_id=user.id,
+            target_user_id=user.id,
+            subject_username=user.username,
+            details={"path": path, "source": "upload"},
+        )
+        await database.commit()
+        return await get_personal_note(database, user, path, client)
     if expected_hash != upload.content_hash:
         raise IngestError(409, "note changed, reload the card")
     if upload.body != source:
@@ -615,6 +754,14 @@ async def import_markdown(
             incoming = read_markdown_bytes(data, filename)
         else:
             raise IngestError(400, "upload a Markdown file or a ZIP archive")
+    except WhiteNoiseContentError as exc:
+        await _reject_white_noise(
+            database,
+            user,
+            paths=exc.paths,
+            reasons=list(exc.reasons),
+            source="upload",
+        )
     except (ArchiveError, PathError) as exc:
         raise IngestError(400, str(exc)) from exc
 

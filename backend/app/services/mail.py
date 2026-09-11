@@ -183,6 +183,44 @@ def queue_notify_mail(
     return "Новые правки по ризоме", "\n".join(lines)
 
 
+def white_noise_lock_mail(
+    recipient: User,
+    *,
+    username: str,
+    locked_email: str,
+    when: str,
+    reasons: list[str],
+    paths: list[str],
+    locked: bool,
+    public_base_url: str | None = None,
+) -> tuple[str, str]:
+    base = _public_base(public_base_url)
+    admin_link = f"{base}/#/" if base else ""
+    path_list = ", ".join(paths[:20]) if paths else "—"
+    if len(paths) > 20:
+        path_list += f" (+{len(paths) - 20})"
+    reason_list = ", ".join(reasons) if reasons else "white noise"
+    lock_line = (
+        "Учётка заблокирована (is_active=false). Уже проиндексированные заметки не удалены."
+        if locked
+        else "Загрузка отклонена. Последний активный admin не блокируется."
+    )
+    lines = [
+        f"Здравствуйте, {recipient.display_name}.",
+        "",
+        "Учётка заблокирована: загруженный файл не является заметками (белый шум / мусор).",
+        "",
+        f"Пользователь: {username} ({locked_email})",
+        f"Когда: {when}",
+        f"Причина: содержимое похоже на белый шум, не Markdown-заметки ({reason_list})",
+        f"Пути: {path_list}",
+        lock_line,
+    ]
+    if admin_link:
+        lines.extend(["", f"Администрирование: {admin_link}"])
+    return "GraphNotes: учётка заблокирована (белый шум)", "\n".join(lines)
+
+
 def test_mail(to_address: str) -> tuple[str, str]:
     return (
         "GraphNotes: проверка SMTP",

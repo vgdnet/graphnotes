@@ -2,10 +2,17 @@
 
 Updated: 2026-09-11
 
-Product model TZ 2.65: personal ZIP ingest accepts **10 000** files
+Product model TZ 2.67: white-noise personal ingest (ZIP / `.md` /
+in-app / git copy-in) is rejected and the account is locked; admins
+are mailed when SMTP is on; already-indexed notes stay. TZ 2.66: missing wikilink / unresolved node opens a card
+page without a body — guests see «карточки пока нет»; signed-in authors
+create a personal card from that page or the hover hint on the missing
+link. TZ 2.65: personal ZIP ingest accepts **10 000** files
 (`GRAPHNOTES_INGEST_MAX_FILES`; over → HTTP 400 `archive has too many files`).
 ~120-file vaults succeed. Zip-bomb size/ratio guards unchanged (2 MiB / 8 MiB /
-256 KiB). TZ 2.63: GitHub is copy-in only. Local stores hold `.md`
+256 KiB). TZ 2.64: publisher navigation — graph node and wikilink open
+the card; card page has a side local graph; guests read published shared
+cards. TZ 2.63: GitHub is copy-in only. Local stores hold `.md`
 (`personal_uploads`, `shared_notes`); PostgreSQL `note_index` is the
 search/graph index, not a second canon. Personal export (if any) is
 from the store, not synthesized from the index. Shared is not a product ZIP.
@@ -30,8 +37,9 @@ queue; `/user` settings; `/offer` my proposals; `/graph` shared canvas;
 login / register / forgot; reset by login or email; letter to stored
 inbox only. Elasticsearch (ADR-015) and payment gateway remain later.
 TZ 2.13: Settings at `/user` hold required email, optional contacts, git
-and author contract. TZ 2.14: start page is `/graph`; guests get nodes/edges
-only, not cards. Rhizome access levels (ADR-016 / TZ 2.41): paid level =
+and author contract. TZ 2.14: start page is `/graph`. TZ 2.64: guests open published
+shared cards from the graph and wikilinks; personal / queue / comments
+still need a session. Rhizome access levels (ADR-016 / TZ 2.41): paid level =
 closed slice; entitlements and payment gateway remain later. SMTP login is
 ADR-017 (TZ 2.37 / 2.40 / 2.45 / 2.52 / 2.59). Vsepsy identity stays a
 separate ADR.
@@ -355,6 +363,13 @@ TZ 2.5–2.7 on this branch (not merged to main; production
   Compressed ZIP 2 MiB, unpacked 8 MiB, per-file 256 KiB and zip-bomb
   ratio/symlink/encryption guards stay. Named in PRODUCT_SPEC 2.65 /
   `functional.md` §6.3 / `STAGE4_INGEST.md`. Production `rhizome` not deployed.
+- TZ 2.67: white-noise gate on personal ingest. Combined heuristics
+  (invalid UTF-8 / NUL, high Shannon entropy, few letters, control soup;
+  fences/frontmatter stripped for soft scores). HTTP 400
+  `content is not Markdown notes`; `is_active=false` + session drop;
+  audit `ingest.white_noise_lock`; admin mail via installation SMTP /
+  public URL. Mail failure does not undo the lock. Last admin is not
+  locked. Production `rhizome` not deployed.
 - leftover: rhizome access-level **entitlement tables** / payment
   gateway (ADR-016 + TZ 2.41 name the model and the «ризома автора»
   view; `closed_paths` already exists — not this slice); vsepsy

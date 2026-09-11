@@ -1,8 +1,11 @@
 # GraphNotes — канонический контекст Technical Observer
 
 Статус: ACTIVE
-Updated: 2026-09-11 (TZ 2.65: ZIP ingest 10 000 files; zip-bomb size/ratio
-guards stay. TZ 2.63: GitHub copy-in only; local personal + shared stores)
+Updated: 2026-09-11 (TZ 2.67: white-noise personal ingest lock + admin
+mail; existing notes kept. TZ 2.66: missing card page + personal create
+from dangling wikilink. TZ 2.65: ZIP ingest 10 000 files; zip-bomb
+size/ratio guards stay. TZ 2.63: GitHub copy-in only; local personal +
+shared stores)
 
 Этот файл задаёт рабочий регламент отдельного Technical Observer проекта
 GraphNotes. Его можно передать новому воркеру целиком. Он не заменяет
@@ -163,7 +166,8 @@ Shared-graph UI uses **fCoSE** (`cytoscape-fcose`), not core `cose`. Layout
 coordinates remain UI-only.
 
 Landing `/` is `/graph` (TZ 2.14 / 2.58). `/my_graph` is the personal
-layer only. Guests must not receive card bodies, feed or comments.
+layer only. Guests may read published shared card bodies (TZ 2.64);
+they must not receive personal, queue, feed or comments.
 Settings (TZ 2.13 / 2.58) live at **`/user`** (email/contacts, git bind,
 author contract); not the public person card and not the graph home.
 The shipped contract copy (TZ 2.44, version `2026-09-05`) is WTFPL for
@@ -189,7 +193,8 @@ proposal pair. Editor queue is `/queue` (TZ 2.38 / 2.58); author’s own
 proposals are `/offer`. The queue UI opens proposed card Markdown and
 links first, then Graph Diff; tabs are New / In progress / Rejected.
 Card search `/search` (TZ 2.39 / 2.58) is role-scoped over `note_index`
-(`layer=visible` default): guest = published shared hits without a card
+(`layer=visible` default): guest = published shared hits; card page is
+openable for those shared paths (TZ 2.64)
 body; user = shared ∪ own personal; editor adds reviewable proposals;
 admin opens every card they can. `layer=overlay` is the graph stitch, not
 the card-search default. Hits carry layer; proposal notes are indexed on
@@ -285,6 +290,9 @@ Observer проверяет diff на:
   ZIP ingest: file-count cap is 10 000 (TZ 2.65); do not treat a raise of
   `ingest_max_files` as licence to drop zip-bomb guards (2 MiB compressed,
   8 MiB unpacked, 256 KiB/file, compression ratio, no symlink/encrypt);
+  TZ 2.67 white-noise gate is content abuse, not a size limit: binary /
+  high-entropy / letter-less `.md` must not reach `note_index`; lock +
+  audit even when SMTP is off; do not delete already-indexed notes;
 - несовместимые лицензии и незафиксированные зависимости;
   проектный код остаётся AGPL-3.0 (`LICENSE`, ADR-005); карточки в общую —
   WTFPL в тексте договора, без второго LICENSE;
@@ -297,7 +305,8 @@ Observer проверяет diff на:
 - accidental workspace/multiple-shared-rhizome abstraction;
 - leftover take-into-git or shared ZIP/clone UX after TZ 2.5;
 - in-app editor that writes shared, others' personal, or proposal cards,
-  or creates a new path from the card page, or opens the editor without
+  or invents a blank new path from an existing card (missing-link create
+  of a personal card is TZ 2.66), or opens the editor without
   «Отредактировать карточку» / without author rights (TZ 2.50: view-first;
   TZ 2.49 widget is MDXEditor, not a vault clone; TZ 2.48 allows own
   personal `PUT` only); personal in-app events leaking into the shared

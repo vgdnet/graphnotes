@@ -7,6 +7,7 @@ import zlib
 
 from app.core.config import settings
 from app.services.git_paths import PathError, normalize_git_path
+from app.services.noise import scan_markdown_files
 
 
 class ArchiveError(ValueError):
@@ -18,8 +19,8 @@ def read_markdown_bytes(data: bytes, filename: str) -> list[tuple[str, str]]:
         raise ArchiveError("file is too large")
     if _looks_like_zip(data):
         raise ArchiveError("upload a .md file or a ZIP archive, not both at once")
-    text = _decode_utf8(data)
-    return [(normalize_git_path(filename.replace("\\", "/").rsplit("/", 1)[-1]), text)]
+    path = normalize_git_path(filename.replace("\\", "/").rsplit("/", 1)[-1])
+    return scan_markdown_files([(path, data)])
 
 
 def read_zip_markdown(data: bytes) -> list[tuple[str, str]]:
@@ -32,7 +33,7 @@ def read_zip_markdown(data: bytes) -> list[tuple[str, str]]:
     except zipfile.BadZipFile as exc:
         raise ArchiveError("archive is unreadable") from exc
 
-    files: list[tuple[str, str]] = []
+    payloads: list[tuple[str, bytes]] = []
     seen: set[str] = set()
     unpacked = 0
     names = archive.infolist()
@@ -67,12 +68,12 @@ def read_zip_markdown(data: bytes) -> list[tuple[str, str]]:
         unpacked += len(payload)
         if unpacked > settings.ingest_max_unpacked_bytes:
             raise ArchiveError("unpacked archive is too large")
-        files.append((path, _decode_utf8(payload)))
+        payloads.append((path, payload))
         seen.add(path)
 
-    if not files:
+    if not payloads:
         raise ArchiveError("archive contains no Markdown files")
-    return files
+    return scan_markdown_files(payloads)
 
 
 def _open_zip(data: bytes) -> zipfile.ZipFile:
@@ -106,15 +107,6 @@ def _zip_member_name(info: zipfile.ZipInfo) -> str:
 
 def _looks_like_zip(data: bytes) -> bool:
     return data.startswith(b"PK")
-
-
-def _decode_utf8(data: bytes) -> str:
-    if b"\x00" in data:
-        raise ArchiveError("file is not UTF-8 Markdown")
-    try:
-        return data.decode("utf-8-sig")
-    except UnicodeDecodeError as exc:
-        raise ArchiveError("file is not UTF-8 Markdown") from exc
 
 
 def _read_limited(handle, limit: int) -> bytes:

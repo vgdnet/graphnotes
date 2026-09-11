@@ -1,7 +1,7 @@
 # Product requirements to Stage traceability
 
 Статус: DERIVED / MAINTAINED
-Источник: `docs/product/PRODUCT_SPEC.md` version 2.63
+Источник: `docs/product/PRODUCT_SPEC.md` version 2.67
 
 Матрица маршрутизирует канонические требования в Stage-файлы и не изменяет
 `PRODUCT_SPEC.md`.
@@ -24,7 +24,7 @@
 | 5.4 Author status; legal contract; commenter tier; closed-segment visibility model | next wave (owner Stage file; requires ADR if security/permission boundary changes) | contract checkbox enables author status; author profile; commenter tier; visibility rules for closed segments |
 | 5.4.1 Closed/paid access level in personal store only (mark paths; no second repo); shared shows lock stub not body | next wave + ADR-016 | not in Differ; no product ZIP/clone of shared; author card sees closed; shared graph lock |
 | 5.4.2 Per-user contribution stats: self only on `/contribution`; public `#/users/{uuid}` achievements; editor review stats; admin sees all | 6, next wave | user: cards/added/accepted/links; public: proposals/created/edits; editor: which proposals/links decided; admin: all users |
-| 5.6 Start = shared graph always; guest no cards; author=user login; closed slice not editor queue; access-level entitlement; admin sees closed | next wave + ADR-016 | guest graph-only; session opens cards in filter |
+| 5.6 Start = shared graph always; guest reads published shared cards; author=user login; closed slice not editor queue; access-level entitlement; admin sees closed | 6 + next wave + ADR-016 | guest graph + published card; session opens own/closed in filter |
 | 5.6.4 «Два графа» = shared + own overlay on one graph; «ризома автора» = closed-slice view after entitlement; «загрузить» = open in-app | next wave + ADR-016 amendment 2026-09-05 | same `closed_paths`; no second repo/index/ZIP; open-personal-as-public not accepted |
 
 ## Functional requirements
@@ -35,7 +35,7 @@
 | 6.1.2 | SMTP: register sends `#/auth/confirm?token=` + 6-digit code; no session until confirm | 2 |
 | 5.5 | Account settings: required email; optional phone/Telegram; git; author contract; chrome: name in header opens settings, logout at bottom; git XOR upload hint next to connect/disconnect, not Differ | next wave; email at register |
 | 5.5.4 | Light/dark Theme Switcher (sliding sun/moon pill, not text buttons); localStorage | 6 (graph UX) |
-| 5.6 | Start graph always; guest no cards; closed slice not editor queue; access-level entitlement (ADR-016) | next wave |
+| 5.6 | Start graph always; guest reads published shared cards + side local graph; closed slice not editor queue; access-level entitlement (ADR-016) | 6 |
 | 5.6.4 | Two graphs = overlay filter; author view of closed slice; load = open in app; not a second repo | next wave |
 | 6.1.1 | Author legal contract in Settings and О программе (§5.5.3); responsibility; withdraw/reclaim; cards WTFPL; software AGPL-3.0 | shipped copy on feature/08-graph-diff |
 | 6.1.3 | vsepsy.ru email+password opens rhizome.vsepsy.ru; no second register; no catalog merge; no /ops roles | next wave + ADR (identity) |
@@ -89,6 +89,7 @@
 | One shared rhizome readable in-app (graph/cards/Markdown); no product ZIP/clone of corpus | 3, 5, 6 |
 | No GraphNotes write of selected shared notes into personal git; no ZIP download of shared | 7; Stage 4 take-from-shared historical only |
 | Safe MD/ZIP upload (≤10 000 ZIP members; zip-bomb size/ratio guards); never into connected git | 4 |
+| White-noise personal ingest rejected; account locked; admins mailed; existing notes kept (TZ 2.67) | 4 |
 | User creates proposal from Differ selection | 7 |
 | Differ git input is the latest pulled public HEAD | 7 |
 | Author contribution: wrote / linked / proposed / accepted; empty Differ keeps accepted | next wave |

@@ -476,7 +476,8 @@ async def test_shared_notes_are_public_and_take_requires_auth(
         take = await anonymous.post("/personal/take-from-shared", json={"paths": ["card.md"]})
         assert take.status_code == 401
         body = await anonymous.get("/shared/notes/card.md")
-        assert body.status_code == 401
+        assert body.status_code == 200
+        assert "See [[missing]]" in body.json()["body"]
         personal = await anonymous.get("/personal/notes")
         assert personal.status_code == 401
 
@@ -622,6 +623,9 @@ async def test_zip_vault_file_count_without_git(
     )
     assert rejected.status_code == 400
     assert rejected.json()["detail"] == "archive has too many files"
+    still = await author.get("/users/me")
+    assert still.status_code == 200
+    assert still.json()["is_active"] is True
     await author.aclose()
 
 
@@ -643,6 +647,151 @@ async def test_zip_over_one_mib_without_git(
     assert uploaded.status_code == 200
     assert uploaded.json()["accepted"] == [f"note{i}.md" for i in range(6)]
     await author.aclose()
+
+
+async def test_white_noise_zip_locks_user_and_skips_index(
+    auth_test_context: tuple[AsyncClient, async_sessionmaker[AsyncSession]],
+    monkeypatch: MonkeyPatch,
+) -> None:
+    from sqlalchemy import select
+
+    from app.models.audit_event import AuditEvent
+    from app.models.personal_upload import PersonalUpload
+    from app.models.user import User
+    from tests.test_smtp_and_admin import _admin, _enable_smtp
+
+    client, session_factory = auth_test_context
+    _install(monkeypatch, _github())
+    await _admin(client, session_factory, "noise-admin")
+    author = AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver")
+    await _register(author, "noise-user")
+    sent = _enable_smtp(monkeypatch)
+    kept = await author.post(
+        "/personal/import-md",
+        files={"file": ("kept.md", b"# Kept note\nSee [[other]].\n", "text/markdown")},
+    )
+    assert kept.status_code == 200
+    assert kept.json()["accepted"] == ["kept.md"]
+
+    payload = _zip_bytes({"noise.md": os_urandom_md()})
+    rejected = await author.post(
+        "/personal/import-md",
+        files={"file": ("noise.zip", payload, "application/zip")},
+    )
+    assert rejected.status_code == 400
+    assert rejected.json()["detail"] == "content is not Markdown notes"
+
+    again = await author.get("/personal/notes")
+    assert again.status_code == 401
+
+    async with session_factory() as database:
+        user = await database.scalar(select(User).where(User.username == "noise-user"))
+        assert user is not None
+        assert user.is_active is False
+        paths = set(
+            (
+                await database.scalars(
+                    select(PersonalUpload.path).where(PersonalUpload.user_id == user.id)
+                )
+            ).all()
+        )
+        assert paths == {"kept.md"}
+        actions = {
+            row.action
+            for row in (
+                await database.scalars(
+                    select(AuditEvent).where(AuditEvent.subject_username == "noise-user")
+                )
+            ).all()
+        }
+        assert "ingest.white_noise_lock" in actions
+
+    assert sent
+    mail = next(item for item in sent if "белый шум" in item["subject"])
+    assert mail["to"] == "noise-admin@example.com"
+    assert "noise-user" in mail["body"]
+    assert "заблокирована" in mail["body"]
+    await author.aclose()
+
+
+async def test_note_like_vault_zip_does_not_lock(
+    auth_test_context: tuple[AsyncClient, async_sessionmaker[AsyncSession]],
+    monkeypatch: MonkeyPatch,
+) -> None:
+    client, _ = auth_test_context
+    _install(monkeypatch, _github())
+    author = AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver")
+    await _register(author, "vault-user")
+    entries = {
+        f"note{i:03d}.md": (
+            f"---\ntitle: Note {i}\ntags: [vault]\n---\n"
+            f"# Note {i}\n\nSee [[note{(i + 1) % 120:03d}]] and привет.\n\n"
+            f"```python\nprint({i})\n```\n"
+        ).encode()
+        for i in range(120)
+    }
+    uploaded = await author.post(
+        "/personal/import-md",
+        files={"file": ("vault.zip", _zip_bytes(entries), "application/zip")},
+    )
+    assert uploaded.status_code == 200
+    assert len(uploaded.json()["accepted"]) == 120
+    me = await author.get("/users/me")
+    assert me.status_code == 200
+    assert me.json()["is_active"] is True
+    notes = await author.get("/personal/notes")
+    assert {item["path"] for item in notes.json()["notes"]} == set(entries)
+    await author.aclose()
+
+
+async def test_white_noise_mail_failure_still_locks(
+    auth_test_context: tuple[AsyncClient, async_sessionmaker[AsyncSession]],
+    monkeypatch: MonkeyPatch,
+) -> None:
+    from sqlalchemy import select
+
+    from app.models.user import User
+    from app.services.mail import MailDeliveryError
+    from tests.test_smtp_and_admin import _admin, _enable_smtp
+
+    client, session_factory = auth_test_context
+    _install(monkeypatch, _github())
+    await _admin(client, session_factory, "mail-fail-admin")
+    author = AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver")
+    await _register(author, "mail-fail-user")
+    _enable_smtp(monkeypatch)
+
+    def boom(*, to_address: str, subject: str, body: str) -> None:
+        raise MailDeliveryError("smtp down")
+
+    monkeypatch.setattr("app.services.notify.send_plaintext_mail", boom)
+    rejected = await author.post(
+        "/personal/import-md",
+        files={"file": ("noise.md", os_urandom_md(), "text/markdown")},
+    )
+    assert rejected.status_code == 400
+    async with session_factory() as database:
+        user = await database.scalar(select(User).where(User.username == "mail-fail-user"))
+        assert user is not None
+        assert user.is_active is False
+    await author.aclose()
+
+
+def os_urandom_md() -> bytes:
+    import os
+
+    payload = os.urandom(220)
+    if b"\x00" not in payload and _utf8_ok(payload):
+        payload = b"\x00" + payload
+    return payload
+
+
+def _utf8_ok(data: bytes) -> bool:
+    try:
+        data.decode("utf-8")
+    except UnicodeDecodeError:
+        return False
+    return True
 
 
 async def test_put_personal_note_upload_and_git(
@@ -716,11 +865,17 @@ async def test_put_personal_note_upload_and_git(
         json={"source": "# Mine\nno hash\n"},
     )
     assert missing_hash.status_code == 422
-    missing = await client.put(
+    created = await client.put(
         "/personal/notes/missing.md",
-        json={"source": "# New\n", "expected_hash": "deadbeef"},
+        json={"source": "# New\n", "expected_hash": ""},
     )
-    assert missing.status_code == 404
+    assert created.status_code == 200
+    assert created.json()["path"] == "missing.md"
+    assert created.json()["title"] == "New"
+    opened_new = await client.get("/cards/personal:missing.md")
+    assert opened_new.status_code == 200
+    assert opened_new.json()["title"] == "New"
+    assert opened_new.json()["source"] == "# New\n"
 
     from tests.test_proposals import _second
 
@@ -729,7 +884,8 @@ async def test_put_personal_note_upload_and_git(
         "/personal/notes/mine.md",
         json={"source": "# Stolen\n", "expected_hash": saved.json()["content_hash"]},
     )
-    assert stolen.status_code == 404
+    assert stolen.status_code == 200
+    assert stolen.json()["source"] == "# Stolen\n"
     assert "Stolen" not in (await client.get("/personal/notes/mine.md")).json()["source"]
     await stranger.aclose()
 
@@ -747,12 +903,15 @@ async def test_put_personal_note_upload_and_git(
     assert github.repos["vgdnet/guide_psy"].files["already.md"] == "# Mine\n"
     local = await client.get("/personal/notes/already.md")
     assert local.json()["source"] == "# Mine\nfrom app\n"
-    git_missing = await client.put(
+    git_created = await client.put(
         "/personal/notes/brand-new.md",
-        json={"source": "# New file\n", "expected_hash": "deadbeef"},
+        json={"source": "# New file\n", "expected_hash": ""},
     )
-    assert git_missing.status_code == 404
+    assert git_created.status_code == 200
+    assert git_created.json()["path"] == "brand-new.md"
     assert "brand-new.md" not in github.repos["vgdnet/guide_psy"].files
+    local_new = await client.get("/personal/notes/brand-new.md")
+    assert local_new.json()["source"] == "# New file\n"
 
     git_feed = await client.get("/cards/personal:already.md/feed")
     assert git_feed.status_code == 200

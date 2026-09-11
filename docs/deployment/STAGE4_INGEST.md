@@ -41,6 +41,26 @@ guards (compressed size, unpacked size, per-file size, compression ratio).
 Connected personal git is never overwritten silently (conflict).
 Upload-without-git replaces the staged path and records a new history event.
 
+## White noise (TZ 2.67)
+
+Personal ingest that would hit the Markdown indexer (ZIP, one `.md`,
+in-app `PUT`, personal git copy-in) is scanned before write. Combined
+signals, not one weak heuristic: invalid UTF-8 / NUL / binary `.md`;
+very high Shannon entropy or incompressible high-entropy printable;
+almost no Unicode letters (including Cyrillic/CJK) vs symbols; control
+soup. YAML frontmatter and fenced blocks are stripped before soft
+scores; stubs under ~80 characters skip soft checks.
+
+On hit: do not persist or index the payload; HTTP 400
+`content is not Markdown notes`; lock with `is_active=false` (same as
+admin block; sessions deleted); audit `ingest.white_noise_lock`.
+Already-indexed notes stay. The last active admin is not locked.
+Admins with a confirmed email (or queue-notify on) get installation
+SMTP mail (`GRAPHNOTES_SMTP_FROM`, public URL from
+`installation_settings`). SMTP off or send failure must not roll back
+the lock. Shared GitHub copy-in is not this gate. Zip-bomb limits
+above are unchanged.
+
 ## API
 
 - `GET /api/shared/notes` — public listing of shared Markdown (in-app read)
