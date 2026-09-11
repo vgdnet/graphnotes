@@ -37,7 +37,7 @@
 | 5.5.4 | Light/dark Theme Switcher (sliding sun/moon pill, not text buttons); localStorage | 6 (graph UX) |
 | 5.6 | Start graph always; guest reads published shared cards + side local graph; closed slice not editor queue; access-level entitlement (ADR-016) | 6 |
 | 5.6.4 | Two graphs = overlay filter; author view of closed slice; load = open in app; not a second repo | next wave |
-| 6.1.1 | Author legal contract in Settings and О программе (§5.5.3); responsibility; withdraw/reclaim; cards WTFPL; software AGPL-3.0 | shipped copy on feature/08-graph-diff |
+| 6.1.1 | Author legal contract in Settings only (§5.5.3); About `#/about` is credits, not contract (§5.5.8 / TZ 2.78) | shipped copy on feature/08-graph-diff |
 | 6.1.3 | vsepsy.ru email+password opens rhizome.vsepsy.ru; no second register; no catalog merge; no /ops roles | next wave + ADR (identity) |
 | 6.1.4 | Opt-in rhizome achievement (graph and/or counts) for vsepsy.ru and own site; card fields for the public internet TBD | next wave + ADR |
 | 5.3 | Admin-only tab «Администрирование»: «Пользователи» (roles, block, set password) and action log | 2 |

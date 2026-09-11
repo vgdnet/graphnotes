@@ -2,7 +2,7 @@
 
 Updated: 2026-09-12
 Status: canonical architecture baseline
-Aligned with PRODUCT_SPEC 2.77. TZ 2.68–2.71 / §12.1: Obsidian plugin
+Aligned with PRODUCT_SPEC 2.78. TZ 2.68–2.71 / §12.1: Obsidian plugin
 **API** copies selected vault files into the owner's `personal_uploads` /
 `personal_assets`. Desktop **GraphNotes Publisher** lives in
 `obsidian-plugin/` (TZ 2.69). Token is an SSH-key analog (TZ 2.70):
@@ -100,7 +100,11 @@ is responsibility for notes/links offered to the shared rhizome, withdraw
 published notes stay in shared git), **WTFPL for card/note content** offered
 to the shared rhizome, and **AGPL-3.0 for the software** with developer
 credit (Юрий Ефимов, y@psychoanalyst.pro). Same Russian text in Settings →
-Договор автора and the guest-visible **О программе** footer. No second
+Договор автора only — not on **О программе**. `#/about` (footer button
+«О программе», guests and signed-in) shows credits: rhizome — Мария
+Надршина (`https://t.me/unconsciousjourney`); GraphNotes — Юрий Ефимов
+(`https://t.me/guide_psy`). Persistent footer has no WTFPL/AGPL one-liner
+and no author-contract control (TZ 2.78). No second
 LICENSE file; `LICENSE` remains AGPL-3.0. Git in Settings is a **connector**
 (TZ 2.62–2.63): it copies `.md` into the local store. Shared GitHub is the same:
 copy-in, not live read. Disconnect does **not** wipe

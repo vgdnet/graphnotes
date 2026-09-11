@@ -378,6 +378,9 @@ select { padding: .65rem .8rem; border: 1px solid var(--gn-input-border); border
   font-size: .78rem;
 }
 .legal-footer .button { margin: 0; padding: .35rem .65rem; font-size: .78rem; }
+.about-credits { display: grid; gap: .55rem; color: var(--gn-quiet-text); font-size: .95rem; line-height: 1.55; }
+.about-credits p { margin: 0; }
+.about-credits a { color: var(--gn-accent); }
 .contract-check { display: flex; gap: .7rem; align-items: flex-start; font-weight: 450; }
 .contract-check input[type="checkbox"] { width: 1.15rem; height: 1.15rem; margin-top: .15rem; padding: 0; flex: 0 0 auto; }
 .note-read { margin-top: 1.5rem; }

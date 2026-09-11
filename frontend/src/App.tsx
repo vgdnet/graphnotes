@@ -1645,20 +1645,24 @@ export function App() {
   const legalAboutPanel = (
     <section className="notes-panel" aria-labelledby="about-heading">
       <div>
-        <p className="eyebrow">Правовое</p>
         <h2 id="about-heading">О программе</h2>
-        <p className="admin-panel__hint">
-          Лицензии карточек и программы. Договор автора принимается в настройках.
-        </p>
-      </div>
-      <AuthorContractCopy contract={authorContract} />
-      {user ? (
-        <div className="settings-actions">
-          <button className="button button--quiet" type="button" onClick={() => openSettings("contract")}>
-            Договор автора
-          </button>
+        <div className="about-credits">
+          <p>
+            Ризома - Мария Надршина (
+            <a href="https://t.me/unconsciousjourney" target="_blank" rel="noreferrer">
+              https://t.me/unconsciousjourney
+            </a>
+            )
+          </p>
+          <p>
+            GraphNotes Юрий Ефимов (
+            <a href="https://t.me/guide_psy" target="_blank" rel="noreferrer">
+              https://t.me/guide_psy
+            </a>
+            )
+          </p>
         </div>
-      ) : null}
+      </div>
     </section>
   );
 
@@ -2798,7 +2802,6 @@ export function App() {
           >
             О программе
           </button>
-          <span>Карточки — WTFPL. Программа — AGPL-3.0.</span>
         </footer>
       )}
     </main>

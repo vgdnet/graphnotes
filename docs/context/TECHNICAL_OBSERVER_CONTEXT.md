@@ -181,7 +181,9 @@ they must not receive personal, queue, feed or comments.
 Settings (TZ 2.13 / 2.58) live at **`/user`** (email/contacts, git bind,
 author contract); not the public person card and not the graph home.
 The shipped contract copy (TZ 2.44, version `2026-09-05`) is WTFPL for
-cards plus AGPL-3.0 for software; guests see the same text on **О программе**.
+cards plus AGPL-3.0 for software; it lives in Settings → Договор автора,
+not on **О программе**. `#/about` shows rhizome / GraphNotes credits with
+Telegram links (TZ 2.78). The footer is the About button only.
 
 Light/dark theme (TZ 2.19 / 2.22) is CSS tokens plus `localStorage`, not a
 server setting and not a second visual language. The control is a Theme

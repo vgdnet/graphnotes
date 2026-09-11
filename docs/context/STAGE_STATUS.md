@@ -388,6 +388,10 @@ TZ 2.5–2.7 on this branch (not merged to main; production
   disable write. Plugin white-noise is 415 `unsupported_type` without
   account lock. Alembic `0017_obsidian_integration`. Production
   `rhizome` not deployed.
+- TZ 2.78: `#/about` is credits (rhizome — Мария Надршина,
+  GraphNotes — Юрий Ефимов, Telegram links). Footer is the About
+  button only — no WTFPL/AGPL one-liner, no author-contract control.
+  Contract copy stays in Settings. Production `rhizome` not deployed.
 - leftover: rhizome access-level **entitlement tables** / payment
   gateway (ADR-016 + TZ 2.41 name the model and the «ризома автора»
   view; `closed_paths` already exists — not this slice); vsepsy
