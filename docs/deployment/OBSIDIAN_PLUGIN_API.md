@@ -57,6 +57,15 @@ never the key). Separate logs DB is later.
 Plugin transfer APIs use `Authorization: Bearer <token>`. They never
 create tokens.
 
+## Client behaviour (TZ 2.82)
+
+The HTTP prefix is unchanged. GraphNotes Publisher copies eligible vault
+edits after save (no card picker). First dump of an existing vault is
+«Отправить всё». Matching bytes are not uploaded. One transfer at a
+time. Conflicts still use `GET /files/content` plus a new transfer with
+the current version; there is no `force=true`. Shared / Differ /
+proposals are not written. §6.6.3 marks/topics are site UI leftover.
+
 ## Ready methods
 
 All under `/api/integrations/obsidian/v1`. Auth: Bearer token.

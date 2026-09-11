@@ -11,14 +11,22 @@ export const transport: Transport = (url, method, headers, body, signal) => new 
     if ((response.statusCode ?? 0) >= 300 && (response.statusCode ?? 0) < 400) {
       response.resume(); reject(new Error('Перенаправление API запрещено. Укажите конечный адрес сервера.')); return;
     }
-    const parts: Buffer[] = []; let total = 0;
+    const parts: Uint8Array[] = []; let total = 0;
     response.on('data', (part: Buffer) => {
       total += part.length;
       if (total > 32 * 1024 * 1024) { response.destroy(new Error('Ответ сервера слишком большой.')); return; }
-      parts.push(part);
+      parts.push(new Uint8Array(part));
     });
     response.on('error', reject);
-    response.on('end', () => resolve({ status: response.statusCode ?? 0, headers: response.headers, bytes: Buffer.concat(parts) }));
+    response.on('end', () => {
+      const bytes = new Uint8Array(total);
+      let offset = 0;
+      for (const part of parts) {
+        bytes.set(part, offset);
+        offset += part.length;
+      }
+      resolve({ status: response.statusCode ?? 0, headers: response.headers, bytes });
+    });
   });
   req.setTimeout(30_000, () => req.destroy(new Error('Сервер не ответил за 30 секунд. Проверьте состояние передачи.')));
   req.on('error', reject);

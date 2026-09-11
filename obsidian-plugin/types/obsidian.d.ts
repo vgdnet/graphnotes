@@ -32,6 +32,8 @@ declare module 'obsidian' {
     getFiles(): TFile[];
     getAbstractFileByPath(path: string): TAbstractFile | null;
     readBinary(file: TFile): Promise<ArrayBuffer>;
+    on(name: 'modify' | 'create' | 'delete', cb: (file: TAbstractFile) => any): any;
+    on(name: 'rename', cb: (file: TAbstractFile, oldPath: string) => any): any;
   }
   export class Workspace {
     getActiveViewOfType<T>(type: new (...args: any[]) => T): T | null;
@@ -62,6 +64,7 @@ declare module 'obsidian' {
     addRibbonIcon(icon: string, title: string, callback: () => void): HTMLElement;
     addCommand(command: { id: string; name: string; callback: () => void }): void;
     addSettingTab(tab: PluginSettingTab): void;
+    registerEvent(eventRef: any): any;
   }
   export class PluginSettingTab {
     app: App;

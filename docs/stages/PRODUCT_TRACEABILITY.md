@@ -1,7 +1,7 @@
 # Product requirements to Stage traceability
 
 Статус: DERIVED / MAINTAINED
-Источник: `docs/product/PRODUCT_SPEC.md` version 2.81
+Источник: `docs/product/PRODUCT_SPEC.md` version 2.84
 
 Матрица маршрутизирует канонические требования в Stage-файлы и не изменяет
 `PRODUCT_SPEC.md`.
@@ -45,17 +45,20 @@
 | 5.4.2 | User sees own contribution stats; public person card `#/users/{uuid}` with achievement counters | 6 |
 | 6.2 | local personal + shared stores; GitHub copy-in (TZ 2.63); leftover merge-out; no product clone/ZIP of shared | 3 |
 | 6.3 | no download of published shared; personal working copy is GraphNotes store; git/Dropbox/Drive = copy-in, not a second canon | 4 (upload copies in), 7 (Differ vs local copy) |
-| 6.3.4 / 5.5.7 | GraphNotes Publisher (this repo) + API copy selected vault files into the same personal store; personal API key stored and shown again in Settings, copied into plugin `data.json` (TZ 2.76); access log / revoke; not shared, not Differ | shipped 2.79 on feature/08-graph-diff |
+| 6.3.4 / 5.5.7 | GraphNotes Publisher + API: **free** copy of the local graph into the same personal store (TZ 2.82: vault edits auto-copy; first dump = send all); personal API key stored and shown again in Settings, copied into plugin `data.json` (TZ 2.76); access log / revoke; not shared, not Differ | plugin auto-copy accepted 2.82; token/API shipped 2.79 |
 | 6.3.2 | Graph personal overlay: from git if connected else server store; layer menu/legend «ваша ризома», never «ваш git» | 6 |
 | 6.3.1 | Upload history in GraphNotes (who/when/hash), not user git log | next wave |
 | 6.4 | revisioned shared/personal/proposal derived index and rebuild | 5 |
 | 6.4.1 | Rhizome card change stats (who/when/which link); actor name opens `#/users/{uuid}`; personal in-app edits owner-scoped; no bodies in PostgreSQL | 6 |
 | 6.5 | bounded shared Graph API, personal overlay, local ego-graph view (весь / локальный, depth 1–4, «Показать всё»), Cytoscape UI, **fCoSE** live layout | 5, 6 |
 | 6.5.2 | `#/search` role-scoped search; `#/card/{path}` view-first; `#/users/{uuid}` person card; own personal edit after «Отредактировать карточку» | 6, 7, 8 |
+| 6.5.3 | Elasticsearch next search (ADR-015); SQL until then; questions 1–9 unanswered (TZ 2.83) | **only after the first approved rhizome production deploy**; not this branch |
 | 16 | Guest anti-scrape of published cards (1 IP → many unique paths); after `rhizome` prod only; not `rhizome-test` (TZ 2.80) | after first production deploy; ADR before code |
+| 17 | Invite-only registration; admin always; own invites after 10 editor-accepted shared cards; inviter chain (TZ 2.84) | after first production deploy; ADR before code |
 | 6.6 | Differ entity; one-way personal → published shared; merge-into-shared rules | 7 |
 | 6.6 | Connected git: Differ/proposal read **current public HEAD** (Obsidian push); poller/webhook backup; no second clone | 7 |
 | 6.6.2 | Author contribution; Differ extended, not replaced; three states personal/proposed/accepted | next wave |
+| 6.6.3 | Rhizome looks at personal store on the site: author proposes; rhizome may mark personal cards missing from shared («дай, если хочешь») and suggest topics to write; still Differ + editor queue; not a second rhizome (TZ 2.82) | accepted model; site UI next wave |
 | 6.5 | Author focus «мой вклад» and provenance on shared graph | next wave (after 6 overlay) |
 | 6.7 | proposal queue tabs New / In progress / Rejected; text and links first, then Graph Diff; reject/return with author comment | 7, 8 |
 | 6.7 | textual and graph impact before publication | 7, 8 |
@@ -138,6 +141,7 @@
 | In-app Obsidian-class editor | excluded (ADR-008) |
 | Real-time collaboration | post-MVP unless roadmap changes |
 | Which author/psychologist card fields are world-visible (achievement/embed) | PRODUCT_SPEC 2.21 §6.1.4: skeleton accepted, field list open |
+| Elasticsearch next-search questions 1–9 (§6.5.3) | When is closed (TZ 2.83): **only after the first approved rhizome production deploy**. Answers 1–9 stay open; do not invent. SQL until then |
 | Open personal repo as a public catalog (search/find/comment by everyone, bypassing editor queue) | Not accepted. PRODUCT_SPEC 2.41 §5.6.4 / §12.9; needs owner decision + ADR vs ADR-007 / §3.3 |
 
 ## Final completeness rule

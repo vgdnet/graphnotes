@@ -98,7 +98,7 @@ GET  /api/integrations/obsidian/v1/transfers/{id}
 DELETE /api/integrations/obsidian/v1/transfers/{id}   # cancel if not applying
 ```
 
-Плагин Obsidian (ТЗ 2.68–2.76 / §6.3.4) пишет **только** в личное хранилище
+Плагин Obsidian (ТЗ 2.68–2.76 / **2.82** / §6.3.4) пишет **только** в личное хранилище
 владельца токена — тот же склад, что `PUT /api/personal/notes/{path}` и
 `POST /api/personal/import-md`. Общую ризому, `shared_notes`, предложения и
 Differ эти методы не меняют.

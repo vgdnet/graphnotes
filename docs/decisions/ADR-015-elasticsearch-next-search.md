@@ -1,7 +1,9 @@
 # ADR-015 - Elasticsearch for the next search iteration
 
-Status: Accepted (next iteration; not current MVP)
+Status: Accepted (scheduled after first approved rhizome production
+deploy; not this branch / not current MVP)
 Accepted: 2026-09-04
+Schedule confirmed: 2026-09-12 (TZ 2.83)
 Refines: ADR-001 (search is derived, Git/Markdown stays canon); ADR-008
 (no second note corpus); ADR-011 (closed bodies stay out of other people's
 search)
@@ -16,14 +18,18 @@ MVP tab.
 The owner wants the next iteration to search **words, tags, and more**, as a
 proper catalog, not only `ILIKE` on metadata. That is a new infrastructure
 component (PRODUCT_SPEC §10 / §13.1). Elasticsearch is named for that wave.
-It is not added to the current Compose stack.
+Owner 2026-09-12 (TZ 2.83): that wave starts **only after the first
+approved rhizome production deploy**. It is not added to the current
+Compose stack and is not this branch.
 
 ## Decision
 
-1. **When.** Elasticsearch is in scope for the **next product iteration**,
-   not Stage 8/9 hardening and not the current MVP. Until that Stage file
-   exists and this ADR's open questions are answered, `GET /api/search`
-   stays PostgreSQL.
+1. **When.** Elasticsearch is in scope **only after the first approved
+   rhizome production deploy**, then as the next product iteration — not
+   Stage 8/9 hardening, not this branch, and not the current MVP. Until
+   that production deploy exists, a later Stage file is named, and this
+   ADR's open questions 1–9 are answered, `GET /api/search` stays
+   PostgreSQL (SQL). Do not invent answers to those questions now.
 2. **What it is.** A **derived search replica**. Rebuildable from Git
    Markdown plus visibility flags. Not a second canon, not an editor, not
    a store of record. Authors keep writing in git / Obsidian (ADR-008).
@@ -86,10 +92,10 @@ in parentheses; they are not accepted requirements.
 
 ## Consequences
 
-- PRODUCT_SPEC §10: Elasticsearch leaves “no decision” and becomes
-  “next iteration, ADR-015”.
-- Current `#/card/` SQL search is the MVP engine and stays documented as
-  such.
+- PRODUCT_SPEC §10 / TZ 2.83: Elasticsearch is accepted ADR-015, scheduled
+  **only after the first approved rhizome production deploy**.
+- Current `/search` SQL search is the engine until that wave and stays
+  documented as such.
 - A later Stage file owns Compose, secrets, rebuild, and tests that prove
   §5.6 on ES hits.
 - If the owner later picks OpenSearch or managed Elastic, update this ADR;

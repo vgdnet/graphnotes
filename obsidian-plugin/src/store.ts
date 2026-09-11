@@ -1,7 +1,7 @@
 import type { ConnectionData, HistoryEntry, Pending, SavedData } from './core';
 
 export function emptySaved(): SavedData {
-  return { server: '', allowHttp: false, token: '', connections: {}, history: [] };
+  return { server: '', allowHttp: false, token: '', autoSync: true, connections: {}, history: [] };
 }
 
 export function normalizeSaved(raw: unknown): SavedData {
@@ -13,6 +13,7 @@ export function normalizeSaved(raw: unknown): SavedData {
   if (typeof data.token === 'string' && data.token.startsWith('gnp_') && data.token.length <= 200) {
     saved.token = data.token.trim();
   }
+  saved.autoSync = data.autoSync !== false;
   if (data.connections && typeof data.connections === 'object' && !Array.isArray(data.connections)) {
     for (const [key, value] of Object.entries(data.connections as Record<string, unknown>)) {
       const conn = normalizeConnection(value);

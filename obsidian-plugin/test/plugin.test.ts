@@ -126,7 +126,9 @@ export async function run(): Promise<void> {
   });
   assertEqual(saved.server, 'http://172.16.13.14:8080', 'saved server');
   assertEqual(saved.token, 'gnp_secret', 'token kept in plugin data');
+  assertEqual(saved.autoSync, true, 'auto sync default');
+  assertEqual(normalizeSaved({ server: 'https://x', token: 'gnp_x', autoSync: false }).autoSync, false, 'auto sync off kept');
   assertEqual(normalizeSaved({ server: 'https://x', token: 'not-a-gnp' }).token, '', 'rejects non-gnp token');
 
-  console.log('ok', 20);
+  console.log('ok', 21);
 }

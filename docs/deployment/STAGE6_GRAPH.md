@@ -56,8 +56,10 @@ MVP search is PostgreSQL (`GET /api/search`) on the same `note_index`
 revision as the graph. Proposal create also writes `layer=proposal` rows
 (dropped on publish). A rebuild or SHA change updates graph and search
 together; a hash to a path that is not in the current git tree does not
-invent a card (API 404). Elasticsearch is the next iteration (ADR-015),
-not this Stage 6 stack.
+invent a card (API 404). Elasticsearch (ADR-015 / TZ 2.83) starts **only
+after the first approved rhizome production deploy**; not this Stage 6
+stack. Until then search stays SQL on `note_index`. Do not add
+Elasticsearch to Compose now.
 
 Light and dark themes are browser-local (`localStorage` `graphnotes-theme`,
 else `prefers-color-scheme`). The UI control is a Theme Switcher (sliding

@@ -69,3 +69,6 @@ PostgreSQL indexes used: `note_index (layer, owner_user_id, revision_sha)`,
 path/revision/owner, `note_links` source and target, unique `index_key`.
 
 Redis, Neo4j and queues were not added.
+Elasticsearch (ADR-015 / TZ 2.83) starts **only after the first approved
+rhizome production deploy**. Until then search is SQL on `note_index`.
+Do not add Elasticsearch to Compose now.

@@ -15,6 +15,7 @@ export interface SavedData {
   server: string;
   allowHttp: boolean;
   token: string;
+  autoSync: boolean;
   connections: Record<string, ConnectionData>;
   history: HistoryEntry[];
 }

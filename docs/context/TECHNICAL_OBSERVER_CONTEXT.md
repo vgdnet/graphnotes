@@ -1,7 +1,12 @@
 # GraphNotes — канонический контекст Technical Observer
 
 Статус: ACTIVE
-Updated: 2026-09-12 (TZ 2.81: Login tab mail-code / `#/auth/login-code`
+Updated: 2026-09-12 (TZ 2.84 / §17: invite-only register after `rhizome`
+prod, not test; ADR before code. TZ 2.83: Elasticsearch iteration starts **only after
+the first approved rhizome production deploy**; SQL `/search` until then;
+do not add ES to Compose. TZ 2.82: plugin copies vault edits after save;
+no card picker; first dump «Отправить всё»; §6.6.3 marks/topics are site
+UI leftover. TZ 2.81: Login tab mail-code / `#/auth/login-code`
 uses the existing SMTP contour. TZ 2.80: guest anti-scrape of published cards is
 product §16 — after `rhizome` prod only, not `rhizome-test`, ADR before
 code. TZ 2.79 shipped 2.72–2.76. TZ 2.75: plugin key lives in the cabinet and is
@@ -97,12 +102,15 @@ PostgreSQL, узлы, связи, теги, поисковый индекс и �
 Личный hosted Markdown — продуктовый путь (ТЗ 2.62). Поиск — `note_index`.
 Выгрузка своей — со склада `.md`, не из индекса.
 
-Плагин Obsidian (ТЗ 2.68–2.75 / MASTER §12.1) — HTTP API в **тот же**
-`personal_uploads` / `personal_assets`. Не git copy-in при apply, не запись
+Плагин Obsidian (ТЗ 2.68–2.82 / MASTER §12.1) — HTTP API в **тот же**
+`personal_uploads` / `personal_assets`. Клиент 2.82 копирует правки vault
+после сохранения; выбор карточек не обязателен; «только по команде»
+(2.69) снято. Не git copy-in при apply, не запись
 в `shared_notes`, не предложение, не обход Differ. Таблицы transfer не канон
 знания. Ключ хранится в кабинете и копируется в плагин (ТЗ 2.75); отзыв
 блокирует, новый ключ снова из кабинета. SHA-256 — только поиск Bearer.
 Код плагина в `obsidian-plugin/` — клиент, не канон склада GraphNotes.
+§6.6.3 пометки/темы — UI сайта, не этот API.
 
 ### Rhizome and RBAC model
 
@@ -232,7 +240,9 @@ provenance (author attribution) for included nodes/links when available.
 Missing entitlement tables / «ризома автора» for payers is **N/A** this
 wave (ADR-016 leftover), not FAIL. Inventing a second knowledge repo,
 payment gateway, SMTP redesign, vsepsy login, Elasticsearch or Celery
-in this slice is P1.
+in this slice is P1. Elasticsearch (ADR-015) is accepted but scheduled
+**only after the first approved rhizome production deploy** (TZ 2.83);
+shipping ES before that deploy is P1.
 
 Current roadmap alignment: Stages 0–7 DONE; Stage 8 CURRENT; Stage 9
 production deploy explicitly deferred.
@@ -264,6 +274,9 @@ personal overlay и Graph Diff (Stage 6+). GitHub App — leftover Git-движ�
 
 Без отдельного принятого решения нельзя преждевременно добавлять Neo4j,
 Elasticsearch, Redis, Celery, RabbitMQ, MinIO/S3, Gitea/GitLab или Kubernetes.
+ADR-015 принят, но Elasticsearch — **только после первой утверждённой
+выкатки на production `rhizome`** (ТЗ 2.83); до тех пор SQL-поиск, в
+Compose ES не добавлять.
 
 MVP authentication — локальные username/password; почта — тот же UUID.
 SMTP инсталляции (ADR-017 / TZ 2.45 / 2.52) при заданных host и From не открывает

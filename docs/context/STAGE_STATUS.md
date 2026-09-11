@@ -2,7 +2,14 @@
 
 Updated: 2026-09-12
 
-Product model TZ 2.81 (login-by-mail on the Login tab) / 2.79 (2.72–2.76 shipped) / §6.3.4: Obsidian plugin **API** copies selected
+Product model TZ 2.84 (invite-only register after first `rhizome` prod,
+not test; ADR before code) /
+2.83 (Elasticsearch iteration starts **only after the
+first approved rhizome production deploy**; SQL `/search` until then) /
+2.82 (plugin copies vault edits after save into the personal store; no
+card picker required; first dump «Отправить всё»; contribution marks
+on the site are leftover UI) /
+2.81 (login-by-mail on the Login tab) / 2.79 (2.72–2.76 shipped) / §6.3.4: Obsidian plugin **API** writes
 vault files into the owner's existing personal store (`personal_uploads` +
 `personal_assets`). Desktop plugin **GraphNotes Publisher** lives in
 `obsidian-plugin/` (TZ 2.69). Token is a personal API key (TZ 2.75):
@@ -47,7 +54,9 @@ queue; `/user` settings; `/offer` my proposals; `/graph` shared canvas;
 `/search` SQL card search; `/my_graph` personal graph; `/contribution`
 Мой вклад; `/differ` Отличающиеся; `/` → `/graph`. Unified auth:
 login / register / forgot; reset by login or email; letter to stored
-inbox only. Elasticsearch (ADR-015) and payment gateway remain later.
+inbox only. Elasticsearch (ADR-015 / TZ 2.83) starts **only after the
+first approved rhizome production deploy**; not this branch; SQL search
+until then. Payment gateway remains later.
 TZ 2.13: Settings at `/user` hold required email, optional contacts, git
 and author contract. TZ 2.14: start page is `/graph`. TZ 2.64: guests open published
 shared cards from the graph and wikilinks; personal / queue / comments
@@ -392,6 +401,11 @@ TZ 2.5–2.7 on this branch (not merged to main; production
   disable write. Plugin white-noise is 415 `unsupported_type` without
   account lock. Alembic `0017`–`0019`. Production `rhizome` not
   deployed.
+- TZ 2.82: Publisher client copies eligible vault edits after save
+  (`autoSync` default on). No card-picker required. First dump is
+  «Отправить всё». HTTP prefix unchanged. §6.6.3 marks/topics UI is
+  leftover (accepted model, not this delivery). Production `rhizome`
+  not deployed.
 - TZ 2.78: `#/about` is credits (rhizome — Мария Надршина,
   GraphNotes — Юрий Ефимов, Telegram links). Footer is the About
   button only — no WTFPL/AGPL one-liner, no author-contract control.
@@ -402,7 +416,17 @@ TZ 2.5–2.7 on this branch (not merged to main; production
   `#/auth/login-code?token=` still opens a session. Plugin manifest
   credits Юрий Ефимов. Cabinet hint: token default 30 days, max 90.
   Production `rhizome` not deployed.
-- leftover: TZ 2.80 / §16 guest anti-scrape (one IP → many unique
+- leftover: TZ 2.82 / §6.6.3 rhizome marks («дай, если хочешь») and
+  topic suggestions — accepted product model, site UI not this delivery;
+- leftover: TZ 2.83 / ADR-015 Elasticsearch iteration starts **only after
+  the first approved rhizome production deploy**; not this branch; SQL
+  `/search` until then; §6.5.3 questions 1–9 unanswered; do not add ES
+  to Compose;
+- leftover: TZ 2.84 / §17 invite-only register **after** first
+  `rhizome` production deploy (admin invites; own invites after 10
+  editor-accepted shared cards; inviter chain); do not ship on
+  `rhizome-test`; ADR before code;
+  TZ 2.80 / §16 guest anti-scrape (one IP → many unique
   published cards) **after** first `rhizome` production deploy; do not
   ship on `rhizome-test`; ADR before code;
   separate **logs database** vs working PostgreSQL (TZ 2.74
@@ -412,6 +436,8 @@ TZ 2.5–2.7 on this branch (not merged to main; production
   view; `closed_paths` already exists — not this slice); vsepsy
   identity §6.1.3 (needs ADR); ZIP wording in ADR-009 vs TZ 2.5;
   formal ADR for TZ 2.18 admin password/audit vs ADR-002 (screen
-  already expanded in 2.37); Elasticsearch remains ADR-015. Do not
+  already expanded in 2.37); Elasticsearch remains ADR-015, scheduled
+  **only after the first approved rhizome production deploy** (TZ 2.83;
+  not this branch; SQL search until then). Do not
   ship payment gateway, SMTP redesign, vsepsy, ES or Celery in the
   current implementer wave

@@ -8,6 +8,7 @@ import { relatedPaths, usedInLabel, vaultEligible } from './links';
 import { cancelTransfer, phaseLabel, runTransfer, SnapshotChangedError, type Phase } from './runner';
 import { connectionOf, emptySaved, normalizeSaved, pushHistory } from './store';
 import type { SavedData } from './core';
+import { VaultSync } from './sync';
 
 interface ReviewItem {
   path: string;
@@ -36,6 +37,8 @@ const WRITE_REASONS: Record<string, string> = {
 export default class GraphNotesPublisherPlugin extends Plugin {
   saved: SavedData = emptySaved();
   abort?: AbortController;
+  syncAbort?: AbortController;
+  sync = new VaultSync(this);
 
   get token(): string {
     return this.saved.token;
@@ -47,15 +50,17 @@ export default class GraphNotesPublisherPlugin extends Plugin {
 
   async onload(): Promise<void> {
     this.saved = normalizeSaved(await this.loadData());
-    this.addRibbonIcon('paper-plane', 'GraphNotes: подготовить изменения', () => this.openPublish('pick'));
-    this.addCommand({ id: 'send-current', name: 'Отправить текущую заметку', callback: () => this.openPublish('current') });
-    this.addCommand({ id: 'prepare', name: 'Подготовить изменения', callback: () => this.openPublish('pick') });
-    this.addCommand({ id: 'resume', name: 'Проверить / продолжить', callback: () => this.openPublish('resume') });
+    this.sync.watch();
+    this.addRibbonIcon('paper-plane', 'GraphNotes: отправить все правки', () => this.sync.pushAll(true));
+    this.addCommand({ id: 'sync-all', name: 'Отправить все правки в личное хранилище', callback: () => this.sync.pushAll(true) });
+    this.addCommand({ id: 'resume', name: 'Проверить / продолжить', callback: () => this.sync.flush('queued', true) });
+    this.addCommand({ id: 'conflicts', name: 'Разобрать конфликты с сервером', callback: () => this.openPublish('conflicts') });
     this.addSettingTab(new GraphNotesSettingTab(this.app, this));
   }
 
   onunload(): void {
     this.abort?.abort();
+    this.syncAbort?.abort();
   }
 
   persist(): Promise<void> {
@@ -68,7 +73,21 @@ export default class GraphNotesPublisherPlugin extends Plugin {
     return this.abort.signal;
   }
 
-  openPublish(mode: 'pick' | 'current' | 'resume'): void {
+  beginSync(): AbortSignal {
+    this.syncAbort?.abort();
+    this.syncAbort = new AbortController();
+    return this.syncAbort.signal;
+  }
+
+  lastConflicts: string[] = [];
+
+  onConflicts(paths: string[]): void {
+    this.lastConflicts = paths;
+    new Notice(`Конфликт с сервером, не отправлено: ${paths.slice(0, 3).join(', ')}${paths.length > 3 ? '…' : ''}`);
+    this.openPublish('conflicts');
+  }
+
+  openPublish(mode: 'pick' | 'current' | 'resume' | 'conflicts'): void {
     if (!this.token.trim()) {
       new Notice('Введите токен в настройках GraphNotes Publisher.');
       return;
@@ -77,7 +96,12 @@ export default class GraphNotesPublisherPlugin extends Plugin {
       new Notice('Откройте заметку, которую нужно отправить.');
       return;
     }
-    new PublishModal(this.app, this, mode).open();
+    if (this.sync.busy && mode !== 'resume' && mode !== 'conflicts') {
+      new Notice('Сейчас уже идёт передача. Дождитесь конца или нажмите «Проверить / продолжить».');
+      return;
+    }
+    if (mode !== 'conflicts') this.syncAbort?.abort();
+    new PublishModal(this.app, this, mode, mode === 'conflicts' ? this.lastConflicts : []).open();
   }
 
   currentNote(): TFile | null {
@@ -102,7 +126,7 @@ class GraphNotesSettingTab extends PluginSettingTab {
     containerEl.createEl('h2', { text: 'GraphNotes Publisher' });
     containerEl.createEl('p', {
       cls: 'gn-muted',
-      text: 'Токен берётся в GraphNotes: Настройки → Obsidian. Его можно снова скопировать там. Плагин запоминает токен. Пароль учётки сюда не вводится.',
+      text: 'Правки в этом хранилище сами уходят в личное хранилище GraphNotes. В общую ризому — только Differ на сайте. Токен: Настройки → Obsidian. Пароль учётки сюда не вводится.',
     });
 
     new Setting(containerEl)
@@ -129,6 +153,16 @@ class GraphNotesSettingTab extends PluginSettingTab {
       });
 
     new Setting(containerEl)
+      .setName('Отправлять правки сразу')
+      .setDesc('После сохранения заметки или вложения плагин сам отправит изменение. Выбор карточек не нужен.')
+      .addToggle(toggle => {
+        toggle.setValue(plugin.saved.autoSync).onChange((value: boolean) => {
+          plugin.saved.autoSync = value;
+          void plugin.persist();
+        });
+      });
+
+    new Setting(containerEl)
       .setName('Токен интеграции')
       .setDesc('Токен из настроек GraphNotes (gnp_…). Плагин запоминает его.')
       .addText(text => {
@@ -138,6 +172,20 @@ class GraphNotesSettingTab extends PluginSettingTab {
           plugin.token = value;
           void plugin.persist();
         });
+      });
+
+    new Setting(containerEl)
+      .setName('Все правки сейчас')
+      .setDesc('Первая заливка уже существующего vault или повторная сверка всех путей. Совпавшие байты не уходят.')
+      .addButton(button => {
+        button.setButtonText('Отправить всё').onClick(() => plugin.sync.pushAll(true));
+      });
+
+    new Setting(containerEl)
+      .setName('Конфликты')
+      .setDesc('Показать серверный Markdown и явно подтвердить замену. Серверного force=true нет.')
+      .addButton(button => {
+        button.setButtonText('Разобрать конфликты').onClick(() => plugin.openPublish('conflicts'));
       });
 
     const status = containerEl.createDiv({ cls: 'gn-muted' });
@@ -180,7 +228,7 @@ class GraphNotesSettingTab extends PluginSettingTab {
 
     const credit = containerEl.createEl('p', { cls: 'gn-muted' });
     credit.createEl('span', { text: 'Разработчик: ' });
-    const site = credit.createEl('a', { text: 'Юрий Ефимов', href: 'https://psychoanalyst.pro/GraphNotes' });
+    const site = credit.createEl('a', { text: 'Юрий Ефимов', href: 'https://t.me/guide_psy' });
     site.setAttr('target', '_blank');
   }
 }
@@ -198,7 +246,12 @@ class PublishModal extends Modal {
   private connKey = '';
   private confirmDeletes = false;
 
-  constructor(app: App, private readonly plugin: GraphNotesPublisherPlugin, private readonly mode: 'pick' | 'current' | 'resume') {
+  constructor(
+    app: App,
+    private readonly plugin: GraphNotesPublisherPlugin,
+    private readonly mode: 'pick' | 'current' | 'resume' | 'conflicts',
+    private readonly focusPaths: string[] = [],
+  ) {
     super(app);
   }
 
@@ -235,7 +288,7 @@ class PublishModal extends Modal {
         await this.continuePending();
         return;
       }
-      if (this.mode === 'current') await this.compare();
+      if (this.mode === 'current' || this.mode === 'conflicts') await this.compare();
     } catch (error) {
       this.error = describeError(error);
     } finally {
@@ -271,7 +324,11 @@ class PublishModal extends Modal {
       const { api } = this.plugin.connect(signal);
       const remote = new Map((await api.manifest(this.caps.limits.manifest_page_size)).map(file => [file.path, file]));
       const conn = connectionOf(this.plugin.saved, this.connKey);
-      const seeds = new Set(this.picked);
+      const seeds = new Set(this.mode === 'conflicts' ? this.focusPaths : this.picked);
+      if (this.mode === 'conflicts') {
+        for (const file of vaultEligible(this.app)) seeds.add(file.path);
+        for (const path of Object.keys(conn.baseline)) seeds.add(path);
+      }
       const usedIn = new Map<string, string[]>();
       const missing: string[] = [];
       const skippedNotes: string[] = [];
@@ -301,8 +358,13 @@ class PublishModal extends Modal {
       for (const path of [...seeds].sort((a, b) => a.localeCompare(b, 'ru'))) {
         items.push(await this.itemFromPath(path, remote.get(path), conn.baseline[path], usedIn.get(path) ?? []));
       }
-      this.items = items;
+      this.items = this.mode === 'conflicts'
+        ? items.filter(item => item.change === 'conflict' || item.change === 'remote' || item.replace)
+        : items;
       this.warnings = [];
+      if (this.mode === 'conflicts' && !this.items.length) {
+        this.message = 'Конфликтов с сервером нет. Совпавшие байты не передаются.';
+      }
       if (skippedNotes.length) {
         this.warnings.push('Связанные заметки не выбраны автоматически: ' + unique(skippedNotes).slice(0, 8).join(', '));
       }

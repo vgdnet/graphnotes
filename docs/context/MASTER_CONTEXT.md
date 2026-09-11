@@ -2,10 +2,20 @@
 
 Updated: 2026-09-12
 Status: canonical architecture baseline
-Aligned with PRODUCT_SPEC 2.81. TZ 2.81 ships login-by-mail on the Login
+Aligned with PRODUCT_SPEC 2.84. TZ 2.84 / §17 invite-only register is
+after first `rhizome` prod, not test. TZ 2.83: the Elasticsearch iteration
+(ADR-015) starts **only after the first approved rhizome production
+deploy**. Not this branch; do not add ES to Compose; SQL `/search` until
+then; §6.5.3 questions 1–9 stay unanswered for that later wave.
+TZ 2.82 / §12.1: GraphNotes Publisher copies vault edits after save into
+the owner's `personal_uploads` / `personal_assets` (no card picker
+required; first dump is «Отправить всё»; matching bytes skipped). Shared
+rhizome, Differ and proposals stay unchanged. Contribution marks/topics
+(§6.6.3) are site UI leftover, not this API.
+TZ 2.81 ships login-by-mail on the Login
 tab (same SMTP contour as confirm/reset). TZ 2.68–2.76 shipped (2.79) / §12.1: Obsidian plugin
-**API** copies selected vault files into the owner's `personal_uploads` /
-`personal_assets`. Desktop **GraphNotes Publisher** lives in
+**API** writes only the token owner's personal store. Desktop
+**GraphNotes Publisher** lives in
 `obsidian-plugin/` (TZ 2.69). Token is a personal API key (TZ 2.75):
 `gnp_` + `secrets.token_urlsafe(32)`, stored in Settings and in the
 plugin `data.json` (TZ 2.75: cabinet stores the key and the user copies
@@ -62,7 +72,8 @@ card); `#/users/{uuid}` = **public person card** (TZ 2.60: achievements —
 accepted notes/links, proposal count, shared created/edited events; feed
 names and proposal author open it; `GET /api/users/{id}/card`); `/offer` = **my** proposals into the rhizome; `/graph` = shared
 rhizome canvas (fCoSE); `/search` = card search (SQL `note_index`,
-`layer=visible`); `/my_graph` = personal graph layer only;
+`layer=visible`; Elasticsearch only after the first approved rhizome
+production deploy — ADR-015 / TZ 2.83); `/my_graph` = personal graph layer only;
 `/contribution` = Мой вклад. `/differ` stays Отличающиеся (compare /
 stack-offer target); do not invent `/accepted/differ`. `/` → `/graph`.
 TZ 2.57 wrongly inferred `/user` = person card and `/offer` = combined
@@ -392,7 +403,7 @@ GraphNotes shared store               = working copy of published rhizome (TZ 2.
 git / later Dropbox / Google Drive    = connectors that copy .md into those stores
 shared knowledge repo                 = leftover merge-out after editor accept
 .md / ZIP upload                      = copy into the same local personal store
-Obsidian plugin API + GraphNotes Publisher = copy selected vault files into that store (TZ 2.68–2.72)
+Obsidian plugin API + GraphNotes Publisher = copy vault edits after save into that store (TZ 2.68–2.82)
 proposal                              = selected Differ results, queued for editors
 Differ                                = local personal copy → published shared
 ```
@@ -462,7 +473,9 @@ adding infrastructure excluded from the MVP.
 ## 6. Scope discipline
 Not needed for the initial MVP unless actual load/features justify them:
 - Neo4j
-- Elasticsearch
+- Elasticsearch (ADR-015 accepted, scheduled **only after the first
+  approved rhizome production deploy**; not this branch; SQL search until
+  then; do not add to Compose now)
 - Redis
 - Celery / RabbitMQ
 - MinIO / S3
@@ -473,6 +486,11 @@ Not needed for the initial MVP unless actual load/features justify them:
 - guest anti-scrape of published cards (TZ 2.80 / product §16): after
   first `rhizome` production deploy only; do **not** implement on
   `rhizome-test`. No Redis/WAF just for this. ADR before code.
+- invite-only registration (TZ 2.84 / product §17): after first
+  `rhizome` production deploy; not on `rhizome-test`. Admin always
+  issues invites; a user issues their own after 10 editor-accepted
+  shared cards. Store inviter UUID. Open street register stays until
+  then. vsepsy-without-invite is an open ADR question. No workspace.
 
 Start simple. Add infrastructure only for measured/observed needs.
 
@@ -697,12 +715,23 @@ Proposals and editor workflow (Stage-owned):
 Reconciliation hook:
 - `POST /api/webhooks/github`
 
-### 12.1 Obsidian plugin → personal store (TZ 2.68–2.75)
+### 12.1 Obsidian plugin → personal store (TZ 2.68–2.82)
 
-Product requirement: §6.3.4 / §5.5.7. Operator examples:
+Product requirement: §6.3.4 / §5.5.7 / TZ 2.82. Operator examples:
 `docs/deployment/OBSIDIAN_PLUGIN_API.md`. The desktop plugin
 (`obsidian-plugin/`, GraphNotes Publisher) is part of this product
 (TZ 2.69). GraphNotes owns the HTTP API and the personal store.
+TZ 2.82 client: vault create/modify/delete/rename after save enqueue a
+personal transfer (default `autoSync: true` in plugin `data.json`).
+Card picking is not required. First dump of an existing vault is the
+«Отправить всё» command. Matching SHA-256 is skipped. One transfer at
+a time. Rename is upsert new path + delete old when `personal:delete`
+is granted. Conflict: batch not applied; client shows GET content and
+the owner confirms a new transfer with the current version — no
+`force=true`. Interrupted plan + token persist in `data.json`; changed
+bytes before upload cancel the plan and rebuild it. 2.69 «send only on
+command» for vault edits is withdrawn. §6.6.3 rhizome marks/topics are
+site UI leftover; this prefix does not implement them.
 
 Browser/plugin URLs use the `/api` prefix. FastAPI routes do **not**:
 Nginx `location /api/` strips it. Incompatible protocol → new prefix
