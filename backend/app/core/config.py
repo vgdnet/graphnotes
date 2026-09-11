@@ -62,6 +62,10 @@ class Settings(BaseSettings):
     public_base_url: str = DEFAULT_PUBLIC_BASE_URL
     mail_code_ttl_minutes: int = 30
     mail_resend_cooldown_seconds: int = 60
+    invite_ttl_days: int = 7
+    invite_resend_cooldown_seconds: int = 60
+    invite_max_per_hour: int = 10
+    invite_max_pending: int = 20
     telegram_bot_token: str = ""
 
     model_config = SettingsConfigDict(

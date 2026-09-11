@@ -162,6 +162,30 @@ def reset_mail(
     return "Сброс пароля GraphNotes", "\n".join(lines)
 
 
+def invite_mail(
+    *,
+    email: str,
+    token: str,
+    inviter_username: str,
+    ttl_days: int,
+    public_base_url: str | None = None,
+) -> tuple[str, str]:
+    base = _public_base(public_base_url)
+    link = f"{base}/#/auth/invite?token={token}" if base else f"#/auth/invite?token={token}"
+    lines = [
+        "Здравствуйте.",
+        "",
+        f"Вас пригласили в GraphNotes по приглашению от @{inviter_username}.",
+        "Откройте ссылку, чтобы завести учётку. Окна регистрации на сайте нет.",
+        "",
+        f"Ссылка: {link}",
+        "",
+        f"Ссылка действует {ttl_days} дн.",
+        "Если вы не ждали приглашение, письмо можно игнорировать.",
+    ]
+    return "Приглашение в GraphNotes", "\n".join(lines)
+
+
 def queue_notify_mail(
     recipient: User,
     *,

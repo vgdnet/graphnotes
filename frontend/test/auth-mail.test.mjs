@@ -10,10 +10,11 @@ import {
   resetFormPhase,
 } from "../test-out/authMail.js";
 
-test("parseAuthHash reads confirm, login and reset links", () => {
+test("parseAuthHash reads confirm, login, reset and invite links", () => {
   assert.deepEqual(parseAuthHash("#/auth/confirm?token=abc"), { purpose: "confirm", token: "abc" });
   assert.deepEqual(parseAuthHash("#/auth/login-code?token=xyz"), { purpose: "login", token: "xyz" });
   assert.deepEqual(parseAuthHash("#/auth/reset?token=rst"), { purpose: "reset", token: "rst" });
+  assert.deepEqual(parseAuthHash("#/auth/invite?token=inv"), { purpose: "invite", token: "inv" });
   assert.equal(parseAuthHash("#/card/"), null);
 });
 

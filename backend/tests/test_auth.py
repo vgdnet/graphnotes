@@ -15,6 +15,7 @@ from app.models.user import User
 from app.services.admin import AdminBootstrapError, bootstrap_admin
 from app.services.auth import verify_password
 from app.services.session_cookie import set_session_cookie
+from tests.test_ingest import _register
 
 
 async def test_registration_session_refresh_and_logout(
@@ -24,7 +25,7 @@ async def test_registration_session_refresh_and_logout(
     ],
 ) -> None:
     client, session_factory = auth_test_context
-    registration = await client.post(
+    closed = await client.post(
         "/auth/register",
         json={
             "username": "Alice.Example",
@@ -33,16 +34,26 @@ async def test_registration_session_refresh_and_logout(
             "email": "Alice@Example.com",
         },
     )
+    assert closed.status_code == 410
+    assert "invite" in closed.json()["detail"]
 
-    assert registration.status_code == 201
-    assert registration.json()["username"] == "alice.example"
-    assert registration.json()["email"] == "alice@example.com"
-    assert registration.json()["role"] == "user"
-    assert registration.json()["is_author"] is False
-    assert registration.json()["author_contract_accepted_at"] is None
-    assert "password" not in registration.text
-    assert "httponly" in registration.headers["set-cookie"].lower()
-    assert "samesite=lax" in registration.headers["set-cookie"].lower()
+    await _register(
+        client,
+        "Alice.Example",
+        accept_author=False,
+        email="Alice@Example.com",
+        password="correct horse battery staple",
+    )
+    login = await client.get("/users/me")
+    assert login.status_code == 200
+    assert login.json()["username"] == "alice.example"
+    assert login.json()["email"] == "alice@example.com"
+    assert login.json()["role"] == "user"
+    assert login.json()["is_author"] is False
+    assert login.json()["author_contract_accepted_at"] is None
+    assert "password" not in login.text
+    raw_token = client.cookies.get("graphnotes_session")
+    assert raw_token
 
     async with session_factory() as database:
         result = await database.execute(
@@ -52,25 +63,12 @@ async def test_registration_session_refresh_and_logout(
         assert user.password_hash != "correct horse battery staple"
         assert verify_password(user.password_hash, "correct horse battery staple")
         auth_session = (await database.execute(select(AuthSession))).scalar_one()
-        raw_token = client.cookies.get("graphnotes_session")
-        assert raw_token
         assert auth_session.token_hash != raw_token
         assert raw_token not in auth_session.token_hash
 
-    duplicate = await client.post(
-        "/auth/register",
-        json={
-            "username": "ALICE.EXAMPLE",
-            "password": "another secure password",
-            "display_name": "Another Alice",
-            "email": "other-alice@example.com",
-        },
-    )
-    assert duplicate.status_code == 409
-
     me = await client.get("/users/me")
     assert me.status_code == 200
-    assert me.json()["display_name"] == "Alice"
+    assert me.json()["display_name"] == "Alice.Example"
 
     old_token = client.cookies.get("graphnotes_session")
     refreshed = await client.post("/auth/refresh")
@@ -99,8 +97,7 @@ async def test_registration_session_refresh_and_logout(
 
     async with session_factory() as database:
         actions = set((await database.scalars(select(AuditEvent.action))).all())
-        assert "auth.registration_succeeded" in actions
-        assert "auth.registration_failed" in actions
+        assert "auth.login_succeeded" in actions
         assert "auth.logout" in actions
 
 
@@ -111,15 +108,7 @@ async def test_login_failures_and_inactive_account(
     ],
 ) -> None:
     client, session_factory = auth_test_context
-    await client.post(
-        "/auth/register",
-        json={
-            "username": "bob",
-            "password": "a sufficiently long password",
-            "display_name": "Bob",
-            "email": "bob@example.com",
-        },
-    )
+    await _register(client, "bob", accept_author=False)
     await client.post("/auth/logout")
 
     bad_password = await client.post(
@@ -189,37 +178,7 @@ async def test_registration_validation(
 ) -> None:
     client, _ = auth_test_context
 
-    short_password = await client.post(
-        "/auth/register",
-        json={
-            "username": "valid-user",
-            "password": "too short",
-            "display_name": "Valid User",
-        },
-    )
-    assert short_password.status_code == 422
-
-    long_password = await client.post(
-        "/auth/register",
-        json={
-            "username": "valid-user",
-            "password": "x" * 129,
-            "display_name": "Valid User",
-        },
-    )
-    assert long_password.status_code == 422
-
-    invalid_username = await client.post(
-        "/auth/register",
-        json={
-            "username": "not valid!",
-            "password": "a sufficiently long password",
-            "display_name": "Valid User",
-        },
-    )
-    assert invalid_username.status_code == 422
-
-    attempted_escalation = await client.post(
+    closed = await client.post(
         "/auth/register",
         json={
             "username": "ordinary-user",
@@ -229,8 +188,29 @@ async def test_registration_validation(
             "role": "admin",
         },
     )
-    assert attempted_escalation.status_code == 201
-    assert attempted_escalation.json()["role"] == "user"
+    assert closed.status_code == 410
+
+    short_password = await client.post(
+        "/auth/invite/accept",
+        json={
+            "token": "not-a-real-invite-token",
+            "username": "valid-user",
+            "password": "too short",
+            "display_name": "Valid User",
+        },
+    )
+    assert short_password.status_code == 422
+
+    invalid_username = await client.post(
+        "/auth/invite/accept",
+        json={
+            "token": "not-a-real-invite-token",
+            "username": "not valid!",
+            "password": "a sufficiently long password",
+            "display_name": "Valid User",
+        },
+    )
+    assert invalid_username.status_code == 422
 
 
 async def test_admin_rbac_management_last_admin_and_audit(
@@ -240,16 +220,13 @@ async def test_admin_rbac_management_last_admin_and_audit(
     ],
 ) -> None:
     admin_client, session_factory = auth_test_context
-    admin_registration = await admin_client.post(
-        "/auth/register",
-        json={
-            "username": "initial-admin",
-            "password": "initial admin password",
-            "display_name": "Initial Admin",
-            "email": "initial-admin@example.com",
-        },
+    await _register(
+        admin_client,
+        "initial-admin",
+        accept_author=False,
+        password="initial admin password",
     )
-    admin_id = admin_registration.json()["id"]
+    admin_id = (await admin_client.get("/users/me")).json()["id"]
     assert (await admin_client.get("/admin/users")).status_code == 403
 
     async with session_factory() as database:
@@ -262,18 +239,15 @@ async def test_admin_rbac_management_last_admin_and_audit(
         transport=ASGITransport(app=app),
         base_url="http://testserver",
     ) as managed_client:
-        managed_registration = await managed_client.post(
-            "/auth/register",
-            json={
-                "username": "managed-user",
-                "password": "managed user password",
-                "display_name": "Managed User",
-                "email": "managed-user@example.com",
-                "role": "admin",
-            },
+        await _register(
+            managed_client,
+            "managed-user",
+            accept_author=False,
+            password="managed user password",
         )
-        managed_id = managed_registration.json()["id"]
-        assert managed_registration.json()["role"] == "user"
+        managed_me = await managed_client.get("/users/me")
+        managed_id = managed_me.json()["id"]
+        assert managed_me.json()["role"] == "user"
         assert (await managed_client.get("/admin/users")).status_code == 403
 
         users_response = await admin_client.get("/admin/users")
@@ -361,15 +335,8 @@ async def test_admin_bootstrap_refuses_escalation_and_supports_recovery(
 ) -> None:
     client, session_factory = auth_test_context
     for username in ("first-admin", "recovery-admin"):
-        await client.post(
-            "/auth/register",
-            json={
-                "username": username,
-                "password": "a sufficiently long password",
-                "display_name": username,
-                "email": f"{username}@example.com",
-            },
-        )
+        await _register(client, username, accept_author=False)
+        await client.post("/auth/logout")
 
     async with session_factory() as database:
         await bootstrap_admin(database, "first-admin")
@@ -402,15 +369,7 @@ async def test_admin_sets_password_and_reads_audit_log(
     ],
 ) -> None:
     admin_client, session_factory = auth_test_context
-    await admin_client.post(
-        "/auth/register",
-        json={
-            "username": "pw-admin",
-            "password": "a sufficiently long password",
-            "display_name": "Password Admin",
-            "email": "pw-admin@example.com",
-        },
-    )
+    await _register(admin_client, "pw-admin", accept_author=False)
     async with session_factory() as database:
         await bootstrap_admin(database, "pw-admin")
 
@@ -418,16 +377,13 @@ async def test_admin_sets_password_and_reads_audit_log(
         transport=ASGITransport(app=app),
         base_url="http://testserver",
     ) as managed_client:
-        created = await managed_client.post(
-            "/auth/register",
-            json={
-                "username": "pw-user",
-                "password": "old managed password",
-                "display_name": "Password User",
-                "email": "pw-user@example.com",
-            },
+        await _register(
+            managed_client,
+            "pw-user",
+            accept_author=False,
+            password="old managed password",
         )
-        managed_id = created.json()["id"]
+        managed_id = (await managed_client.get("/users/me")).json()["id"]
         assert (await managed_client.get("/users/me")).status_code == 200
         assert (await managed_client.get("/admin/audit")).status_code == 403
         assert (

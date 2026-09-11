@@ -13,6 +13,7 @@ from app.models.audit_event import AuditEvent
 from app.services.admin import bootstrap_admin
 from app.services.github import GitHubAppError, GitHubRepoSnapshot
 from sqlalchemy import select
+from tests.test_ingest import _register
 
 
 def _snapshot(owner: str, name: str, sha: str | None = "abc123") -> GitHubRepoSnapshot:
@@ -91,15 +92,7 @@ async def test_user_cannot_connect_shared_and_admin_can(
         monkeypatch,
         {"vgdnet/rhizome": _snapshot("vgdnet", "rhizome", "b675b76dca9a")},
     )
-    await client.post(
-        "/auth/register",
-        json={
-            "username": "plain-user",
-            "password": "a sufficiently long password",
-            "display_name": "Plain",
-            "email": "plain-user@example.com",
-        },
-    )
+    await _register(client, "plain-user", accept_author=False)
     assert (await client.post("/repository/connect")).status_code == 403
 
     async with session_factory() as database:
@@ -131,16 +124,7 @@ async def test_personal_connect_isolation_and_shared_rejection(
             "vgdnet/guide_psy": _snapshot("vgdnet", "guide_psy", "2656006c2308"),
         },
     )
-    await first.post(
-        "/auth/register",
-        json={
-            "username": "efimov",
-            "password": "a sufficiently long password",
-            "display_name": "Efimov",
-            "email": "efimov@example.com",
-            "accept_author_contract": True,
-        },
-    )
+    await _register(first, "efimov")
     rejected_shared = await first.post(
         "/personal/connect",
         json={"repository": "vgdnet/rhizome"},
@@ -166,16 +150,7 @@ async def test_personal_connect_isolation_and_shared_rejection(
         transport=ASGITransport(app=app),
         base_url="http://testserver",
     ) as second:
-        await second.post(
-            "/auth/register",
-            json={
-                "username": "other-user",
-                "password": "a sufficiently long password",
-                "display_name": "Other",
-                "email": "other-user@example.com",
-                "accept_author_contract": True,
-            },
-        )
+        await _register(second, "other-user")
         stolen = await second.post(
             "/personal/connect",
             json={"repository": "vgdnet/guide_psy"},
@@ -193,15 +168,7 @@ async def test_webhook_signature_and_idempotency(
     _install_fake(monkeypatch, {"vgdnet/rhizome": _snapshot("vgdnet", "rhizome")})
     monkeypatch.setattr(settings, "github_webhook_secret", "webhook-secret")
 
-    await client.post(
-        "/auth/register",
-        json={
-            "username": "hook-admin",
-            "password": "a sufficiently long password",
-            "display_name": "Hook Admin",
-            "email": "hook-admin@example.com",
-        },
-    )
+    await _register(client, "hook-admin", accept_author=False)
     async with session_factory() as database:
         await bootstrap_admin(database, "hook-admin")
     assert (await client.post("/repository/connect")).status_code == 200

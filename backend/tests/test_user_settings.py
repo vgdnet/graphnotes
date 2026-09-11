@@ -12,7 +12,7 @@ async def test_register_requires_unique_email_and_profile_patch(
     auth_test_context: tuple[AsyncClient, async_sessionmaker[AsyncSession]],
 ) -> None:
     client, _ = auth_test_context
-    missing = await client.post(
+    closed = await client.post(
         "/auth/register",
         json={
             "username": "no-mail",
@@ -20,33 +20,13 @@ async def test_register_requires_unique_email_and_profile_patch(
             "display_name": "No Mail",
         },
     )
-    assert missing.status_code == 422
+    assert closed.status_code == 410
 
-    created = await client.post(
-        "/auth/register",
-        json={
-            "username": "mail-user",
-            "password": "a sufficiently long password",
-            "display_name": "Mail User",
-            "email": "Mail.User@Example.com",
-        },
-    )
-    assert created.status_code == 201
-    assert created.json()["email"] == "mail.user@example.com"
-    assert created.json()["phone"] is None
-
-    taken = AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver")
-    async with taken:
-        clash = await taken.post(
-            "/auth/register",
-            json={
-                "username": "other-mail",
-                "password": "a sufficiently long password",
-                "display_name": "Other",
-                "email": "mail.user@example.com",
-            },
-        )
-        assert clash.status_code == 409
+    await _register(client, "mail-user", email="Mail.User@Example.com")
+    me = await client.get("/users/me")
+    assert me.status_code == 200
+    assert me.json()["email"] == "mail.user@example.com"
+    assert me.json()["phone"] is None
 
     patched = await client.patch(
         "/users/me",

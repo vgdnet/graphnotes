@@ -100,8 +100,10 @@ Current deployment decision:
 - production deployment will happen only after a separate explicit owner decision
 - guest anti-scrape of published cards (TZ 2.80 / product §16) is a
   **post-production** wave: do not enable it on `rhizome-test`
-- invite-only registration (TZ 2.86–2.87 / product §17) is the same:
-  **post-production**, do not enable on `rhizome-test`
+- invite-only registration (TZ 2.85–2.87 / product §17) **is on
+  `rhizome-test`** (TZ 2.89). Do not deploy this wave to production
+  `rhizome` until a separate owner decision. Alembic `0020` attributes
+  existing accounts (except `efimov`) to `@efimov`.
 
 Rules:
 - deploy only a revision already validated on `rhizome-test`

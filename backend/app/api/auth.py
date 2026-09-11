@@ -18,11 +18,12 @@ from app.schemas.auth import (
     LoginRequest,
     MailStatusResponse,
     PasswordResetRequest,
-    RegisterRequest,
     UserResponse,
 )
+from app.schemas.invites import InviteAcceptRequest, InvitePreviewResponse
 from app.services.audit import record_audit_event
 from app.services.author_contract import apply_accept
+from app.services.invites import InviteError, consume_invite, preview_invite
 from app.services.auth import (
     DUMMY_PASSWORD_HASH,
     hash_password,
@@ -103,30 +104,75 @@ async def mail_status() -> MailStatusResponse:
     )
 
 
+@router.post("/register")
+async def register() -> None:
+    raise HTTPException(
+        status_code=status.HTTP_410_GONE,
+        detail="registration requires an invite",
+    )
+
+
+@router.get("/invite", response_model=InvitePreviewResponse)
+async def invite_preview(token: str, database: DatabaseSession) -> InvitePreviewResponse:
+    try:
+        invite, inviter = await preview_invite(database, token)
+    except InviteError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+    return InvitePreviewResponse(
+        email=invite.email,
+        expires_at=invite.expires_at,
+        inviter_username=inviter.username,
+    )
+
+
 @router.post(
-    "/register",
+    "/invite/accept",
     response_model=UserResponse,
     status_code=status.HTTP_201_CREATED,
 )
-async def register(
-    payload: RegisterRequest,
+async def accept_invite(
+    payload: InviteAcceptRequest,
     response: Response,
     database: DatabaseSession,
 ) -> User:
-    password_hash = await run_in_threadpool(hash_password, payload.password)
-    taken_email = await database.scalar(select(User.id).where(User.email == payload.email))
-    if taken_email is not None:
+    try:
+        invite = await consume_invite(database, payload.token)
+    except InviteError as exc:
+        record_audit_event(
+            database,
+            action="invite.accept_failed",
+            details={"reason": exc.detail},
+        )
+        await database.commit()
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+
+    taken_username = await database.scalar(
+        select(User.id).where(User.username == payload.username)
+    )
+    if taken_username is not None:
+        await database.rollback()
+        record_audit_event(
+            database,
+            action="invite.accept_failed",
+            subject_username=payload.username,
+            details={"reason": "username_taken"},
+        )
+        await database.commit()
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail="email is already registered",
+            detail="username is already registered",
         )
+
     now = datetime.now(UTC)
+    password_hash = await run_in_threadpool(hash_password, payload.password)
     user = User(
         username=payload.username,
         password_hash=password_hash,
-        email=payload.email,
+        email=invite.email,
         display_name=payload.display_name,
-        email_verified_at=None if smtp_configured() else now,
+        email_verified_at=now,
+        invited_by_id=invite.inviter_id,
+        invited_at=now,
     )
     if payload.accept_author_contract:
         apply_accept(user)
@@ -134,12 +180,14 @@ async def register(
 
     try:
         await database.flush()
+        invite.accepted_user_id = user.id
         record_audit_event(
             database,
-            action="auth.registration_succeeded",
+            action="invite.accepted",
             actor_user_id=user.id,
-            target_user_id=user.id,
+            target_user_id=invite.inviter_id,
             subject_username=user.username,
+            details={"invite_id": str(invite.id)},
         )
         if payload.accept_author_contract:
             record_audit_event(
@@ -150,28 +198,6 @@ async def register(
                 subject_username=user.username,
                 details={"version": user.author_contract_version},
             )
-        if smtp_configured():
-            token, code = await issue_email_token(database, user, CONFIRM_PURPOSE)
-            try:
-                await _send_user_mail(database, user, CONFIRM_PURPOSE, token, code)
-            except (MailNotConfiguredError, MailDeliveryError) as exc:
-                await database.rollback()
-                raise HTTPException(
-                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                    detail="confirmation mail could not be sent",
-                ) from exc
-            record_audit_event(
-                database,
-                action="mail.confirmation_sent",
-                actor_user_id=user.id,
-                target_user_id=user.id,
-                subject_username=user.username,
-                details={"purpose": CONFIRM_PURPOSE},
-            )
-            await database.commit()
-            await database.refresh(user)
-            return user
-
         token = await _open_session(database, user)
         await database.commit()
         await database.refresh(user)
@@ -179,7 +205,7 @@ async def register(
         await database.rollback()
         record_audit_event(
             database,
-            action="auth.registration_failed",
+            action="invite.accept_failed",
             subject_username=payload.username,
             details={"reason": "identity_conflict"},
         )

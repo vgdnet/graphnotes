@@ -14,6 +14,7 @@ from app.api.auth import router as auth_router
 from app.api.author import router as author_router
 from app.api.graph import router as graph_router
 from app.api.health import router as health_router
+from app.api.invites import router as invites_router
 from app.api.integration_obsidian import router as obsidian_router
 from app.api.notes import router as notes_router
 from app.api.contributions import router as contributions_router
@@ -60,6 +61,7 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
 app = FastAPI(title=settings.app_name, lifespan=lifespan)
 app.include_router(health_router)
 app.include_router(auth_router)
+app.include_router(invites_router)
 app.include_router(author_router)
 app.include_router(users_router)
 app.include_router(admin_router)

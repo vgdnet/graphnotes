@@ -22,7 +22,30 @@ export type PersonCardData = {
   self: boolean;
   achievements: PersonAchievements;
   notes: { path: string; title: string; state: string }[];
+  invited_at?: string | null;
+  inviter?: { id: string; username: string } | null;
 };
+
+const INVITE_MONTHS = [
+  "января",
+  "февраля",
+  "марта",
+  "апреля",
+  "мая",
+  "июня",
+  "июля",
+  "августа",
+  "сентября",
+  "октября",
+  "ноября",
+  "декабря",
+];
+
+export function formatInvitedAt(iso: string): string {
+  const stamp = new Date(iso);
+  if (Number.isNaN(stamp.getTime())) return iso.slice(0, 10);
+  return `${stamp.getUTCDate()} ${INVITE_MONTHS[stamp.getUTCMonth()]} ${stamp.getUTCFullYear()}`;
+}
 
 export function ActorLink({
   actor,
@@ -74,6 +97,14 @@ export function PersonCardPage({
               @{card.user.username} · {card.user.role}
               {card.user.is_author ? " · автор" : ""}
             </span>
+            {card.inviter && card.invited_at ? (
+              <p className="admin-panel__hint">
+                Приглашен {formatInvitedAt(card.invited_at)} по приглашению от{" "}
+                <a className="person-link" href={personCardHash(card.inviter.id)}>
+                  @{card.inviter.username}
+                </a>
+              </p>
+            ) : null}
           </div>
           {card.user.website ? (
             <p className="admin-panel__hint">{card.user.website}</p>

@@ -1,7 +1,7 @@
 # Product requirements to Stage traceability
 
 Статус: DERIVED / MAINTAINED
-Источник: `docs/product/PRODUCT_SPEC.md` version 2.87
+Источник: `docs/product/PRODUCT_SPEC.md` version 2.88
 
 Матрица маршрутизирует канонические требования в Stage-файлы и не изменяет
 `PRODUCT_SPEC.md`.
@@ -54,11 +54,11 @@
 | 6.5.2 | `#/search` role-scoped search; `#/card/{path}` view-first; `#/users/{uuid}` person card; own personal edit after «Отредактировать карточку» | 6, 7, 8 |
 | 6.5.3 | Elasticsearch next search (ADR-015); SQL until then; questions 1–9 unanswered (TZ 2.83) | **only after the first approved rhizome production deploy**; not this branch |
 | 16 | Guest anti-scrape of published cards (1 IP → many unique paths); after `rhizome` prod only; not `rhizome-test` (TZ 2.80) | after first production deploy; ADR before code |
-| 17 | Invite email link; no Register tab; person card «Приглашен %date% по приглашению от %@user%»; same on vsepsy.ru (TZ 2.87) | after first production deploy; ADR before code |
+| 17 | Invite email link; no Register tab; person card «Приглашен %date% по приглашению от @user»; same on vsepsy.ru (TZ 2.85–2.87) | shipped on rhizome-test (TZ 2.89); Alembic 0020 attributes existing accounts except efimov to @efimov |
 | 6.6 | Differ entity; one-way personal → published shared; merge-into-shared rules | 7 |
 | 6.6 | Connected git: Differ/proposal read **current public HEAD** (Obsidian push); poller/webhook backup; no second clone | 7 |
 | 6.6.2 | Author contribution; Differ extended, not replaced; three states personal/proposed/accepted | next wave |
-| 6.6.3 | Rhizome looks at personal store on the site: author proposes; rhizome may mark personal cards missing from shared («дай, если хочешь») and suggest topics to write; still Differ + editor queue; not a second rhizome (TZ 2.82) | accepted model; site UI next wave |
+| 6.6.3 | Differ API lists personal → shared diffs and itself offers personal cards missing from shared («дай, если хочешь»); cabinet first, then the same Differ in a later plugin iteration; plugin does not publish to shared now (TZ 2.82 / 2.88) | accepted model; cabinet next wave; plugin leftover |
 | 6.5 | Author focus «мой вклад» and provenance on shared graph | next wave (after 6 overlay) |
 | 6.7 | proposal queue tabs New / In progress / Rejected; text and links first, then Graph Diff; reject/return with author comment | 7, 8 |
 | 6.7 | textual and graph impact before publication | 7, 8 |

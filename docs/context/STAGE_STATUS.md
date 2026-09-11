@@ -2,9 +2,10 @@
 
 Updated: 2026-09-12
 
-Product model TZ 2.87 (person card invite line; email-link register after
-first `rhizome` prod; any account may invite; same on vsepsy.ru; not
-test; ADR before code) /
+Product model TZ 2.89 (2.85–2.87 shipped on `rhizome-test`: any account
+may invite by email link; no Register tab; person card «Приглашен …
+от @user»; existing accounts except `efimov` attributed to `@efimov`;
+Alembic `0020`; production `rhizome` not deployed) /
 2.83 (Elasticsearch iteration starts **only after the
 first approved rhizome production deploy**; SQL `/search` until then) /
 2.82 (plugin copies vault edits after save into the personal store; no
@@ -58,6 +59,9 @@ login / register / forgot; reset by login or email; letter to stored
 inbox only. Elasticsearch (ADR-015 / TZ 2.83) starts **only after the
 first approved rhizome production deploy**; not this branch; SQL search
 until then. Payment gateway remains later.
+TZ 2.89 shipped 2.85–2.87 on `rhizome-test`: `POST /api/invites`,
+`POST /api/auth/invite/accept`, `POST /api/auth/register` → 410;
+`/user` invite form; `#/users/{uuid}` attribution line.
 TZ 2.13: Settings at `/user` hold required email, optional contacts, git
 and author contract. TZ 2.14: start page is `/graph`. TZ 2.64: guests open published
 shared cards from the graph and wikilinks; personal / queue / comments
@@ -423,11 +427,8 @@ TZ 2.5–2.7 on this branch (not merged to main; production
   the first approved rhizome production deploy**; not this branch; SQL
   `/search` until then; §6.5.3 questions 1–9 unanswered; do not add ES
   to Compose;
-- leftover: TZ 2.86–2.87 / §17 invite email-link **after** first
-  `rhizome` production deploy (no Register tab; any account may invite;
-  inviter chain; person card «Приглашен %date% по приглашению от %@user%»;
-  same on vsepsy.ru); do not ship on `rhizome-test`;
-  ADR before code;
+- leftover: promote invite wave (TZ 2.85–2.87 / 2.89) to production
+  `rhizome` only after a separate owner decision;
   TZ 2.80 / §16 guest anti-scrape (one IP → many unique
   published cards) **after** first `rhizome` production deploy; do not
   ship on `rhizome-test`; ADR before code;

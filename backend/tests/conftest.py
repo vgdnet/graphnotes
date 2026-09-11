@@ -10,6 +10,7 @@ from app.db.base import Base
 from app.db.session import get_db_session
 from app.main import app
 from app import models  # noqa: F401
+from tests import harness
 
 # Tests use http://testserver. Secure cookies would be dropped on HTTP.
 settings.cookie_secure = False
@@ -31,9 +32,12 @@ async def auth_test_context(
             yield session
 
     app.dependency_overrides[get_db_session] = override_database
+    harness.session_factory = session_factory
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://testserver") as client:
-        yield client, session_factory
-
-    app.dependency_overrides.clear()
-    await engine.dispose()
+    try:
+        async with AsyncClient(transport=transport, base_url="http://testserver") as client:
+            yield client, session_factory
+    finally:
+        harness.session_factory = None
+        app.dependency_overrides.clear()
+        await engine.dispose()

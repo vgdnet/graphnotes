@@ -6,8 +6,13 @@
 фиксируют продуктовую поверхность, но не требуют преждевременной реализации.
 
 ```text
-POST /api/auth/register                # SMTP on: 201, no session; letter has #/auth/confirm?token= + code
+POST /api/auth/register                # 410 Gone — street register closed (TZ 2.86)
 POST /api/auth/login                    # username or email + password
+POST /api/invites                       # any active account; {email}; SMTP letter #/auth/invite?token=
+GET  /api/invites                       # caller's unused invites
+DELETE /api/invites/{id}                # revoke unused
+GET  /api/auth/invite?token=            # preview email + inviter login
+POST /api/auth/invite/accept            # token + username + password + display_name → 201 session; email confirmed
 GET  /api/auth/mail-status              # { configured, code_ttl_minutes } — no SMTP secrets
 POST /api/auth/email/request            # identifier = login or email (field email still accepted); purpose confirm|login|reset; letter only to stored account email; 204 always if SMTP on (no existence leak); 503 if SMTP off
 GET  /api/installation/start-card       # { path } or path null — admin-set start card for /card
@@ -42,12 +47,15 @@ PUT  /api/personal/notes/{path}       # own personal only; source + expected_has
 GET  /api/personal/uploads            # upload history: who / when / path / hash
 
 GET  /api/differ                      # one-way personal → published shared;
-                                      # connected git: refresh public HEAD first
+                                      # connected git: refresh public HEAD first;
+                                      # ответ — отличия, в том числе личные карточки
+                                      # без пары в общей (просьба «дай, если хочешь»).
+                                      # Сначала кабинет (ТЗ 2.88); плагин читает позже,
+                                      # тем же маршрутом, не пишет в общую
 GET  /api/contributions/me            # author's notes, links, proposals, counts; derived
                                       # editor/admin also receive own review stats
 GET  /api/users/{id}/card             # public person card: achievements + accepted notes;
-                                      # after TZ 2.87 / prod: invited_at + inviter display
-                                      # («Приглашен %date% по приглашению от %@user%»);
+                                      # invited_at + inviter {id, username} as @user (TZ 2.87);
                                       # omit if no inviter; not personal/closed bodies; not /user settings
 GET  /api/admin/contributions         # admin only: same stats for every account
 GET  /api/admin/users                 # list/search/filter; last login, sessions

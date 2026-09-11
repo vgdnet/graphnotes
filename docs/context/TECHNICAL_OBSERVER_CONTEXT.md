@@ -1,14 +1,16 @@
 # GraphNotes — канонический контекст Technical Observer
 
 Статус: ACTIVE
-Updated: 2026-09-12 (TZ 2.87 / §17: person card
-«Приглашен %date% по приглашению от %@user%». TZ 2.86 / §17: invite
-is an email link; no Register tab; any account may invite; after
-`rhizome` prod, not test; ADR before code.
+Updated: 2026-09-12 (TZ 2.89 / §17 shipped on `rhizome-test`:
+invite email link; no Register tab; any account may invite; person card
+«Приглашен … от @user»; existing accounts except `efimov` attributed to
+`@efimov`. Do not deploy production `rhizome`.
 TZ 2.83: Elasticsearch iteration starts **only after
 the first approved rhizome production deploy**; SQL `/search` until then;
 do not add ES to Compose. TZ 2.82: plugin copies vault edits after save;
-no card picker; first dump «Отправить всё»; §6.6.3 marks/topics are site
+no card picker; first dump «Отправить всё»; TZ 2.88: Differ API lists
+diffs and missing-from-shared offers — cabinet first, plugin later;
+§6.6.3 marks/topics are site
 UI leftover. TZ 2.81: Login tab mail-code / `#/auth/login-code`
 uses the existing SMTP contour. TZ 2.80: guest anti-scrape of published cards is
 product §16 — after `rhizome` prod only, not `rhizome-test`, ADR before
@@ -113,7 +115,9 @@ PostgreSQL, узлы, связи, теги, поисковый индекс и �
 знания. Ключ хранится в кабинете и копируется в плагин (ТЗ 2.75); отзыв
 блокирует, новый ключ снова из кабинета. SHA-256 — только поиск Bearer.
 Код плагина в `obsidian-plugin/` — клиент, не канон склада GraphNotes.
-§6.6.3 пометки/темы — UI сайта, не этот API.
+§6.6.3 / ТЗ 2.88: Differ (`GET /api/differ`) отдаёт отличия и просьбы
+«нет в общей»; сначала кабинет; плагин — позже, тем же маршрутом.
+Пометки в Obsidian и публикация из плагина — не этот API.
 
 ### Rhizome and RBAC model
 
@@ -137,7 +141,7 @@ PostgreSQL, узлы, связи, теги, поисковый индекс и �
   card (2.55–2.56 stack + Differ offer); `/queue` editor queue; `/user`
   **settings** (not person card); `#/users/{uuid}` **public person card**
   (`GET /api/users/{id}/card`, achievement counters, no unpublished paths;
-  TZ 2.87 after prod: invited_at + inviter display, omit if none);
+  TZ 2.87: invited_at + inviter login as @user, omit if none);
   `/offer` **my** proposals; `/graph`
   shared canvas; `/search` card search; `/my_graph` personal graph;
   `/contribution` Мой вклад; `/differ` stays Отличающиеся; `/` → `/graph`.

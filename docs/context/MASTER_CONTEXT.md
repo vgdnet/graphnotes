@@ -2,19 +2,21 @@
 
 Updated: 2026-09-12
 Status: canonical architecture baseline
-Aligned with PRODUCT_SPEC 2.87. TZ 2.87 / §17: person card shows
-Habr-style invite line. TZ 2.86 / §17: invite is an email link;
-no Register tab; any account may invite;
-purpose is the inviter chain (10-card gate removed). Same rule on
-vsepsy.ru. After first `rhizome` prod, not test. TZ 2.83: the Elasticsearch iteration
+Aligned with PRODUCT_SPEC 2.89. TZ 2.85–2.87 / §17 **shipped on
+`rhizome-test`**: any active account may invite by email link; no
+Register tab; person card shows «Приглашен … по приглашению от @user»
+(inviter login). Cutover: existing rows except `efimov` point at the
+real `@efimov` account (`invited_by_id`, Alembic `0020`). Same rule on
+vsepsy.ru. Do not deploy this wave to production `rhizome`. TZ 2.83: the Elasticsearch iteration
 (ADR-015) starts **only after the first approved rhizome production
 deploy**. Not this branch; do not add ES to Compose; SQL `/search` until
 then; §6.5.3 questions 1–9 stay unanswered for that later wave.
 TZ 2.82 / §12.1: GraphNotes Publisher copies vault edits after save into
 the owner's `personal_uploads` / `personal_assets` (no card picker
 required; first dump is «Отправить всё»; matching bytes skipped). Shared
-rhizome, Differ and proposals stay unchanged. Contribution marks/topics
-(§6.6.3) are site UI leftover, not this API.
+rhizome, Differ and proposals stay unchanged. TZ 2.88: Differ API lists
+diffs and missing-from-shared offers; cabinet first, plugin later.
+Contribution marks/topics (§6.6.3) are not this plugin transfer API.
 TZ 2.81 ships login-by-mail on the Login
 tab (same SMTP contour as confirm/reset). TZ 2.68–2.76 shipped (2.79) / §12.1: Obsidian plugin
 **API** writes only the token owner's personal store. Desktop
@@ -74,8 +76,8 @@ proposal queue; `/user` = **account settings** (not the public person
 card); `#/users/{uuid}` = **public person card** (TZ 2.60: achievements —
 accepted notes/links, proposal count, shared created/edited events; feed
 names and proposal author open it; `GET /api/users/{id}/card`;
-TZ 2.87 after prod: «Приглашен %date% по приглашению от %@user%»
-from stored inviter UUID — omit if none); `/offer` = **my** proposals into the rhizome; `/graph` = shared
+TZ 2.87: «Приглашен %date% по приглашению от @user»
+from stored inviter UUID / login — omit if none); `/offer` = **my** proposals into the rhizome; `/graph` = shared
 rhizome canvas (fCoSE); `/search` = card search (SQL `note_index`,
 `layer=visible`; Elasticsearch only after the first approved rhizome
 production deploy — ADR-015 / TZ 2.83); `/my_graph` = personal graph layer only;
@@ -156,9 +158,10 @@ email (`identifier` or `email` on `POST /auth/email/request`); the
 letter always goes to the **stored account email**, never a typed
 address that is not on file. HTTP 204 is generic (no enumeration).
 Username **or** email identifies
-the same UUID. Auth UI is one chrome: «Вход» / «Регистрация» /
-«Не помню пароль». After TZ 2.86 / first `rhizome` prod, drop the
-«Регистрация» tab: new accounts only via the invite email link (§17).
+the same UUID. Auth UI is one chrome: «Вход» /
+«Не помню пароль». TZ 2.86: no «Регистрация» tab; new accounts only via
+the invite email link `#/auth/invite?token=` (`POST /api/invites`,
+`POST /api/auth/invite/accept`; `POST /api/auth/register` → 410).
 On «Вход», when SMTP is on, «Войти письмом»
 requests `purpose=login` (identifier = login or email; letter only to
 the stored inbox) and then accepts the 6-digit code or
@@ -493,13 +496,15 @@ Not needed for the initial MVP unless actual load/features justify them:
 - guest anti-scrape of published cards (TZ 2.80 / product §16): after
   first `rhizome` production deploy only; do **not** implement on
   `rhizome-test`. No Redis/WAF just for this. ADR before code.
-- invite-only registration (TZ 2.86–2.87 / product §17): after first
-  `rhizome` production deploy; not on `rhizome-test`. Invite is an
-  **email link**; drop the Register tab (Login / forgot password stay).
-  Any existing account may invite; store inviter UUID (one chain with
-  vsepsy.ru). Person card and `GET /api/users/{id}/card` show
-  «Приглашен %date% по приглашению от %@user%» (omit if no inviter).
-  Street register stays until then. No workspace.
+- invite-only registration (TZ 2.85–2.87 / product §17): **shipped on
+  `rhizome-test`** (TZ 2.89). Invite is an **email link**; no Register
+  tab (Login / forgot password stay). Any active account may invite;
+  store inviter UUID (one chain with vsepsy.ru). Person card and
+  `GET /api/users/{id}/card` show «Приглашен %date% по приглашению от
+  @user» (omit if no inviter). Cutover attributes existing accounts
+  except `efimov` to that real row. No street register. No workspace.
+  Do not promote this wave to production `rhizome` without a separate
+  owner decision.
 
 Start simple. Add infrastructure only for measured/observed needs.
 
@@ -632,8 +637,10 @@ Key product invariants that the technical architecture must preserve:
 The product defines the external API surface for the MVP. Exact request/response schemas, error codes, and authorization details are finalized per Stage, but the route list and ownership of responsibilities are part of the contract (product spec §7).
 
 Authentication / users:
-- `POST /api/auth/register` (email required and unique; `accept_author_contract` optional)
+- `POST /api/auth/register` (410 Gone; street register closed)
 - `POST /api/auth/login` (username or email + password)
+- `POST /api/invites` / `GET /api/invites` / `DELETE /api/invites/{id}`
+- `GET  /api/auth/invite?token=` / `POST /api/auth/invite/accept`
 - `GET  /api/auth/mail-status`
 - `POST /api/auth/email/request` (purpose `confirm` / `login` / `reset`)
 - `POST /api/auth/email/verify`
@@ -739,8 +746,11 @@ is granted. Conflict: batch not applied; client shows GET content and
 the owner confirms a new transfer with the current version — no
 `force=true`. Interrupted plan + token persist in `data.json`; changed
 bytes before upload cancel the plan and rebuild it. 2.69 «send only on
-command» for vault edits is withdrawn. §6.6.3 rhizome marks/topics are
-site UI leftover; this prefix does not implement them.
+command» for vault edits is withdrawn. TZ 2.88: Differ API (`GET /api/differ`)
+lists personal → shared diffs and itself flags personal paths missing
+from published shared. Cabinet consumes that first. The plugin reads
+the same Differ in a later iteration; this prefix still does not
+publish to shared and does not implement marks/topics UI.
 
 Browser/plugin URLs use the `/api` prefix. FastAPI routes do **not**:
 Nginx `location /api/` strips it. Incompatible protocol → new prefix
@@ -827,5 +837,6 @@ secrets, passwords, or note bodies. Owner-visible access history is
 table `integration_token_access`, not the admin audit journal.
 
 Alembic: `0017_obsidian_integration`, `0018_integration_token_access`,
-`0019_integration_token_secret`. Integration checks: `rhizome-test`
+`0020_invites` (invite table + `users.invited_by_id` / `invited_at`;
+cutover UPDATE to `@efimov`). Integration checks: `rhizome-test`
 only; do not apply on `rhizome` until an approved revision.

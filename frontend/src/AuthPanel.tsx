@@ -6,7 +6,7 @@ import {
   resetFormPhase,
 } from "./authMail";
 
-export type AuthMode = "login" | "register" | "confirm" | "reset";
+export type AuthMode = "login" | "invite" | "confirm" | "reset";
 
 export function AuthPanel({
   mode,
@@ -15,6 +15,9 @@ export function AuthPanel({
   mailChallengeStartedAt,
   mailChallengeClock,
   resetToken,
+  inviteToken,
+  inviteEmail,
+  inviteInviter,
   loginByMail,
   authNote,
   error,
@@ -31,6 +34,9 @@ export function AuthPanel({
   mailChallengeStartedAt: number | null;
   mailChallengeClock: number;
   resetToken: string;
+  inviteToken: string;
+  inviteEmail: string;
+  inviteInviter: string;
   loginByMail: boolean;
   authNote: string;
   error: string;
@@ -54,8 +60,8 @@ export function AuthPanel({
   }
 
   const title =
-    mode === "register"
-      ? "Регистрация"
+    mode === "invite"
+      ? "Приглашение"
       : mode === "reset"
         ? "Не помню пароль"
         : mode === "confirm"
@@ -68,24 +74,18 @@ export function AuthPanel({
         <p className="eyebrow">Аккаунт</p>
         <h1>{title}</h1>
         <p className="summary">
-          Один экран: вход, регистрация и восстановление пароля. Письма уходят на почту учётки.
+          Вход и восстановление пароля. Новая учётка только по ссылке из письма-приглашения.
         </p>
       </div>
       <div className="auth-card">
-        <div className={mailConfigured ? "tabs tabs--three" : "tabs"} role="tablist" aria-label="Авторизация">
+        {mode !== "invite" && (
+        <div className={mailConfigured ? "tabs" : "tabs tabs--single"} role="tablist" aria-label="Авторизация">
           <button
-            className={mode === "login" ? "tab tab--active" : "tab"}
+            className={mode === "login" || mode === "confirm" ? "tab tab--active" : "tab"}
             type="button"
             onClick={() => switchMode("login")}
           >
             Вход
-          </button>
-          <button
-            className={mode === "register" || mode === "confirm" ? "tab tab--active" : "tab"}
-            type="button"
-            onClick={() => switchMode("register")}
-          >
-            Регистрация
           </button>
           {mailConfigured && (
             <button
@@ -97,6 +97,7 @@ export function AuthPanel({
             </button>
           )}
         </div>
+        )}
         <form onSubmit={onSubmit}>
           {mode === "login" && loginPhase === "password" && (
             <>
@@ -162,8 +163,12 @@ export function AuthPanel({
               </p>
             </>
           )}
-          {mode === "register" && (
+          {mode === "invite" && (
             <>
+              <label>
+                Почта
+                <input name="email" type="email" value={inviteEmail} readOnly autoComplete="email" />
+              </label>
               <label>
                 Логин
                 <input name="username" minLength={3} maxLength={32} autoComplete="username" required />
@@ -173,16 +178,15 @@ export function AuthPanel({
                 <input name="displayName" maxLength={80} autoComplete="name" required />
               </label>
               <label>
-                Почта
-                <input name="email" type="email" maxLength={320} autoComplete="email" required />
-              </label>
-              <label>
                 Пароль
                 <input name="password" type="password" minLength={12} maxLength={128} autoComplete="new-password" required />
               </label>
+              <input type="hidden" name="inviteToken" value={inviteToken} />
               <p className="hint">
-                Минимум 12 символов. Договор автора принимается в настройках.
-                {mailConfigured ? " Письмо с ссылкой и кодом уйдёт на эту почту." : ""}
+                {inviteInviter
+                  ? `Вас пригласил @${inviteInviter}. Задайте логин и пароль — учётка откроется сразу.`
+                  : "Откройте ссылку из письма-приглашения."}
+                {" "}Минимум 12 символов. Договор автора принимается в настройках.
               </p>
             </>
           )}
@@ -243,7 +247,7 @@ export function AuthPanel({
           <button className="button button--primary" type="submit" disabled={submitting}>
             {submitting
               ? "Подождите…"
-              : mode === "register"
+              : mode === "invite"
                 ? "Создать учётку"
                 : mode === "confirm"
                   ? "Подтвердить"
@@ -256,15 +260,12 @@ export function AuthPanel({
                         : "Войти"}
           </button>
           <p className="hint auth-switch">
-            {mode === "login" && (
-              <button className="auth-link" type="button" onClick={() => switchMode("register")}>Регистрация</button>
-            )}
             {mode !== "login" && (
               <button className="auth-link" type="button" onClick={() => switchMode("login")}>Вход</button>
             )}
             {mailConfigured && mode !== "reset" && (
               <>
-                {" · "}
+                {mode !== "login" ? " · " : ""}
                 <button className="auth-link" type="button" onClick={() => switchMode("reset")}>Не помню пароль</button>
               </>
             )}

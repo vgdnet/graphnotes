@@ -1,15 +1,21 @@
 export const DEFAULT_MAIL_CODE_TTL_MINUTES = 30;
 
-export type AuthMailPurpose = "confirm" | "login" | "reset";
+export type AuthMailPurpose = "confirm" | "login" | "reset" | "invite";
 
 export function parseAuthHash(
   hash: string,
 ): { purpose: AuthMailPurpose; token: string } | null {
   const value = hash.startsWith("#") ? hash.slice(1) : hash;
-  const match = value.match(/^\/auth\/(confirm|login-code|reset)\?token=([^&]+)$/);
+  const match = value.match(/^\/auth\/(confirm|login-code|reset|invite)\?token=([^&]+)$/);
   if (!match) return null;
   const purpose: AuthMailPurpose =
-    match[1] === "confirm" ? "confirm" : match[1] === "reset" ? "reset" : "login";
+    match[1] === "confirm"
+      ? "confirm"
+      : match[1] === "reset"
+        ? "reset"
+        : match[1] === "invite"
+          ? "invite"
+          : "login";
   return { purpose, token: decodeURIComponent(match[2]) };
 }
 

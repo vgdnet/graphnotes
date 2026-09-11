@@ -512,6 +512,13 @@ async def get_user_card(
         accepted_notes=len(accepted),
         accepted_links=int(body["stats"]["links_accepted"]),
     )
+    inviter = None
+    invited_at = None
+    if target.invited_by_id is not None:
+        inviter_row = await database.get(User, target.invited_by_id)
+        if inviter_row is not None:
+            invited_at = target.invited_at or target.created_at
+            inviter = {"id": inviter_row.id, "username": inviter_row.username}
     return {
         "user": {
             "id": target.id,
@@ -533,6 +540,8 @@ async def get_user_card(
         ],
         "review": body["review"] if is_self else None,
         "closed_count": closed_count,
+        "invited_at": invited_at,
+        "inviter": inviter,
     }
 
 

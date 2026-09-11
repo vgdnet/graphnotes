@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Literal
 from uuid import UUID
 
@@ -112,6 +113,11 @@ class UserCardAchievements(BaseModel):
     edits: int
 
 
+class UserCardInviter(BaseModel):
+    id: UUID
+    username: str
+
+
 class UserCardResponse(BaseModel):
     user: UserCardPerson
     self: bool
@@ -120,3 +126,5 @@ class UserCardResponse(BaseModel):
     notes: list[UserCardNote]
     review: ReviewStats | None = None
     closed_count: int | None = None
+    invited_at: datetime | None = None
+    inviter: UserCardInviter | None = None

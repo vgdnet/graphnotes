@@ -19,12 +19,14 @@ from app.models.personal_upload import PersonalUpload, UploadEvent
 from app.models.shared_note import SharedNote
 from app.models.proposal import Proposal
 from app.models.rhizome_event import RhizomeEvent
+from app.models.invite import Invite
 from app.models.user import User, UserRole
 
 __all__ = [
     "AuditEvent",
     "AuthSession",
     "EmailToken",
+    "Invite",
     "InstallationSetting",
     "ClosedPath",
     "NoteComment",

@@ -251,18 +251,36 @@ async def _register(
     username: str,
     *,
     accept_author: bool = True,
+    email: str | None = None,
+    password: str = "a sufficiently long password",
 ) -> None:
+    from datetime import UTC, datetime
+
+    from app.models.user import User
+    from app.schemas.auth import normalize_username
+    from app.services.auth import hash_password
+    from app.services.author_contract import apply_accept
+    from tests.harness import current_session_factory
+
+    factory = current_session_factory()
+    now = datetime.now(UTC)
+    async with factory() as database:
+        user = User(
+            username=normalize_username(username),
+            password_hash=hash_password(password),
+            email=(email or f"{username.casefold()}@example.com").casefold(),
+            display_name=username.title(),
+            email_verified_at=now,
+        )
+        if accept_author:
+            apply_accept(user)
+        database.add(user)
+        await database.commit()
     response = await client.post(
-        "/auth/register",
-        json={
-            "username": username,
-            "password": "a sufficiently long password",
-            "display_name": username.title(),
-            "email": f"{username.casefold()}@example.com",
-            "accept_author_contract": accept_author,
-        },
+        "/auth/login",
+        json={"username": username, "password": password},
     )
-    assert response.status_code in {200, 201}
+    assert response.status_code == 200, response.text
 
 
 async def _bind_shared(

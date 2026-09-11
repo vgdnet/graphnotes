@@ -11,7 +11,7 @@ import { canShowCardEditButton, cardApiUrl, cardFilePath, cardHash, cardSearchHa
 import { parseAppRoute, personCardHash, routeToView, viewHash, type ShellView } from "./appRoute";
 import { AuthPanel, type AuthMode } from "./AuthPanel";
 import { PersonalCardEditor } from "./PersonalCardEditor";
-import { ActorLink, PersonCardPage } from "./PersonCard";
+import { ActorLink, PersonCardPage, formatInvitedAt } from "./PersonCard";
 import { AdminPanel } from "./AdminPanel";
 import { ThemeSwitcher } from "./ThemeSwitcher";
 import {
@@ -242,6 +242,8 @@ type UserCard = {
     phone?: string | null;
     telegram?: string | null;
   };
+  invited_at?: string | null;
+  inviter?: { id: string; username: string } | null;
   self: boolean;
   stats: ContributionStats;
   achievements: {
@@ -417,6 +419,11 @@ export function App() {
   const [mailChallengeClock, setMailChallengeClock] = useState(0);
   const [authNote, setAuthNote] = useState("");
   const [resetToken, setResetToken] = useState("");
+  const [inviteToken, setInviteToken] = useState("");
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteInviter, setInviteInviter] = useState("");
+  const [inviteNote, setInviteNote] = useState("");
+  const [pendingInvites, setPendingInvites] = useState<{ id: string; email: string; expires_at: string }[]>([]);
   const [repository, setRepository] = useState<RepositoryStatusResponse | null>(null);
   const [sharedNotes, setSharedNotes] = useState<NoteProjection[]>([]);
   const [personalNotes, setPersonalNotes] = useState<NoteProjection[]>([]);
@@ -1085,6 +1092,36 @@ export function App() {
     }
   }
 
+  async function loadPendingInvites() {
+    const response = await fetch("/api/invites");
+    if (!response.ok) return;
+    const body = (await response.json()) as { invites: { id: string; email: string; expires_at: string }[] };
+    setPendingInvites(body.invites);
+  }
+
+  async function sendInvite(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    setSubmitting(true);
+    setError("");
+    setInviteNote("");
+    try {
+      const response = await fetch("/api/invites", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: form.get("inviteEmail") }),
+      });
+      if (!response.ok) throw new Error(await readError(response));
+      setInviteNote("Письмо со ссылкой отправлено.");
+      event.currentTarget.reset();
+      await loadPendingInvites();
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "Ошибка соединения");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
   async function loadIntegrationTokens() {
     const response = await fetch("/api/users/me/integration-tokens");
     if (!response.ok) throw new Error(await readError(response));
@@ -1145,6 +1182,11 @@ export function App() {
     void loadIntegrationTokens().catch((requestError: unknown) => {
       setError(requestError instanceof Error ? requestError.message : "Ошибка соединения");
     });
+  }, [view, settingsBlock, user]);
+
+  useEffect(() => {
+    if (view !== "settings" || settingsBlock !== "profile" || !user) return;
+    void loadPendingInvites();
   }, [view, settingsBlock, user]);
 
   function openDiffer() {
@@ -1406,6 +1448,29 @@ export function App() {
       setAuthNote("Введите новый пароль, чтобы завершить сброс.");
       return;
     }
+    if (parsed.purpose === "invite") {
+      setAuthOpen(true);
+      setMode("invite");
+      setLoginByMail(false);
+      setInviteToken(parsed.token);
+      setInviteEmail("");
+      setInviteInviter("");
+      setAuthNote("Задайте логин и пароль по ссылке из письма.");
+      void fetch(`/api/auth/invite?token=${encodeURIComponent(parsed.token)}`)
+        .then(async (response) => {
+          if (!response.ok) throw new Error(await readError(response));
+          return (await response.json()) as { email: string; inviter_username: string };
+        })
+        .then((body) => {
+          setInviteEmail(body.email);
+          setInviteInviter(body.inviter_username);
+          setAuthNote(`Вас пригласил @${body.inviter_username}.`);
+        })
+        .catch((requestError: unknown) => {
+          setError(requestError instanceof Error ? requestError.message : "Ссылка недействительна");
+        });
+      return;
+    }
     if (parsed.purpose === "login") {
       setMode("login");
       setLoginByMail(true);
@@ -1519,32 +1584,36 @@ export function App() {
         return;
       }
 
-      const endpoint = mode === "register" ? "/api/auth/register" : "/api/auth/login";
-      const payload = mode === "register"
-        ? {
+      if (mode === "invite") {
+        const accepted = await fetch("/api/auth/invite/accept", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            token: inviteToken || String(form.get("inviteToken") || ""),
             username: form.get("username"),
             password: form.get("password"),
             display_name: form.get("displayName"),
-            email: form.get("email"),
-          }
-        : {
-            username: form.get("username"),
-            password: form.get("password"),
-          };
-      const response = await fetch(endpoint, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      if (!response.ok) throw new Error(await readError(response));
-      const body = (await response.json()) as User;
-      if (mode === "register" && mailConfigured && !body.email_verified_at) {
-        setAuthNote("Письмо с кодом и ссылкой отправлено на указанную почту. Подтвердите её, затем войдите.");
-        setMode("confirm");
+          }),
+        });
+        if (!accepted.ok) throw new Error(await readError(accepted));
+        setInviteToken("");
+        setInviteEmail("");
+        setInviteInviter("");
+        await finishSignedIn((await accepted.json()) as User);
         formElement.reset();
         return;
       }
-      await finishSignedIn(body);
+
+      const response = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          username: form.get("username"),
+          password: form.get("password"),
+        }),
+      });
+      if (!response.ok) throw new Error(await readError(response));
+      await finishSignedIn((await response.json()) as User);
       formElement.reset();
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "Ошибка соединения");
@@ -2094,6 +2163,31 @@ export function App() {
                 <button className="button button--primary" type="submit" disabled={submitting}>Сохранить</button>
               </form>
             )}
+            {settingsBlock === "profile" && (
+              <form className="connect-form" onSubmit={(event) => void sendInvite(event)}>
+                <p className="admin-panel__hint">
+                  Пригласить человека: укажите почту, сервер пришлёт ссылку. Учётка появится, когда человек откроет письмо.
+                </p>
+                <label>
+                  Почта приглашаемого
+                  <input name="inviteEmail" type="email" maxLength={320} required autoComplete="email" />
+                </label>
+                {inviteNote && <p className="admin-panel__hint" role="status">{inviteNote}</p>}
+                <button className="button button--primary" type="submit" disabled={submitting}>Отправить приглашение</button>
+                {pendingInvites.length > 0 && (
+                  <ul className="note-list">
+                    {pendingInvites.map((item) => (
+                      <li key={item.id}>
+                        <span className="note-link">
+                          <strong>{item.email}</strong>
+                          <small>до {new Date(item.expires_at).toLocaleString("ru")}</small>
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </form>
+            )}
             {settingsBlock === "git" && (
               <div className="settings-stack">
                 {repository?.personal?.connected ? (
@@ -2438,6 +2532,14 @@ export function App() {
                       {userCard.user.is_author ? " · автор" : ""}
                       {userCard.self && userCard.closed_count != null ? ` · закрыто ${userCard.closed_count}` : ""}
                     </span>
+                    {userCard.inviter && userCard.invited_at ? (
+                      <p className="admin-panel__hint">
+                        Приглашен {formatInvitedAt(userCard.invited_at)} по приглашению от{" "}
+                        <a className="person-link" href={personCardHash(userCard.inviter.id)}>
+                          @{userCard.inviter.username}
+                        </a>
+                      </p>
+                    ) : null}
                   </div>
                   <p className="admin-panel__hint">
                     Принято в общую: {userCard.stats.accepted} заметок, {userCard.stats.links_accepted} связей.
@@ -2775,6 +2877,9 @@ export function App() {
             mailChallengeStartedAt={mailChallengeStartedAt}
             mailChallengeClock={mailChallengeClock}
             resetToken={resetToken}
+            inviteToken={inviteToken}
+            inviteEmail={inviteEmail}
+            inviteInviter={inviteInviter}
             authNote={authNote}
             error={error}
             submitting={submitting}
