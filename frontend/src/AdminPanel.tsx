@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
+import { InviteAttribution } from "./PersonCard";
 
 export type AdminRole = "user" | "editor" | "admin";
 
@@ -19,6 +20,8 @@ export type AdminUser = {
   last_login_at: string | null;
   session_count: number;
   created_at?: string;
+  invited_at?: string | null;
+  inviter_username?: string | null;
 };
 
 type AdminUsersResponse = { users: AdminUser[]; total: number };
@@ -481,6 +484,10 @@ export function AdminPanel({
                       {` · вход ${formatWhen(managedUser.last_login_at)}`}
                       {` · сессий ${managedUser.session_count}`}
                     </span>
+                    <InviteAttribution
+                      invitedAt={managedUser.invited_at}
+                      inviterUsername={managedUser.inviter_username}
+                    />
                   </div>
                   <label>
                     Роль

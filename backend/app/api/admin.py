@@ -76,9 +76,17 @@ async def _active_admins(database) -> list[User]:
     )
 
 
-def _admin_user_item(user: User, session_count: int) -> AdminUserItem:
+def _admin_user_item(
+    user: User,
+    session_count: int,
+    inviter_username: str | None = None,
+) -> AdminUserItem:
     payload = UserResponse.model_validate(user).model_dump()
     payload["session_count"] = session_count
+    payload["inviter_username"] = inviter_username
+    payload["invited_at"] = user.invited_at or (
+        user.created_at if user.invited_by_id is not None else None
+    )
     return AdminUserItem.model_validate(payload)
 
 
@@ -116,6 +124,7 @@ async def list_users(
         )
     ).all()
     session_counts: dict[uuid.UUID, int] = {}
+    inviter_names: dict[uuid.UUID, str] = {}
     if users:
         rows = (
             await database.execute(
@@ -128,8 +137,21 @@ async def list_users(
             )
         ).all()
         session_counts = {user_id: count for user_id, count in rows}
+        inviter_ids = {user.invited_by_id for user in users if user.invited_by_id}
+        if inviter_ids:
+            inviters = (
+                await database.scalars(select(User).where(User.id.in_(inviter_ids)))
+            ).all()
+            inviter_names = {row.id: row.username for row in inviters}
     return AdminUserListResponse(
-        users=[_admin_user_item(user, session_counts.get(user.id, 0)) for user in users],
+        users=[
+            _admin_user_item(
+                user,
+                session_counts.get(user.id, 0),
+                inviter_names.get(user.invited_by_id) if user.invited_by_id else None,
+            )
+            for user in users
+        ],
         total=total,
     )
 

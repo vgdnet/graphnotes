@@ -47,6 +47,31 @@ export function formatInvitedAt(iso: string): string {
   return `${stamp.getUTCDate()} ${INVITE_MONTHS[stamp.getUTCMonth()]} ${stamp.getUTCFullYear()}`;
 }
 
+export function InviteAttribution({
+  invitedAt,
+  inviterId,
+  inviterUsername,
+}: {
+  invitedAt?: string | null;
+  inviterId?: string | null;
+  inviterUsername?: string | null;
+}) {
+  if (!inviterUsername || !invitedAt) return null;
+  const handle = inviterUsername.replace(/^@/, "");
+  return (
+    <p className="person-invite">
+      Приглашен {formatInvitedAt(invitedAt)} по приглашению от{" "}
+      {inviterId ? (
+        <a className="person-link" href={personCardHash(inviterId)}>
+          @{handle}
+        </a>
+      ) : (
+        <span>@{handle}</span>
+      )}
+    </p>
+  );
+}
+
 export function ActorLink({
   actor,
 }: {
@@ -97,14 +122,11 @@ export function PersonCardPage({
               @{card.user.username} · {card.user.role}
               {card.user.is_author ? " · автор" : ""}
             </span>
-            {card.inviter && card.invited_at ? (
-              <p className="admin-panel__hint">
-                Приглашен {formatInvitedAt(card.invited_at)} по приглашению от{" "}
-                <a className="person-link" href={personCardHash(card.inviter.id)}>
-                  @{card.inviter.username}
-                </a>
-              </p>
-            ) : null}
+            <InviteAttribution
+              invitedAt={card.invited_at}
+              inviterId={card.inviter?.id}
+              inviterUsername={card.inviter?.username}
+            />
           </div>
           {card.user.website ? (
             <p className="admin-panel__hint">{card.user.website}</p>

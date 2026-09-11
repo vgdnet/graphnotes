@@ -59,6 +59,8 @@ class AdminUserCreate(BaseModel):
 
 class AdminUserItem(UserResponse):
     session_count: int = 0
+    invited_at: datetime | None = None
+    inviter_username: str | None = None
 
 
 class AdminUserListResponse(BaseModel):

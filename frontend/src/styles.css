@@ -285,6 +285,7 @@ select { padding: .65rem .8rem; border: 1px solid var(--gn-input-border); border
 .workspace { grid-template-columns: minmax(0, 1fr) 19rem; }
 .profile-card { display: grid; gap: 1.2rem; padding: 1.5rem; }
 .profile-card div:nth-child(2) { display: grid; gap: .3rem; }
+.person-invite { margin: .35rem 0 0; color: var(--gn-text); font-size: .92rem; line-height: 1.4; }
 .person-link {
   color: inherit;
   font-weight: 700;

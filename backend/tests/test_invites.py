@@ -8,6 +8,7 @@ from app.main import app
 from app.models.audit_event import AuditEvent
 from app.models.invite import Invite
 from app.models.user import User
+from app.services.admin import bootstrap_admin
 from app.services.invites import attribute_existing_accounts_to_efimov
 from tests.test_ingest import _register
 from tests.test_smtp_and_admin import _enable_smtp
@@ -181,4 +182,12 @@ async def test_cutover_attributes_existing_users_to_efimov(
     assert card.json()["inviter"]["id"] == efimov_id
     seed_card = await other.get(f"/users/{efimov_id}/card")
     assert seed_card.json()["inviter"] is None
+    async with session_factory() as database:
+        await bootstrap_admin(database, "efimov")
+        await database.commit()
+    listed = await client.get("/admin/users")
+    assert listed.status_code == 200
+    row = next(item for item in listed.json()["users"] if item["username"] == "old-account")
+    assert row["inviter_username"] == "efimov"
+    assert row["invited_at"]
     await other.aclose()

@@ -11,7 +11,7 @@ import { canShowCardEditButton, cardApiUrl, cardFilePath, cardHash, cardSearchHa
 import { parseAppRoute, personCardHash, routeToView, viewHash, type ShellView } from "./appRoute";
 import { AuthPanel, type AuthMode } from "./AuthPanel";
 import { PersonalCardEditor } from "./PersonalCardEditor";
-import { ActorLink, PersonCardPage, formatInvitedAt } from "./PersonCard";
+import { ActorLink, InviteAttribution, PersonCardPage } from "./PersonCard";
 import { AdminPanel } from "./AdminPanel";
 import { ThemeSwitcher } from "./ThemeSwitcher";
 import {
@@ -2115,6 +2115,11 @@ export function App() {
             </div>
             {settingsBlock === "profile" && (
               <form className="connect-form" onSubmit={(event) => void saveProfile(event)}>
+                <InviteAttribution
+                  invitedAt={userCard?.invited_at}
+                  inviterId={userCard?.inviter?.id}
+                  inviterUsername={userCard?.inviter?.username}
+                />
                 <label>
                   Логин <span className="optional">вход в GraphNotes</span>
                   <input value={user.username} readOnly autoComplete="username" />
@@ -2532,14 +2537,11 @@ export function App() {
                       {userCard.user.is_author ? " · автор" : ""}
                       {userCard.self && userCard.closed_count != null ? ` · закрыто ${userCard.closed_count}` : ""}
                     </span>
-                    {userCard.inviter && userCard.invited_at ? (
-                      <p className="admin-panel__hint">
-                        Приглашен {formatInvitedAt(userCard.invited_at)} по приглашению от{" "}
-                        <a className="person-link" href={personCardHash(userCard.inviter.id)}>
-                          @{userCard.inviter.username}
-                        </a>
-                      </p>
-                    ) : null}
+                    <InviteAttribution
+                      invitedAt={userCard.invited_at}
+                      inviterId={userCard.inviter?.id}
+                      inviterUsername={userCard.inviter?.username}
+                    />
                   </div>
                   <p className="admin-panel__hint">
                     Принято в общую: {userCard.stats.accepted} заметок, {userCard.stats.links_accepted} связей.

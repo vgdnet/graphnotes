@@ -2,16 +2,18 @@
 
 Updated: 2026-09-12
 Status: canonical architecture baseline
-Aligned with PRODUCT_SPEC 2.89. TZ 2.85–2.87 / §17 **shipped on
+Aligned with PRODUCT_SPEC 2.92. TZ 2.85–2.87 / §17 **shipped on
 `rhizome-test`**: any active account may invite by email link; no
 Register tab; person card shows «Приглашен … по приглашению от @user»
-(inviter login). Cutover: existing rows except `efimov` point at the
+(inviter login). TZ 2.92: the same line is on `/user`, «Мой вклад»,
+and the admin user row. Cutover: existing rows except `efimov` point at the
 real `@efimov` account (`invited_by_id`, Alembic `0020`). Same rule on
 vsepsy.ru. Do not deploy this wave to production `rhizome`. TZ 2.83: the Elasticsearch iteration
 (ADR-015) starts **only after the first approved rhizome production
 deploy**. Not this branch; do not add ES to Compose; SQL `/search` until
 then; §6.5.3 questions 1–9 stay unanswered for that later wave.
-TZ 2.82 / §12.1: GraphNotes Publisher copies vault edits after save into
+TZ 2.90 / §12.1: GraphNotes Publisher queues vault edits and copies them
+on ribbon / file close / idle minutes / interval (not every keystroke), into
 the owner's `personal_uploads` / `personal_assets` (no card picker
 required; first dump is «Отправить всё»; matching bytes skipped). Shared
 rhizome, Differ and proposals stay unchanged. TZ 2.88: Differ API lists
@@ -731,20 +733,25 @@ Proposals and editor workflow (Stage-owned):
 Reconciliation hook:
 - `POST /api/webhooks/github`
 
-### 12.1 Obsidian plugin → personal store (TZ 2.68–2.82)
+### 12.1 Obsidian plugin → personal store (TZ 2.68–2.90)
 
-Product requirement: §6.3.4 / §5.5.7 / TZ 2.82. Operator examples:
+Product requirement: §6.3.4 / §5.5.7 / TZ 2.82 / 2.90. Operator examples:
 `docs/deployment/OBSIDIAN_PLUGIN_API.md`. The desktop plugin
 (`obsidian-plugin/`, GraphNotes Publisher) is part of this product
 (TZ 2.69). GraphNotes owns the HTTP API and the personal store.
-TZ 2.82 client: vault create/modify/delete/rename after save enqueue a
-personal transfer (default `autoSync: true` in plugin `data.json`).
-Card picking is not required. First dump of an existing vault is the
-«Отправить всё» command. Matching SHA-256 is skipped. One transfer at
+TZ 2.90 client: vault create/modify/delete/rename enqueue locally.
+Network runs on ribbon «Записать», file close, idle minutes after the
+last edit, or an interval if the queue is not empty — not on every
+`modify`. Default `autoMode: idle`, `autoMinutes: 5`. Obsidian quit does
+not start a transfer (same limit as Obsidian Git). Card picking is not
+required. First dump of an existing vault is the
+«Отправить все правки» command. Matching SHA-256 is skipped. One transfer at
 a time. Rename is upsert new path + delete old when `personal:delete`
-is granted. Conflict: batch not applied; client shows GET content and
-the owner confirms a new transfer with the current version — no
-`force=true`. Interrupted plan + token persist in `data.json`; changed
+is granted. TZ 2.91: vault and personal store are one copy; local wins.
+No conflict UI. Differing server bytes are overwritten with local using
+`expected_version` from the manifest / GET content — no `force=true`.
+Differ / offer-to-shared in the plugin is leftover, not this version.
+Interrupted plan + token persist in `data.json`; changed
 bytes before upload cancel the plan and rebuild it. 2.69 «send only on
 command» for vault edits is withdrawn. TZ 2.88: Differ API (`GET /api/differ`)
 lists personal → shared diffs and itself flags personal paths missing

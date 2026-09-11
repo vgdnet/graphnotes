@@ -2,7 +2,9 @@
 
 Updated: 2026-09-12
 
-Product model TZ 2.89 (2.85–2.87 shipped on `rhizome-test`: any account
+Product model TZ 2.92 (invite line on current-user cards: person,
+contribution, settings, admin row; data still 2.89 cutover to `@efimov`) /
+2.89 (2.85–2.87 shipped on `rhizome-test`: any account
 may invite by email link; no Register tab; person card «Приглашен …
 от @user»; existing accounts except `efimov` attributed to `@efimov`;
 Alembic `0020`; production `rhizome` not deployed) /
