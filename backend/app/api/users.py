@@ -24,8 +24,11 @@ from app.services.contributions import get_user_card
 from app.services.github import GitHubAppClient
 from app.services.integration_errors import IntegrationError
 from app.services.integration_tokens import (
+    access_retention_days,
+    access_view,
     create_integration_token,
     list_integration_tokens,
+    list_token_access,
     revoke_integration_token,
 )
 from app.services.mail import smtp_configured
@@ -140,9 +143,10 @@ def _http_from_integration(exc: IntegrationError) -> HTTPException:
 
 
 def _token_view(row, *, token: str | None = None) -> dict[str, object]:
-    payload: dict[str, object] = {
+    return {
         "id": str(row.id),
         "name": row.name,
+        "token": token if token is not None else row.token,
         "token_prefix": row.token_prefix,
         "scopes": list(row.scopes or []),
         "expires_at": iso(row.expires_at),
@@ -150,9 +154,6 @@ def _token_view(row, *, token: str | None = None) -> dict[str, object]:
         "created_at": iso(row.created_at),
         "revoked_at": iso(row.revoked_at),
     }
-    if token is not None:
-        payload["token"] = token
-    return payload
 
 
 @router.post("/me/integration-tokens", status_code=status.HTTP_201_CREATED)
@@ -181,6 +182,18 @@ async def list_my_integration_tokens(
 ) -> dict[str, object]:
     rows = await list_integration_tokens(database, user=user)
     return {"tokens": [_token_view(row) for row in rows]}
+
+
+@router.get("/me/integration-tokens/access")
+async def list_my_integration_token_access(
+    user: CurrentUser,
+    database: DatabaseSession,
+) -> dict[str, object]:
+    rows = await list_token_access(database, user_id=user.id)
+    return {
+        "access": [access_view(row) for row in rows],
+        "retention_days": access_retention_days(),
+    }
 
 
 @router.delete(

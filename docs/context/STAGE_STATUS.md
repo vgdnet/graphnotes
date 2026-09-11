@@ -1,16 +1,18 @@
 # GraphNotes - Stage Status
 
-Updated: 2026-09-11
+Updated: 2026-09-12
 
-Product model TZ 2.71 / §6.3.4: Obsidian plugin **API** copies selected
+Product model TZ 2.79 (2.72–2.76 shipped) / §6.3.4: Obsidian plugin **API** copies selected
 vault files into the owner's existing personal store (`personal_uploads` +
 `personal_assets`). Desktop plugin **GraphNotes Publisher** lives in
-`obsidian-plugin/` (TZ 2.69). Token is an SSH-key analog (TZ 2.70):
-`gnp_` + `secrets.token_urlsafe(32)`, SHA-256 only in
-`integration_tokens`, prefix fingerprint in `/user`; plugin persists the
-secret in `data.json`. Alembic `0017_obsidian_integration`; batch
-transfer with versions and idempotency. Git connection does **not**
-disable plugin write (TZ 2.62). Shared rhizome and Differ unchanged.
+`obsidian-plugin/` (TZ 2.69). Token is a personal API key (TZ 2.75):
+`gnp_` + `secrets.token_urlsafe(32)`, stored in `/user` and copied into
+plugin `data.json`; SHA-256 for Bearer lookup only. Compromise → revoke
+the key; restore → new key from the cabinet. TZ 2.73–2.74: access log on
+`/user` (who / IP / which token), ~6 months in the working DB, ceiling
+~1 year; separate logs DB later. Alembic `0017`–`0019`. Batch transfer
+with versions and idempotency. Git connection does **not** disable
+plugin write (TZ 2.62). Shared rhizome and Differ unchanged.
 Technical contract: `MASTER_CONTEXT` §12.1. TZ 2.67: white-noise personal ingest (ZIP / `.md` /
 in-app / git copy-in) is rejected and the account is locked; admins
 are mailed when SMTP is on; already-indexed notes stay. TZ 2.66: missing wikilink / unresolved node opens a card
@@ -380,19 +382,23 @@ TZ 2.5–2.7 on this branch (not merged to main; production
   audit `ingest.white_noise_lock`; admin mail via installation SMTP /
   public URL. Mail failure does not undo the lock. Last admin is not
   locked. Production `rhizome` not deployed.
-- TZ 2.68–2.71 shipped on this branch: Obsidian plugin API
+- TZ 2.68–2.76 shipped on this branch (TZ 2.79): Obsidian plugin API
   (`/integrations/obsidian/v1`) writes only the token owner's personal
-  store; Settings tab **Obsidian** mints `gnp_` tokens (secret once,
-  SHA-256 stored); desktop GraphNotes Publisher in `obsidian-plugin/`
-  persists the secret in `data.json` (TZ 2.70). Connected git does not
+  store; Settings tab **Obsidian** stores the `gnp_` key and the user
+  copies it into the plugin (TZ 2.75); access history ~6 months / max
+  ~1 year and revoke (TZ 2.73–2.74). Separate logs DB is leftover.
+  Desktop GraphNotes Publisher in `obsidian-plugin/`
+  persists the same token in `data.json`. Connected git does not
   disable write. Plugin white-noise is 415 `unsupported_type` without
-  account lock. Alembic `0017_obsidian_integration`. Production
-  `rhizome` not deployed.
+  account lock. Alembic `0017`–`0019`. Production `rhizome` not
+  deployed.
 - TZ 2.78: `#/about` is credits (rhizome — Мария Надршина,
   GraphNotes — Юрий Ефимов, Telegram links). Footer is the About
   button only — no WTFPL/AGPL one-liner, no author-contract control.
   Contract copy stays in Settings. Production `rhizome` not deployed.
-- leftover: rhizome access-level **entitlement tables** / payment
+- leftover: separate **logs database** vs working PostgreSQL (TZ 2.74
+  keeps `integration_token_access` in the working DB with prune);
+  rhizome access-level **entitlement tables** / payment
   gateway (ADR-016 + TZ 2.41 name the model and the «ризома автора»
   view; `closed_paths` already exists — not this slice); vsepsy
   identity §6.1.3 (needs ADR); ZIP wording in ADR-009 vs TZ 2.5;

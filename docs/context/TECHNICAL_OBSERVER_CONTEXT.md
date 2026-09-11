@@ -1,10 +1,14 @@
 # GraphNotes — канонический контекст Technical Observer
 
 Статус: ACTIVE
-Updated: 2026-09-11 (TZ 2.71 shipped: plugin token like SSH — SHA-256 on
-server, secret persisted in plugin `data.json`. TZ 2.68–2.70: Obsidian
-plugin → personal store API + desktop plugin in-repo. Alembic 0017,
-hashed tokens,
+Updated: 2026-09-12 (TZ 2.79 shipped 2.72–2.76. TZ 2.75: plugin key lives in the cabinet and is
+copied into the plugin; revoke then mint/copy a new key. Hash-only /
+show-once is not the product. TZ 2.74: access log stays in the working
+DB for ~6 months, hard ceiling ~1 year; do not add a second logs
+database yet. TZ 2.73: plugin token access log on `/user`. TZ 2.72:
+API key stored in Settings and plugin `data.json`; list returns `token`.
+TZ 2.68–2.71: Obsidian plugin → personal store API + desktop plugin
+in-repo. Alembic 0017–0019, hashed lookup + stored token,
 no git copy-in on plugin apply. TZ 2.67: white-noise personal ingest lock + admin
 mail; existing notes kept. TZ 2.66: missing card page + personal create
 from dangling wikilink. TZ 2.65: ZIP ingest 10 000 files; zip-bomb
@@ -90,10 +94,11 @@ PostgreSQL, узлы, связи, теги, поисковый индекс и �
 Личный hosted Markdown — продуктовый путь (ТЗ 2.62). Поиск — `note_index`.
 Выгрузка своей — со склада `.md`, не из индекса.
 
-Плагин Obsidian (ТЗ 2.68–2.70 / MASTER §12.1) — HTTP API в **тот же**
+Плагин Obsidian (ТЗ 2.68–2.75 / MASTER §12.1) — HTTP API в **тот же**
 `personal_uploads` / `personal_assets`. Не git copy-in при apply, не запись
 в `shared_notes`, не предложение, не обход Differ. Таблицы transfer не канон
-знания. Секрет токена на сервере не хранится (SHA-256 + `token_prefix`).
+знания. Ключ хранится в кабинете и копируется в плагин (ТЗ 2.75); отзыв
+блокирует, новый ключ снова из кабинета. SHA-256 — только поиск Bearer.
 Код плагина в `obsidian-plugin/` — клиент, не канон склада GraphNotes.
 
 ### Rhizome and RBAC model

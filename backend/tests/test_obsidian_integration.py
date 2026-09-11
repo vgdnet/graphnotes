@@ -46,7 +46,7 @@ def _auth(token: str) -> dict[str, str]:
     return {"Authorization": f"Bearer {token}"}
 
 
-async def test_token_create_list_revoke_and_secret_once(
+async def test_token_create_list_revoke_and_secret_kept(
     auth_test_context: tuple[AsyncClient, async_sessionmaker[AsyncSession]],
 ) -> None:
     client, session_factory = auth_test_context
@@ -59,8 +59,7 @@ async def test_token_create_list_revoke_and_secret_once(
     assert listed.status_code == 200
     tokens = listed.json()["tokens"]
     assert len(tokens) == 1
-    assert "token" not in tokens[0]
-    assert created["token"] not in listed.text
+    assert tokens[0]["token"] == created["token"]
     revoked = await client.delete(f"/users/me/integration-tokens/{created['id']}")
     assert revoked.status_code == 204
     blocked = await client.get(f"{PREFIX}/capabilities", headers=_auth(created["token"]))
@@ -72,6 +71,63 @@ async def test_token_create_list_revoke_and_secret_once(
         )
     assert "integration.token_created" in actions
     assert "integration.token_revoked" in actions
+
+
+async def test_token_access_history_who_where_which_token(
+    auth_test_context: tuple[AsyncClient, async_sessionmaker[AsyncSession]],
+) -> None:
+    client, _session_factory = auth_test_context
+    await _author(client)
+    empty = await client.get("/users/me/integration-tokens/access")
+    assert empty.status_code == 200
+    assert empty.json()["access"] == []
+    assert empty.json()["retention_days"] == 183
+    assert empty.json()["retention_days"] <= 366
+
+    created = await _token(client, name="Laptop")
+    secret = created["token"]
+    headers = {
+        **_auth(secret),
+        "X-Forwarded-For": "203.0.113.50",
+        "User-Agent": "GraphNotes Publisher/1.0",
+    }
+    first = await client.get(f"{PREFIX}/capabilities", headers=headers)
+    assert first.status_code == 200
+    repeat = await client.get(f"{PREFIX}/capabilities", headers=headers)
+    assert repeat.status_code == 200
+    other = await client.get(
+        f"{PREFIX}/capabilities",
+        headers={
+            **_auth(secret),
+            "X-Forwarded-For": "198.51.100.9",
+            "User-Agent": "GraphNotes Publisher/1.0",
+        },
+    )
+    assert other.status_code == 200
+
+    listed = await client.get("/users/me/integration-tokens/access")
+    assert listed.status_code == 200
+    access = listed.json()["access"]
+    assert secret not in listed.text
+    assert len(access) == 2
+    assert {row["ip"] for row in access} == {"203.0.113.50", "198.51.100.9"}
+    assert {row["username"] for row in access} == {"obsidian-user"}
+    assert {row["token_name"] for row in access} == {"Laptop"}
+    assert all(row["token_prefix"] == created["token_prefix"] for row in access)
+    assert all(row["user_agent"] == "GraphNotes Publisher/1.0" for row in access)
+    assert all("token" not in row for row in access)
+
+    revoked = await client.delete(f"/users/me/integration-tokens/{created['id']}")
+    assert revoked.status_code == 204
+    after = await client.get("/users/me/integration-tokens/access")
+    assert after.status_code == 200
+    assert len(after.json()["access"]) == 2
+    blocked = await client.get(f"{PREFIX}/capabilities", headers=_auth(secret))
+    assert blocked.status_code == 401
+
+    await client.post("/auth/logout")
+    denied = await client.get("/users/me/integration-tokens/access")
+    assert denied.status_code == 401
 
 
 async def test_capabilities_manifest_one_note_transfer(

@@ -45,7 +45,7 @@
 | 5.4.2 | User sees own contribution stats; public person card `#/users/{uuid}` with achievement counters | 6 |
 | 6.2 | local personal + shared stores; GitHub copy-in (TZ 2.63); leftover merge-out; no product clone/ZIP of shared | 3 |
 | 6.3 | no download of published shared; personal working copy is GraphNotes store; git/Dropbox/Drive = copy-in, not a second canon | 4 (upload copies in), 7 (Differ vs local copy) |
-| 6.3.4 / 5.5.7 | GraphNotes Publisher (this repo) + API copy selected vault files into the same personal store; personal API key stored and shown again in Settings, copied into plugin `data.json` (TZ 2.76); access log / revoke; not shared, not Differ | 8 (TZ 2.68–2.76) |
+| 6.3.4 / 5.5.7 | GraphNotes Publisher (this repo) + API copy selected vault files into the same personal store; personal API key stored and shown again in Settings, copied into plugin `data.json` (TZ 2.76); access log / revoke; not shared, not Differ | shipped 2.79 on feature/08-graph-diff |
 | 6.3.2 | Graph personal overlay: from git if connected else server store; layer menu/legend «ваша ризома», never «ваш git» | 6 |
 | 6.3.1 | Upload history in GraphNotes (who/when/hash), not user git log | next wave |
 | 6.4 | revisioned shared/personal/proposal derived index and rebuild | 5 |

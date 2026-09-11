@@ -29,13 +29,14 @@ promoted. Do not point the plugin at production while testing.
    header: token CRUD is same-origin Settings, like the rest of the web UI.
 2. Open **Настройки** (click the signed-in name) → **Obsidian**.
 3. Name the token, optionally allow `personal:delete`, create.
-4. Copy the secret **once**. It starts with `gnp_`. The server stores only
-   a SHA-256 hash and shows a prefix fingerprint in Settings. The cabinet
-   never re-exports the secret.
-5. Paste it into GraphNotes Publisher. The plugin keeps the secret in its
-   `data.json` (SSH-key analog, TZ 2.70). Restarting Obsidian does not
-   require pasting again.
-6. Default TTL 30 days, max 90. Revoke from the same tab.
+4. The token starts with `gnp_`. The cabinet **stores** it and shows it
+   again (TZ 2.75). SHA-256 is also stored for Bearer lookup, not instead
+   of the key.
+5. Copy it from Settings into GraphNotes Publisher. The plugin keeps the
+   same token in `data.json`.
+6. Compromise: revoke the key on the same tab (plugin stops writing).
+   When access is restored, mint a new key in the cabinet and paste it
+   into the plugin. Default TTL 30 days, max 90.
 
 Web token routes (cookie session, errors `{ "detail": "..." }`):
 
@@ -46,9 +47,12 @@ Content-Type: application/json
 {"name":"Obsidian","scopes":["personal:read","personal:write"]}
 ```
 
-201 body includes `token` once, plus `id`, `name`, `token_prefix`,
-`scopes`, `expires_at`, `created_at`. `GET` lists the same fields without
-`token`. `DELETE /api/users/me/integration-tokens/{id}` → 204.
+201 body includes `token`, plus `id`, `name`, `token_prefix`,
+`scopes`, `expires_at`, `created_at`. `GET` lists the same fields,
+including `token`. `GET /api/users/me/integration-tokens/access` is the
+access log (~6 months, max ~1 year; who / IP / token name + prefix;
+never the key). Separate logs DB is later.
+`DELETE /api/users/me/integration-tokens/{id}` → 204.
 
 Plugin transfer APIs use `Authorization: Bearer <token>`. They never
 create tokens.
@@ -224,7 +228,10 @@ re-commit retries index only.
 ## Operator
 
 - Alembic: `0017_obsidian_integration` (`object_version` on
-  `personal_uploads`, token/transfer/blob/snapshot tables, `personal_assets`).
+  `personal_uploads`, token/transfer/blob/snapshot tables,
+  `personal_assets`); `0018_integration_token_access` (~6-month who /
+  IP / token log); `0019_integration_token_secret` (token value for
+  Settings re-copy).
 - Audit actions: `integration.token_created` / `token_revoked` /
   `transfer_created` / `transfer_applied` / `transfer_indexed` /
   `transfer_index_failed` / `transfer_conflict` / `transfer_cancelled`.

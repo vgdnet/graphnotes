@@ -125,7 +125,7 @@ export async function run(): Promise<void> {
     history: [{ at: '2026-09-11T00:00:00Z', state: 'succeeded', count: 1 }],
   });
   assertEqual(saved.server, 'http://172.16.13.14:8080', 'saved server');
-  assertEqual(saved.token, 'gnp_secret', 'token kept like an SSH private key');
+  assertEqual(saved.token, 'gnp_secret', 'token kept in plugin data');
   assertEqual(normalizeSaved({ server: 'https://x', token: 'not-a-gnp' }).token, '', 'rejects non-gnp token');
 
   console.log('ok', 20);

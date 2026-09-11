@@ -12,6 +12,7 @@ class IntegrationTokenCreateRequest(BaseModel):
 class IntegrationTokenView(BaseModel):
     id: str
     name: str
+    token: str | None = None
     token_prefix: str
     scopes: list[str]
     expires_at: str

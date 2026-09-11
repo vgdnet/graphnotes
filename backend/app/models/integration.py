@@ -31,6 +31,7 @@ class IntegrationToken(Base):
         index=True,
     )
     name: Mapped[str] = mapped_column(String(80))
+    token: Mapped[str | None] = mapped_column(String(200), nullable=True)
     token_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
     token_prefix: Mapped[str] = mapped_column(String(16))
     scopes: Mapped[list[str]] = mapped_column(JSON, default=list)
@@ -43,6 +44,36 @@ class IntegrationToken(Base):
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
+    )
+
+
+class IntegrationTokenAccess(Base):
+    """Who used which plugin token from where. Kept 6 months."""
+
+    __tablename__ = "integration_token_access"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        index=True,
+    )
+    token_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("integration_tokens.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    username: Mapped[str] = mapped_column(String(32))
+    token_name: Mapped[str] = mapped_column(String(80))
+    token_prefix: Mapped[str] = mapped_column(String(16))
+    ip: Mapped[str] = mapped_column(String(64))
+    user_agent: Mapped[str] = mapped_column(String(300))
+    route: Mapped[str] = mapped_column(String(120))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), index=True
     )
 
 

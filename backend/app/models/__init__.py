@@ -11,6 +11,7 @@ from app.models.integration import (
     IntegrationIdempotency,
     IntegrationSnapshot,
     IntegrationToken,
+    IntegrationTokenAccess,
     IntegrationTransfer,
     PersonalAsset,
 )
@@ -32,6 +33,7 @@ __all__ = [
     "IntegrationIdempotency",
     "IntegrationSnapshot",
     "IntegrationToken",
+    "IntegrationTokenAccess",
     "IntegrationTransfer",
     "NoteIndex",
     "NoteLink",

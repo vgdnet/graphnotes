@@ -47,6 +47,11 @@ class Settings(BaseSettings):
     integration_plan_ttl_hours: int = 24
     integration_result_ttl_days: int = 30
     integration_rate_limit_per_minute: int = 120
+    # Working-DB hygiene: keep ~6 months; never more than ~1 year here.
+    # A separate logs database is later architecture, not this wave.
+    integration_access_retention_days: int = 183
+    integration_access_retention_max_days: int = 366
+    integration_access_debounce_seconds: int = 3600
     smtp_host: str = ""
     smtp_port: int = 587
     smtp_username: str = ""

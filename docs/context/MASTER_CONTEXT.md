@@ -2,13 +2,17 @@
 
 Updated: 2026-09-12
 Status: canonical architecture baseline
-Aligned with PRODUCT_SPEC 2.78. TZ 2.68–2.71 / §12.1: Obsidian plugin
+Aligned with PRODUCT_SPEC 2.79. TZ 2.68–2.76 shipped (2.79) / §12.1: Obsidian plugin
 **API** copies selected vault files into the owner's `personal_uploads` /
 `personal_assets`. Desktop **GraphNotes Publisher** lives in
-`obsidian-plugin/` (TZ 2.69). Token is an SSH-key analog (TZ 2.70):
-`gnp_` + `secrets.token_urlsafe(32)`, SHA-256 only on the server, secret
-persisted in the plugin `data.json`. Shared rhizome and Differ stay
-unchanged. TZ 2.67: personal ingest that hits the
+`obsidian-plugin/` (TZ 2.69). Token is a personal API key (TZ 2.75):
+`gnp_` + `secrets.token_urlsafe(32)`, stored in Settings and in the
+plugin `data.json` (TZ 2.75: cabinet stores the key and the user copies
+it into the plugin; hash-only / show-once is not the product). SHA-256
+is kept for Bearer lookup. TZ 2.73–2.74:
+token access log on `/user` (who / IP / which token), ~6 months in the
+working DB, hard ceiling ~1 year; a separate logs database is later.
+Shared rhizome and Differ stay unchanged. TZ 2.67: personal ingest that hits the
 Markdown indexer (ZIP, one `.md`, in-app save, personal git copy-in) is
 scanned for **white noise** (garbage, not notes). Combined signals — not
 one weak heuristic: invalid UTF-8 / binary `.md` (NUL), Shannon entropy
@@ -383,7 +387,7 @@ GraphNotes shared store               = working copy of published rhizome (TZ 2.
 git / later Dropbox / Google Drive    = connectors that copy .md into those stores
 shared knowledge repo                 = leftover merge-out after editor accept
 .md / ZIP upload                      = copy into the same local personal store
-Obsidian plugin API + GraphNotes Publisher = copy selected vault files into that store (TZ 2.68–2.71)
+Obsidian plugin API + GraphNotes Publisher = copy selected vault files into that store (TZ 2.68–2.72)
 proposal                              = selected Differ results, queued for editors
 Differ                                = local personal copy → published shared
 ```
@@ -459,6 +463,8 @@ Not needed for the initial MVP unless actual load/features justify them:
 - MinIO / S3
 - Gitea / GitLab / self-hosted Git
 - Kubernetes
+- a second PostgreSQL (or other store) just for logs — later; TZ 2.74
+  keeps access history in the working DB with a 6–12 month prune
 
 Start simple. Add infrastructure only for measured/observed needs.
 
@@ -604,8 +610,10 @@ Authentication / users:
 - `GET  /api/users/me/author-contract`
 - `POST /api/users/me/author-contract`
 - `POST /api/users/me/author-contract/withdraw`
-- `POST /api/users/me/integration-tokens` (cookie session; secret once)
-- `GET  /api/users/me/integration-tokens` (no secrets)
+- `POST /api/users/me/integration-tokens` (cookie session; token stored)
+- `GET  /api/users/me/integration-tokens` (includes `token`)
+- `GET  /api/users/me/integration-tokens/access` (6 months: who / IP /
+  token name + prefix; no key)
 - `DELETE /api/users/me/integration-tokens/{id}`
 - `GET  /api/author/contract` (same text; settings aliases are canonical)
 - `POST /api/author/accept`
@@ -681,7 +689,7 @@ Proposals and editor workflow (Stage-owned):
 Reconciliation hook:
 - `POST /api/webhooks/github`
 
-### 12.1 Obsidian plugin → personal store (TZ 2.68–2.71)
+### 12.1 Obsidian plugin → personal store (TZ 2.68–2.75)
 
 Product requirement: §6.3.4 / §5.5.7. Operator examples:
 `docs/deployment/OBSIDIAN_PLUGIN_API.md`. The desktop plugin
@@ -693,13 +701,29 @@ Nginx `location /api/` strips it. Incompatible protocol → new prefix
 (`/integrations/obsidian/v2`), do not silently reshape v1 fields.
 
 **Auth.** Transfer APIs: `Authorization: Bearer`. Mint is
-`secrets.token_urlsafe(32)` with prefix `gnp_` (TZ 2.70, SSH-key analog).
-Secret is shown once on create (`POST /api/users/me/integration-tokens`,
-cookie session, `{detail}` errors like the rest of `/users/me`). Server
-stores SHA-256 of the secret in `integration_tokens`, never plaintext;
-the cabinet lists name, prefix fingerprint, scopes, expiry. The desktop
-plugin persists the secret in its `data.json` so Obsidian restart does
-not require pasting again. The server cannot re-export the secret.
+`secrets.token_urlsafe(32)` with prefix `gnp_` (TZ 2.70: personal API
+key). Create and list (`POST`/`GET /api/users/me/integration-tokens`,
+cookie session, `{detail}` errors like the rest of `/users/me`) return
+the same `token` so Settings can show it again (TZ 2.75 canon: the key
+lives in the cabinet and is copied into the plugin). Server stores the
+token value and SHA-256 for Bearer lookup (`integration_tokens.token` +
+`token_hash`). Hash-only / show-once is not the product. The desktop
+plugin persists the same token in its `data.json`. Compromise → revoke
+in `/user`; restored access → mint a new key in the cabinet and paste
+it into the plugin.
+Successful Bearer calls append `integration_token_access` (username,
+token name/prefix, IP from `X-Forwarded-For` / `X-Real-IP` / peer,
+User-Agent, route). Same token+IP within
+`GRAPHNOTES_INTEGRATION_ACCESS_DEBOUNCE_SECONDS` (default 3600) is one
+row; a new IP always inserts. Retention
+`GRAPHNOTES_INTEGRATION_ACCESS_RETENTION_DAYS` (default 183), clamped
+to `GRAPHNOTES_INTEGRATION_ACCESS_RETENTION_MAX_DAYS` (366). This is
+working-DB hygiene, not a forever archive. A separate logs database
+vs working store is later architecture; do not add a second Postgres,
+Redis, or warehouse in this wave. Owner
+lists this on `GET /api/users/me/integration-tokens/access`. Revoke
+does not delete history (`token_id` SET NULL if the row is later
+removed). The access payload never includes the key.
 Scopes:
 `personal:read` (required), `personal:write`, optional `personal:delete`.
 Owner UUID is derived from the token; the client must not send `user_id`
@@ -753,7 +777,9 @@ proxy. No Redis/S3/Celery.
 
 Audit: `integration.token_*`, `integration.transfer_*` with user UUID,
 token id, client_id, transfer_id, paths, versions, sizes, result. No
-secrets, passwords, or note bodies.
+secrets, passwords, or note bodies. Owner-visible access history is
+table `integration_token_access`, not the admin audit journal.
 
-Alembic: `0017_obsidian_integration`. Integration checks: `rhizome-test`
+Alembic: `0017_obsidian_integration`, `0018_integration_token_access`,
+`0019_integration_token_secret`. Integration checks: `rhizome-test`
 only; do not apply on `rhizome` until an approved revision.

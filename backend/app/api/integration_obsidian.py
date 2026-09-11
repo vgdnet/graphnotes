@@ -14,7 +14,11 @@ from app.models.user import User
 from app.schemas.integration import TransferPlanRequest
 from app.services.installation import resolve_public_base_url
 from app.services.integration_errors import IntegrationError
-from app.services.integration_tokens import authenticate_integration_token, require_scopes
+from app.services.integration_tokens import (
+    authenticate_integration_token,
+    record_token_access,
+    require_scopes,
+)
 from app.services.obsidian_transfers import (
     cancel_transfer,
     capabilities_payload,
@@ -48,6 +52,7 @@ async def current_integration(
     request_id = request.headers.get("X-Request-ID") or str(uuid.uuid4())
     request.state.request_id = request_id
     user, token = await authenticate_integration_token(database, authorization)
+    await record_token_access(database, user=user, token=token, request=request)
     _check_rate(user)
     return user, token
 

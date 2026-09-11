@@ -4,11 +4,12 @@ import hashlib
 import secrets
 from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from starlette.requests import Request
 
 from app.core.config import settings
-from app.models.integration import IntegrationToken
+from app.models.integration import IntegrationToken, IntegrationTokenAccess
 from app.models.user import User
 from app.services.audit import record_audit_event
 from app.services.integration_errors import IntegrationError
@@ -70,7 +71,7 @@ def resolve_expiry(expires_at: datetime | None) -> datetime:
 
 
 def mint_token_secret() -> str:
-    """High-entropy bearer secret. Server stores SHA-256 only (TZ 2.70)."""
+    """Personal API key. Cabinet and plugin keep the same value (TZ 2.70)."""
     return TOKEN_PREFIX + secrets.token_urlsafe(32)
 
 
@@ -93,6 +94,7 @@ async def create_integration_token(
     row = IntegrationToken(
         user_id=user.id,
         name=cleaned_name,
+        token=secret,
         token_hash=hash_integration_token(secret),
         token_prefix=secret[:12],
         scopes=cleaned_scopes,
@@ -188,3 +190,111 @@ def require_scopes(token: IntegrationToken, *needed: str) -> None:
             "недостаточно прав токена",
             details=[{"scope": item} for item in missing],
         )
+
+
+def client_ip(request: Request) -> str:
+    forwarded = request.headers.get("X-Forwarded-For") or request.headers.get(
+        "X-Real-IP"
+    )
+    if forwarded:
+        return forwarded.split(",")[0].strip()[:64]
+    if request.client and request.client.host:
+        return request.client.host[:64]
+    return ""
+
+
+def _route_label(request: Request) -> str:
+    return f"{request.method} {request.url.path}"[:120]
+
+
+def access_retention_days() -> int:
+    """How long access rows stay in the working database (TZ 2.74)."""
+    return max(
+        1,
+        min(
+            settings.integration_access_retention_days,
+            settings.integration_access_retention_max_days,
+        ),
+    )
+
+
+async def prune_token_access(database: AsyncSession) -> None:
+    cutoff = datetime.now(UTC) - timedelta(days=access_retention_days())
+    await database.execute(
+        delete(IntegrationTokenAccess).where(IntegrationTokenAccess.created_at < cutoff)
+    )
+
+
+async def record_token_access(
+    database: AsyncSession,
+    *,
+    user: User,
+    token: IntegrationToken,
+    request: Request,
+) -> None:
+    ip = client_ip(request)
+    route = _route_label(request)
+    agent = (request.headers.get("User-Agent") or "")[:300]
+    since = datetime.now(UTC) - timedelta(
+        seconds=settings.integration_access_debounce_seconds
+    )
+    recent = await database.scalar(
+        select(IntegrationTokenAccess.id).where(
+            IntegrationTokenAccess.token_id == token.id,
+            IntegrationTokenAccess.ip == ip,
+            IntegrationTokenAccess.created_at >= since,
+        )
+    )
+    if recent is None:
+        database.add(
+            IntegrationTokenAccess(
+                user_id=user.id,
+                token_id=token.id,
+                username=user.username,
+                token_name=token.name,
+                token_prefix=token.token_prefix,
+                ip=ip,
+                user_agent=agent,
+                route=route,
+            )
+        )
+    await prune_token_access(database)
+    await database.commit()
+
+
+async def list_token_access(
+    database: AsyncSession,
+    *,
+    user_id: object,
+    limit: int = 100,
+) -> list[IntegrationTokenAccess]:
+    await prune_token_access(database)
+    await database.commit()
+    cap = max(1, min(limit, 200))
+    cutoff = datetime.now(UTC) - timedelta(days=access_retention_days())
+    rows = await database.scalars(
+        select(IntegrationTokenAccess)
+        .where(
+            IntegrationTokenAccess.user_id == user_id,
+            IntegrationTokenAccess.created_at >= cutoff,
+        )
+        .order_by(IntegrationTokenAccess.created_at.desc())
+        .limit(cap)
+    )
+    return list(rows.all())
+
+
+def access_view(row: IntegrationTokenAccess) -> dict[str, object]:
+    return {
+        "id": str(row.id),
+        "token_id": str(row.token_id) if row.token_id else None,
+        "username": row.username,
+        "token_name": row.token_name,
+        "token_prefix": row.token_prefix,
+        "ip": row.ip,
+        "user_agent": row.user_agent,
+        "route": row.route,
+        "created_at": row.created_at.astimezone(UTC).isoformat().replace("+00:00", "Z")
+        if row.created_at.tzinfo
+        else row.created_at.replace(tzinfo=UTC).isoformat().replace("+00:00", "Z"),
+    }

@@ -76,6 +76,18 @@ type IntegrationToken = {
   token?: string;
 };
 
+type IntegrationAccess = {
+  id: string;
+  token_id: string | null;
+  username: string;
+  token_name: string;
+  token_prefix: string;
+  ip: string;
+  user_agent: string;
+  route: string;
+  created_at: string;
+};
+
 const AUTHOR_CONTRACT_FALLBACK: Omit<AuthorContract, "version" | "title"> = {
   responsibility:
     "Принимая договор, вы несёте ответственность за содержание своих заметок и связанных с ними связей, которые предлагаете в общую ризому.",
@@ -394,7 +406,7 @@ export function App() {
   const [authOpen, setAuthOpen] = useState(false);
   const [settingsBlock, setSettingsBlock] = useState<SettingsBlock>("profile");
   const [integrationTokens, setIntegrationTokens] = useState<IntegrationToken[]>([]);
-  const [createdIntegrationToken, setCreatedIntegrationToken] = useState<string | null>(null);
+  const [integrationAccess, setIntegrationAccess] = useState<IntegrationAccess[]>([]);
   const [mode, setMode] = useState<AuthMode>("login");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
@@ -1077,6 +1089,11 @@ export function App() {
     if (!response.ok) throw new Error(await readError(response));
     const body = (await response.json()) as { tokens: IntegrationToken[] };
     setIntegrationTokens(body.tokens);
+    const accessResponse = await fetch("/api/users/me/integration-tokens/access");
+    if (accessResponse.ok) {
+      const accessBody = (await accessResponse.json()) as { access: IntegrationAccess[] };
+      setIntegrationAccess(accessBody.access);
+    }
   }
 
   async function createIntegrationToken(event: FormEvent<HTMLFormElement>) {
@@ -1085,7 +1102,6 @@ export function App() {
     const allowDelete = form.get("tokenDelete") === "on";
     setSubmitting(true);
     setError("");
-    setCreatedIntegrationToken(null);
     try {
       const response = await fetch("/api/users/me/integration-tokens", {
         method: "POST",
@@ -1098,8 +1114,6 @@ export function App() {
         }),
       });
       if (!response.ok) throw new Error(await readError(response));
-      const created = (await response.json()) as IntegrationToken;
-      if (created.token) setCreatedIntegrationToken(created.token);
       await loadIntegrationTokens();
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "Ошибка соединения");
@@ -1117,7 +1131,6 @@ export function App() {
     try {
       const response = await fetch(`/api/users/me/integration-tokens/${tokenId}`, { method: "DELETE" });
       if (!response.ok && response.status !== 204) throw new Error(await readError(response));
-      setCreatedIntegrationToken(null);
       await loadIntegrationTokens();
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "Ошибка соединения");
@@ -2116,14 +2129,8 @@ export function App() {
             {settingsBlock === "integrations" && (
               <div className="settings-stack">
                 <p className="admin-panel__hint">
-                  Токен как ключ SSH: создаёте один раз. У нас остаются хеш и отпечаток, сам секрет больше не показываем. Вставьте его в плагин — там он запоминается. Общую ризому и Differ токен не трогает.
+                  Ключ живёт в кабинете: создайте и скопируйте в плагин. Плагин запомнит. Чужой вход — отзовите ключ здесь. Доступ вернули — новый ключ снова из кабинета в плагин. Общую ризому и Differ ключ не трогает.
                 </p>
-                {createdIntegrationToken && (
-                  <label>
-                    Секрет токена — скопируйте сейчас, повторно сервер его не покажет
-                    <input value={createdIntegrationToken} readOnly onFocus={(event) => event.currentTarget.select()} />
-                  </label>
-                )}
                 <form className="connect-form" onSubmit={(event) => void createIntegrationToken(event)}>
                   <label>
                     Имя
@@ -2147,9 +2154,18 @@ export function App() {
                           <span className="note-link">
                             <strong>{item.name}</strong>
                             <small>
-                              {item.token_prefix}… · {item.scopes.join(", ")} · до {new Date(item.expires_at).toLocaleString("ru")}
+                              {item.scopes.join(", ")} · до {new Date(item.expires_at).toLocaleString("ru")}
+                              {item.last_used_at ? ` · вход ${new Date(item.last_used_at).toLocaleString("ru")}` : ""}
                               {item.revoked_at ? " · отозван" : ""}
                             </small>
+                            {item.token ? (
+                              <label>
+                                Токен
+                                <input value={item.token} readOnly onFocus={(event) => event.currentTarget.select()} />
+                              </label>
+                            ) : (
+                              <small>{item.token_prefix}…</small>
+                            )}
                           </span>
                           {item.revoked_at == null && (
                             <button
@@ -2162,6 +2178,26 @@ export function App() {
                             </button>
                           )}
                         </div>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                <p className="admin-panel__hint">
+                  Входы с токеном: кто, откуда (IP) и какой токен. Храним около полугода, не дольше года — чтобы не раздувать рабочую базу. Чужой адрес — отзовите токен.
+                </p>
+                {integrationAccess.length === 0 ? (
+                  <p className="admin-panel__hint">Пока никто не заходил с токеном.</p>
+                ) : (
+                  <ul className="note-list">
+                    {integrationAccess.map((item) => (
+                      <li key={item.id}>
+                        <span className="note-link">
+                          <strong>{item.username} · {item.token_name} ({item.token_prefix}…)</strong>
+                          <small>
+                            {new Date(item.created_at).toLocaleString("ru")} · {item.ip || "IP неизвестен"}
+                            {item.user_agent ? ` · ${item.user_agent}` : ""}
+                          </small>
+                        </span>
                       </li>
                     ))}
                   </ul>

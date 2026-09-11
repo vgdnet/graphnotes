@@ -102,7 +102,7 @@ class GraphNotesSettingTab extends PluginSettingTab {
     containerEl.createEl('h2', { text: 'GraphNotes Publisher' });
     containerEl.createEl('p', {
       cls: 'gn-muted',
-      text: 'Токен создаётся один раз на сайте GraphNotes: Настройки → Obsidian. Пароль учётки сюда не вводится. Секрет остаётся в плагине, как ключ SSH; на сервере хранится только хеш.',
+      text: 'Токен берётся в GraphNotes: Настройки → Obsidian. Его можно снова скопировать там. Плагин запоминает токен. Пароль учётки сюда не вводится.',
     });
 
     new Setting(containerEl)
@@ -130,7 +130,7 @@ class GraphNotesSettingTab extends PluginSettingTab {
 
     new Setting(containerEl)
       .setName('Токен интеграции')
-      .setDesc('Секрет вида gnp_… Вставляется один раз и сохраняется в плагине. С сайта повторно не скачивается.')
+      .setDesc('Токен из настроек GraphNotes (gnp_…). Плагин запоминает его.')
       .addText(text => {
         text.inputEl.type = 'password';
         text.setPlaceholder('gnp_…').setValue(plugin.token);
