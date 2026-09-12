@@ -1,0 +1,128 @@
+.gnm-view {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: 0;
+}
+
+.gnm-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.gnm-title {
+  color: var(--text-muted);
+  font-size: var(--font-small);
+}
+
+.gnm-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.gnm-meta {
+  padding: 6px 12px;
+  color: var(--text-muted);
+  font-size: var(--font-small);
+}
+
+.gnm-meta.gnm-error,
+.gnm-error {
+  color: var(--text-error);
+}
+
+.gnm-muted {
+  color: var(--text-muted);
+  font-size: var(--font-small);
+}
+
+.gnm-merge-host {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.gnm-merge-host .cm-mergeView {
+  height: 100%;
+  background: var(--background-primary);
+  color: var(--text-normal);
+}
+
+.gnm-merge-host .cm-editor {
+  height: 100%;
+}
+
+.gnm-merge-host .cm-mergeViewEditors {
+  height: 100%;
+}
+
+.gnm-merge-host .cm-deletedChunk,
+.gnm-merge-host .cm-deletedLine {
+  background-color: color-mix(in srgb, var(--color-red) 18%, transparent);
+}
+
+.gnm-merge-host .cm-insertedLine {
+  background-color: color-mix(in srgb, var(--color-green) 18%, transparent);
+}
+
+.gnm-merge-host .cm-changedLine {
+  background-color: color-mix(in srgb, var(--color-orange) 12%, transparent);
+}
+
+.gnm-merge-host .cm-mergeView .cm-scroller {
+  font-family: var(--font-text);
+}
+
+.gnm-modal .setting-item {
+  padding: 8px 0;
+}
+
+.gnm-differ-list {
+  list-style: none;
+  margin: 0 0 12px;
+  padding: 0;
+  max-height: 40vh;
+  overflow: auto;
+}
+
+.gnm-differ-list button {
+  width: 100%;
+  text-align: left;
+  margin: 0 0 6px;
+}
+
+.gnm-queue {
+  padding: 8px 12px;
+}
+
+.gnm-queue-refresh {
+  width: 100%;
+  margin: 8px 0;
+}
+
+.gnm-queue-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.gnm-queue-item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  width: 100%;
+  margin: 0 0 8px;
+  text-align: left;
+}
+
+.gnm-queue-item small {
+  color: var(--text-muted);
+  font-size: var(--font-small);
+}

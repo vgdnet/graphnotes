@@ -1,0 +1,543 @@
+import { useEffect, useMemo, useRef, useState } from "react";
+import type { KeyboardEvent } from "react";
+import cytoscape from "cytoscape";
+import type { Core, EventObject } from "cytoscape";
+import {
+  applyDegreeScores,
+  bindNeighborhoodHighlight,
+  graphStylesheet,
+  highlightNeighborhood,
+  runFcoseLayout,
+} from "./cytoscapeFcose";
+import { cardHash, missingNotePath } from "./cardRoute";
+import { graphNodePath, LOCAL_GRAPH_DEPTHS } from "./graphQuery";
+import type { GraphScope } from "./graphQuery";
+import type { ThemeName } from "./theme";
+
+export type GraphNode = {
+  path: string;
+  title: string;
+  tags: string[];
+  isolated: boolean;
+  unresolved: boolean;
+  locked?: boolean;
+  origin?: string;
+};
+
+export type GraphEdge = {
+  source: string;
+  target: string;
+  type: string;
+  unresolved: boolean;
+  locked?: boolean;
+  origin?: string;
+};
+
+export type GraphResponse = {
+  layer: string;
+  index_status: string;
+  truncated: boolean;
+  nodes: GraphNode[];
+  edges: GraphEdge[];
+};
+
+export type FilterKind = "all" | "unresolved" | "isolated" | "overlay" | "personal";
+
+const STATUS_LABEL: Record<string, string> = {
+  empty: "индекс пуст",
+  current: "актуален",
+  updating: "обновляется",
+  error: "ошибка индекса",
+};
+
+function originLabel(origin: string | undefined, personalLayer: boolean): string {
+  if (origin === "personal") return personalLayer ? "ваша личная ризома" : "ваша часть ризомы";
+  if (origin === "both") return "общая и ваша часть ризомы";
+  if (origin === "overlay") return "связь с общей";
+  return "общая";
+}
+
+function layerStatusLabel(graphLayer: string | undefined, kind: FilterKind): string {
+  if (kind === "personal" || graphLayer === "personal") return "ваша личная ризома";
+  if (kind === "overlay") return "ваша часть ризомы";
+  if (graphLayer === "overlay") return "общая ризома и ваша часть ризомы";
+  return "общая ризома";
+}
+
+function cardPathFor(node: GraphNode, _personalLayer: boolean): string {
+  if (node.path.startsWith("unresolved:") || node.path.startsWith("locked:")) {
+    return node.path;
+  }
+  if (node.path.startsWith("personal:")) {
+    const rest = node.path.slice("personal:".length);
+    if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}:/i.test(rest)) {
+      return node.path;
+    }
+    return rest;
+  }
+  return node.path;
+}
+
+export function GraphView({
+  graph,
+  loading,
+  selectedPath,
+  localCenter = null,
+  localDepth = 1,
+  onLocalCenterChange,
+  onLocalDepthChange,
+  canReadNotes = true,
+  onNeedAuth,
+  filterKind,
+  onFilterKindChange,
+  theme,
+  variant = "page",
+}: {
+  graph: GraphResponse | null;
+  loading?: boolean;
+  selectedPath?: string | null;
+  localCenter?: string | null;
+  localDepth?: number;
+  onLocalCenterChange: (path: string | null) => void;
+  onLocalDepthChange?: (depth: number) => void;
+  canReadNotes?: boolean;
+  onNeedAuth?: () => void;
+  filterKind?: FilterKind;
+  onFilterKindChange?: (kind: FilterKind) => void;
+  theme: ThemeName;
+  variant?: "page" | "aside";
+}) {
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const cyRef = useRef<Core | null>(null);
+  const [query, setQuery] = useState("");
+  const [localKind, setLocalKind] = useState<FilterKind>("all");
+  const kind = filterKind ?? localKind;
+  const [tag, setTag] = useState("");
+  const [focusPath, setFocusPath] = useState<string | null>(null);
+  const personalLayer = kind === "personal" || graph?.layer === "personal";
+  const selectedNodePath = graphNodePath(selectedPath, personalLayer);
+  const graphScope: GraphScope = localCenter ? "local" : "full";
+  const searchLayer = personalLayer ? "personal" : "overlay";
+
+  const visible = useMemo(() => {
+    if (!graph) return { nodes: [] as GraphNode[], edges: [] as GraphEdge[] };
+    const tagQ = tag.trim().toLowerCase();
+    const nodes = graph.nodes.filter((node) => {
+      if (kind === "unresolved" && !node.unresolved) return false;
+      if (kind === "isolated" && !node.isolated) return false;
+      if (kind === "overlay" && node.origin !== "personal" && node.origin !== "both") return false;
+      if (tagQ && !node.tags.some((item) => item.toLowerCase().includes(tagQ))) return false;
+      return true;
+    });
+    const allowed = new Set(nodes.map((node) => node.path));
+    const edges = graph.edges.filter((edge) => allowed.has(edge.source) && allowed.has(edge.target));
+    return { nodes, edges };
+  }, [graph, kind, tag]);
+
+  const visibleKey = `${visible.nodes.map((node) => node.path).join("\0")}|${visible.edges.map((edge) => `${edge.source}->${edge.target}:${edge.type}`).join("\0")}`;
+
+  const matches = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return [] as GraphNode[];
+    return visible.nodes.filter(
+      (node) => node.title.toLowerCase().includes(q) || node.path.toLowerCase().includes(q),
+    );
+  }, [visible, query]);
+
+  const [remoteHits, setRemoteHits] = useState<{ path: string; title: string }[]>([]);
+  useEffect(() => {
+    const q = query.trim();
+    if (!q) {
+      setRemoteHits([]);
+      return;
+    }
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => {
+      void fetch(`/api/search?q=${encodeURIComponent(q)}&layer=${searchLayer}`, { signal: controller.signal })
+        .then(async (response) => (response.ok ? (await response.json()) as { hits: { path: string; title: string }[] } : { hits: [] }))
+        .then((body) => setRemoteHits(body.hits))
+        .catch(() => undefined);
+    }, 180);
+    return () => {
+      window.clearTimeout(timer);
+      controller.abort();
+    };
+  }, [query, searchLayer]);
+
+  const focusPathRef = useRef<string | null>(null);
+  const personalLayerRef = useRef(personalLayer);
+  const canReadNotesRef = useRef(canReadNotes);
+  const onNeedAuthRef = useRef(onNeedAuth);
+  focusPathRef.current = focusPath || selectedNodePath || localCenter || null;
+  personalLayerRef.current = personalLayer;
+  canReadNotesRef.current = canReadNotes;
+  onNeedAuthRef.current = onNeedAuth;
+
+  useEffect(() => {
+    if (matches[0]) setFocusPath(matches[0].path);
+  }, [query, matches]);
+
+  useEffect(() => {
+    const host = containerRef.current;
+    if (!host) return;
+    const cy = cytoscape({
+      container: host,
+      elements: [],
+      minZoom: 0.15,
+      maxZoom: 3,
+      wheelSensitivity: 0.25,
+      style: graphStylesheet(),
+    });
+    cyRef.current = cy;
+    bindNeighborhoodHighlight(cy, () => focusPathRef.current);
+    const onTap = (event: EventObject) => {
+      if (event.target === cy || typeof event.target.isNode !== "function") {
+        setFocusPath(null);
+        return;
+      }
+      if (!event.target.isNode()) return;
+      const path = event.target.id();
+      setFocusPath(path);
+      if (path.startsWith("locked:")) return;
+      if (path.startsWith("unresolved:")) {
+        const filePath = missingNotePath(path);
+        if (filePath) window.location.hash = cardHash(filePath);
+        return;
+      }
+      const node = {
+        path,
+        title: "",
+        tags: [],
+        isolated: false,
+        unresolved: false,
+      };
+      window.location.hash = cardHash(cardPathFor(node, personalLayerRef.current));
+      if (
+        !canReadNotesRef.current
+        && (path.startsWith("personal:") || path.startsWith("proposal:"))
+      ) {
+        onNeedAuthRef.current?.();
+      }
+    };
+    cy.on("tap", onTap);
+    return () => {
+      cy.stop();
+      cy.destroy();
+      cyRef.current = null;
+    };
+  }, []);
+
+  useEffect(() => {
+    const cy = cyRef.current;
+    if (!cy) return;
+    cy.style().fromJson(graphStylesheet()).update();
+  }, [theme]);
+
+  useEffect(() => {
+    const cy = cyRef.current;
+    if (!cy) return;
+    cy.stop();
+    cy.elements().remove();
+    cy.add([
+      ...visible.nodes.map((node) => ({
+        group: "nodes" as const,
+        data: {
+          id: node.path,
+          label: node.title,
+          origin: node.origin || "shared",
+          unresolved: node.unresolved ? 1 : 0,
+          locked: node.locked ? 1 : 0,
+        },
+      })),
+      ...visible.edges.map((edge, index) => ({
+        group: "edges" as const,
+        data: {
+          id: `${edge.source}->${edge.target}:${edge.type}:${index}`,
+          source: edge.source,
+          target: edge.target,
+          origin: edge.origin || "shared",
+          unresolved: edge.unresolved ? 1 : 0,
+          locked: edge.locked ? 1 : 0,
+        },
+      })),
+    ]);
+    applyDegreeScores(cy);
+    const layout = visible.nodes.length > 0 ? runFcoseLayout(cy) : undefined;
+    return () => {
+      layout?.stop();
+      cy.stop();
+    };
+  }, [visibleKey, visible.nodes, visible.edges]);
+
+  useEffect(() => {
+    const cy = cyRef.current;
+    if (!cy) return;
+    const hit = new Set(matches.map((item) => item.path));
+    cy.nodes().forEach((node) => {
+      node.data("searchHit", hit.has(node.id()) ? 1 : 0);
+    });
+  }, [matches, visible]);
+
+  useEffect(() => {
+    const cy = cyRef.current;
+    if (!cy) return;
+    cy.nodes().unselect();
+    const path = selectedNodePath || focusPath || localCenter;
+    if (path && cy.getElementById(path).nonempty()) {
+      cy.getElementById(path).select();
+      highlightNeighborhood(cy, path);
+    } else {
+      highlightNeighborhood(cy, null);
+    }
+  }, [selectedNodePath, focusPath, localCenter, visible]);
+
+  function currentNode(): GraphNode | null {
+    const path = focusPath || selectedNodePath || localCenter;
+    if (!path || !graph) return null;
+    return graph.nodes.find((node) => node.path === path) ?? null;
+  }
+
+  function canOpenLocal(node: GraphNode | null): boolean {
+    return Boolean(node && !node.unresolved && !node.locked);
+  }
+
+  function openLocalGraph(path: string) {
+    onLocalCenterChange(path);
+  }
+
+  function showWholeGraph() {
+    onLocalCenterChange(null);
+  }
+
+  function moveFocus(step: number) {
+    if (visible.nodes.length === 0) return;
+    const paths = visible.nodes.map((node) => node.path);
+    const current = focusPath || selectedNodePath || localCenter;
+    const index = current ? Math.max(0, paths.indexOf(current)) : 0;
+    const next = paths[(index + step + paths.length) % paths.length];
+    setFocusPath(next);
+  }
+
+  function handleKey(event: KeyboardEvent<HTMLDivElement>) {
+    if (event.key === "ArrowRight" || event.key === "ArrowDown") {
+      event.preventDefault();
+      moveFocus(1);
+    } else if (event.key === "ArrowLeft" || event.key === "ArrowUp") {
+      event.preventDefault();
+      moveFocus(-1);
+    } else if (event.key === "Enter") {
+      const node = currentNode();
+      if (node?.unresolved) {
+        const filePath = missingNotePath(node.path);
+        if (filePath) window.location.hash = cardHash(filePath);
+      } else if (node) {
+        window.location.hash = cardHash(cardPathFor(node, personalLayer));
+        if (!canReadNotes) onNeedAuth?.();
+      }
+    } else if (event.key === "e" || event.key === "E") {
+      const node = currentNode();
+      if (canOpenLocal(node) && node) openLocalGraph(node.path);
+    } else if (event.key === "Escape") {
+      setFocusPath(null);
+    }
+  }
+
+  const selected = currentNode();
+  const status = graph ? STATUS_LABEL[graph.index_status] || graph.index_status : "загрузка";
+  const neighbors = (() => {
+    if (!selected || !graph) return [] as GraphNode[];
+    const seen = new Set<string>();
+    const items: GraphNode[] = [];
+    for (const edge of graph.edges) {
+      const other = edge.source === selected.path ? edge.target : edge.target === selected.path ? edge.source : null;
+      if (!other || seen.has(other)) continue;
+      seen.add(other);
+      items.push(
+        graph.nodes.find((node) => node.path === other) ?? {
+          path: other,
+          title: other,
+          tags: [],
+          isolated: false,
+          unresolved: edge.unresolved,
+        },
+      );
+    }
+    return items;
+  })();
+
+  const aside = variant === "aside";
+
+  return (
+    <div className={aside ? "graph-view graph-view--aside" : "graph-view"}>
+      <div className="graph-toolbar">
+        {!aside && (
+        <label>
+          Поиск
+          <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="название или путь" />
+        </label>
+        )}
+        {!aside && (
+        <label>
+          Слой
+          <select
+            value={kind}
+            onChange={(event) => {
+              const next = event.target.value as FilterKind;
+              if (filterKind === undefined) setLocalKind(next);
+              onFilterKindChange?.(next);
+            }}
+          >
+            <option value="all">все узлы</option>
+            <option value="unresolved">нет заметки</option>
+            <option value="isolated">отдельно</option>
+            {canReadNotes && <option value="overlay">ваша часть ризомы</option>}
+            {canReadNotes && <option value="personal">ваша личная ризома</option>}
+          </select>
+        </label>
+        )}
+        {!aside && (
+        <label>
+          Вид
+          <select
+            value={graphScope}
+            onChange={(event) => {
+              const next = event.target.value as GraphScope;
+              if (next === "full") {
+                showWholeGraph();
+                return;
+              }
+              const node = currentNode();
+              if (canOpenLocal(node) && node) openLocalGraph(node.path);
+            }}
+          >
+            <option value="full">весь граф</option>
+            <option value="local">локальный граф</option>
+          </select>
+        </label>
+        )}
+        <label>
+          Глубина
+          <select
+            value={String(localDepth)}
+            disabled={!aside && graphScope !== "local"}
+            onChange={(event) => onLocalDepthChange?.(Number(event.target.value))}
+          >
+            {LOCAL_GRAPH_DEPTHS.map((value) => (
+              <option key={value} value={value}>{value}</option>
+            ))}
+          </select>
+        </label>
+        {!aside && (
+        <label>
+          Тег
+          <input value={tag} onChange={(event) => setTag(event.target.value)} placeholder="тег" />
+        </label>
+        )}
+      </div>
+      {!aside && (
+      <p className="admin-panel__hint" role="status">
+        Слой: {layerStatusLabel(graph?.layer, kind)}.
+        {graphScope === "local" ? ` Локальный граф, глубина ${localDepth}.` : " Весь граф."}
+        Состояние: {status}.
+        {graphScope === "local" && localCenter ? ` Центр: ${localCenter}.` : ""}
+        {graphScope === "full" && graph?.truncated ? " Показана часть ризомы. Выберите узел и откройте локальный граф." : ""}
+        {loading ? " Обновляем граф…" : ""}
+        {query.trim() && matches.length > 0 ? ` Совпадений на графе: ${matches.length}.` : ""}
+        {query.trim() && matches.length === 0 ? " Совпадений нет — граф на месте." : ""}
+      </p>
+      )}
+      {(!graph || graph.nodes.length === 0) && !loading ? (
+        <p className="admin-panel__hint">Граф пока пуст.</p>
+      ) : null}
+      <div
+        ref={containerRef}
+        className="graph-canvas"
+        tabIndex={0}
+        role="application"
+        aria-label={personalLayer ? "Граф вашей личной ризомы" : "Граф общей ризомы"}
+        onKeyDown={handleKey}
+      />
+      {!aside && (
+      <div className="graph-legend" aria-hidden="true">
+        <span><i className="swatch swatch--shared" /> общая</span>
+        <span><i className="swatch swatch--both" /> есть у вас</span>
+        <span><i className="swatch swatch--personal" /> {personalLayer ? "ваша личная ризома" : "ваша часть ризомы"}</span>
+        <span><i className="swatch swatch--missing" /> нет заметки</span>
+      </div>
+      )}
+      {query.trim() && remoteHits.length > 0 && (
+        <ul className="search-hits">
+          {remoteHits.slice(0, 8).map((hit) => (
+            <li key={hit.path}>
+              <a
+                href={cardHash(hit.path)}
+                onClick={() => {
+                  if (!canReadNotes) onNeedAuth?.();
+                }}
+              >
+                {hit.title}
+              </a>
+            </li>
+          ))}
+        </ul>
+      )}
+      {selected && !aside && (
+        <div className="graph-selection">
+          <p>
+            <strong>{selected.title}</strong>
+            <small> {originLabel(selected.origin, personalLayer)} · {selected.locked ? "замок" : selected.unresolved ? "нет заметки" : selected.path}</small>
+          </p>
+          <div className="graph-actions">
+            {graphScope === "local" ? (
+              <button className="button button--quiet" type="button" onClick={() => showWholeGraph()}>
+                Показать всё
+              </button>
+            ) : (
+              <button
+                className="button button--quiet"
+                type="button"
+                disabled={!canOpenLocal(selected)}
+                onClick={() => openLocalGraph(selected.path)}
+              >
+                Локальный граф
+              </button>
+            )}
+          </div>
+          {neighbors.length > 0 && (
+            <ul className="graph-selection__links">
+              {neighbors.map((node) => (
+                <li key={node.path}>
+                  {node.unresolved ? (
+                    <a href={cardHash(missingNotePath(node.path))}>{node.title} · нет заметки</a>
+                  ) : (
+                    <a
+                      href={cardHash(cardPathFor(node, personalLayer))}
+                      onClick={() => {
+                        if (!canReadNotes) onNeedAuth?.();
+                      }}
+                    >
+                      {node.title}
+                    </a>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+          {!aside && !selected.unresolved && (
+            <p className="graph-selection__link">
+              <a
+                href={cardHash(cardPathFor(selected, personalLayer))}
+                onClick={() => {
+                  if (!canReadNotes) onNeedAuth?.();
+                }}
+              >
+                Открыть карточку · {selected.title}
+              </a>
+            </p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+

@@ -4,8 +4,8 @@ Status: Accepted
 
 ## Context
 GraphNotes needs a reproducible promotion path from development through
-integration testing to the stable user-test environment. Deployment hosts must
-not become competing sources of truth, and compromise of the stable host must
+integration testing to the production environment. Deployment hosts must not
+become competing sources of truth, and compromise of the production host must
 not provide credentials capable of changing the canonical repository.
 
 The canonical public repository is:
@@ -30,10 +30,11 @@ Environment roles and access are:
 
 - `nord` owns source development and may use GitHub write access for branches,
   commits and pushes.
-- `rhizome-test` is an integration environment. It normally consumes the public
-  repository read-only by cloning, fetching and checking out candidate
-  revisions. It is not a canonical source repository.
-- `rhizome` is the stable/user-test environment. Its repository access must be
+- `rhizome-test` is the development-runtime, integration, migration and test
+  environment. It normally consumes the public repository read-only by cloning,
+  fetching and checking out candidate revisions. It is not a canonical source
+  repository; source authoring remains on `nord`.
+- `rhizome` is the production environment. Its repository access must be
   read-only. It must not contain GitHub credentials capable of push and receives
   only commits or tags already approved on `rhizome-test`.
 
@@ -42,7 +43,7 @@ No ad-hoc source edits are permitted on `rhizome`.
 ## Consequences
 - promotion is tied to an identifiable Git commit or tag
 - the same approved revision moves from `rhizome-test` to `rhizome`
-- production credentials cannot push even if the stable host is compromised
+- production credentials cannot push even if the production host is compromised
 - fixes originate on `nord`, are pushed to GitHub and repeat the test/promotion
   path instead of being patched directly on a deployment host
 - any bootstrap copy must be reconciled with a canonical GitHub revision before
