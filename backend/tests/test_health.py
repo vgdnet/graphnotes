@@ -16,6 +16,23 @@ async def test_health() -> None:
     assert response.json() == {"status": "ok"}
 
 
+async def test_docs_load_openapi_behind_api_prefix() -> None:
+    async with AsyncClient(
+        transport=ASGITransport(app=app),
+        base_url="http://testserver",
+    ) as client:
+        spec = await client.get("/openapi.json")
+        docs = await client.get("/docs")
+
+    assert spec.status_code == 200
+    assert spec.headers["content-type"].startswith("application/json")
+    body = spec.json()
+    assert str(body["openapi"]).startswith("3.")
+    assert any(server.get("url") == "/api" for server in body.get("servers", []))
+    assert docs.status_code == 200
+    assert "/api/openapi.json" in docs.text
+
+
 class UnavailableSession:
     async def __aenter__(self) -> "UnavailableSession":
         return self

@@ -36,9 +36,9 @@ ADR-018): **wikidiff2** table HTML from the C++ `TableFormatter`
 (same fragment as `wikidiff2_do_diff`; «В ризоме» |
 «В предложении»; added cards have an empty left). Graph Diff is the
 following rhizome block. Target runtime is a compiled native helper
-from pinned Wikimedia `src/lib` (owner 2026-09-12). `php-cli` /
-`php-wikidiff2` are leftover until that helper ships, then they leave
-the backend image. `GET /api/proposals/{id}` file diffs include `html`,
+from pinned Wikimedia `src/lib` (owner 2026-09-12 / ADR-018 amendment).
+This test deploy still runs leftover `php-cli` / `php-wikidiff2`; they
+leave the backend image when the helper ships. `GET /api/proposals/{id}` file diffs include `html`,
 `engine`, proposed `body`, shared `before`, leftover unified `diff`, and
 `rows` parsed from the table. Missing engine is HTTP 503, not `difflib`.
 There is no inline/unified toggle. Author Differ stays a path-checkbox list.

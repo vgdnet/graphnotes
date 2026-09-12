@@ -17,6 +17,7 @@ Nginx `location /api/` strips it.
 | Browser / plugin base | `http://172.16.13.14:8080/api/integrations/obsidian/v1` |
 | FastAPI path | `/integrations/obsidian/v1` |
 | OpenAPI | `http://172.16.13.14:8080/api/openapi.json` |
+| Swagger UI | `http://172.16.13.14:8080/api/docs` (not `/docs`; that is the SPA) |
 | Token UI | `http://172.16.13.14:8080/#/user` → tab **Obsidian** |
 
 `rhizome` (production) is not this API until an approved revision is
@@ -151,8 +152,8 @@ Authorization: Bearer gnp_…
     "personal_remaining_bytes": 524288000
   },
   "links": {
-    "personal_graph": "http://172.16.13.14:8080/#/my_graph",
-    "differ": "http://172.16.13.14:8080/#/differ"
+    "personal_graph": "http://172.16.13.14:8080/#/graph",
+    "differ": "http://172.16.13.14:8080/#/offer"
   }
 }
 ```

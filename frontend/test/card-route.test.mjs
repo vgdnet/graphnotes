@@ -16,9 +16,12 @@ test("empty #/card/ is legacy search; #/card is the start card", () => {
   assert.deepEqual(parseAppRoute("#/card"), { kind: "start_card" });
   assert.deepEqual(parseAppRoute("#/search"), { kind: "search" });
   assert.equal(routeToView(parseAppRoute("#/offer")), "offer");
+  assert.equal(routeToView(parseAppRoute("#/differ")), "offer");
+  assert.equal(parseAppRoute("#/differ").kind, "offer");
   assert.equal(routeToView(parseAppRoute("#/queue")), "queue");
   assert.equal(routeToView(parseAppRoute("#/user")), "settings");
-  assert.equal(routeToView(parseAppRoute("#/my_graph")), "my_graph");
+  assert.equal(routeToView(parseAppRoute("#/my_graph")), "graph");
+  assert.equal(parseAppRoute("#/my_graph").kind, "graph");
   assert.equal(routeToView(parseAppRoute("#/invites")), "invites");
   assert.equal(viewHash("invites"), "#/invites");
   assert.equal(routeToView(parseAppRoute("#/contribution")), "contribution");

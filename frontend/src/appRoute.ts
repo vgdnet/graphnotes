@@ -3,10 +3,8 @@ import { parseAuthHash, type AuthMailPurpose } from "./authMail.js";
 
 export type ShellView =
   | "graph"
-  | "my_graph"
   | "invites"
   | "settings"
-  | "differ"
   | "queue"
   | "offer"
   | "contribution"
@@ -18,7 +16,6 @@ export type ShellView =
 
 export type AppRoute =
   | { kind: "graph" }
-  | { kind: "my_graph" }
   | { kind: "invites" }
   | { kind: "search" }
   | { kind: "start_card" }
@@ -29,21 +26,18 @@ export type AppRoute =
   | { kind: "offer" }
   | { kind: "queue" }
   | { kind: "contribution" }
-  | { kind: "differ" }
   | { kind: "admin" }
   | { kind: "about" }
   | { kind: "auth"; purpose?: AuthMailPurpose; token?: string };
 
 const VIEW_HASH: Record<Exclude<AppRoute["kind"], "card" | "start_card" | "auth" | "person" | "person_unknown">, string> = {
   graph: "#/graph",
-  my_graph: "#/my_graph",
   invites: "#/invites",
   search: "#/search",
   user: "#/user",
   offer: "#/offer",
   queue: "#/queue",
   contribution: "#/contribution",
-  differ: "#/differ",
   admin: "#/admin",
   about: "#/about",
 };
@@ -66,7 +60,7 @@ export function parseAppRoute(hash: string): AppRoute {
   const raw = hash.startsWith("#") ? hash.slice(1) : hash;
   const value = raw.startsWith("/") ? raw : `/${raw}`;
   if (value === "/" || value === "" || value === "/graph") return { kind: "graph" };
-  if (value === "/my_graph") return { kind: "my_graph" };
+  if (value === "/my_graph") return { kind: "graph" };
   if (value === "/invites") return { kind: "invites" };
   if (value === "/search") return { kind: "search" };
   if (value === "/user") return { kind: "user" };
@@ -76,7 +70,7 @@ export function parseAppRoute(hash: string): AppRoute {
   if (value === "/offer") return { kind: "offer" };
   if (value === "/queue") return { kind: "queue" };
   if (value === "/contribution") return { kind: "contribution" };
-  if (value === "/differ") return { kind: "differ" };
+  if (value === "/differ") return { kind: "offer" };
   if (value === "/admin") return { kind: "admin" };
   if (value === "/about") return { kind: "about" };
   if (value === "/auth" || value.startsWith("/auth")) {
@@ -94,8 +88,6 @@ export function parseAppRoute(hash: string): AppRoute {
 
 export function routeToView(route: AppRoute): ShellView {
   switch (route.kind) {
-    case "my_graph":
-      return "my_graph";
     case "invites":
       return "invites";
     case "search":
@@ -114,8 +106,6 @@ export function routeToView(route: AppRoute): ShellView {
     case "person":
     case "person_unknown":
       return "person";
-    case "differ":
-      return "differ";
     case "admin":
       return "admin";
     case "about":

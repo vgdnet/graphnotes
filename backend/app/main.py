@@ -58,7 +58,9 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
         await engine.dispose()
 
 
-app = FastAPI(title=settings.app_name, lifespan=lifespan)
+# Nginx location /api/ strips the prefix. root_path keeps Swagger/ReDoc
+# fetching /api/openapi.json instead of the frontend SPA at /openapi.json.
+app = FastAPI(title=settings.app_name, lifespan=lifespan, root_path="/api")
 app.include_router(health_router)
 app.include_router(auth_router)
 app.include_router(invites_router)

@@ -146,7 +146,7 @@
 | Elasticsearch next-search questions 1–9 (§6.5.3) | When is closed (TZ 2.83): **only after the first approved rhizome production deploy**. Answers 1–9 stay open; do not invent. SQL until then |
 | Open personal repo as a public catalog (search/find/comment by everyone, bypassing editor queue) | Not accepted. PRODUCT_SPEC 2.41 §5.6.4 / §12.9; needs owner decision + ADR vs ADR-007 / §3.3 |
 | Editor accept line compare (Wikipedia two-column / one-column) | Closed TZ 3.02 for `/queue` (and the same proposal body). Author Differ line UX still open (§12.10) |
-| Editor accept engine is MediaWiki wikidiff2 | Closed TZ 3.03 / ADR-018. Not `difflib`. Runtime: pinned wikidiff2 C++ as a native helper (owner 2026-09-12), not PHP. `php-cli` / `php-wikidiff2` leftover until the helper ships. |
+| Editor accept engine is MediaWiki wikidiff2 | Closed TZ 3.03 / ADR-018 amendment. Not `difflib`. Canon runtime: pinned wikidiff2 C++ as a native helper (owner 2026-09-12), not PHP. This test deploy still runs leftover `php-cli` / `php-wikidiff2` until the helper ships. |
 
 ## Final completeness rule
 

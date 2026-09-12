@@ -5,6 +5,8 @@ import type { FilterKind, GraphResponse } from "./GraphView";
 import { InviteGraph, type InviteGraphPayload } from "./InviteGraph";
 import { graphRequestParams } from "./graphQuery";
 import { GraphDiffView } from "./GraphDiffView";
+import { WikiDiffTable } from "./WikiDiffTable";
+import type { WikiDiffRow } from "./WikiDiffTable";
 import type { GraphDiffResponse } from "./GraphDiffView";
 import { CardHistory } from "./CardHistory";
 import { MarkdownBody } from "./MarkdownBody";
@@ -149,7 +151,7 @@ type Proposal = {
   reason: string | null;
   created_at: string;
   updated_at: string;
-  diff: { path: string; diff: string; body?: string }[];
+  diff: { path: string; diff: string; body?: string; before?: string; html?: string; engine?: string; rows?: WikiDiffRow[] }[];
 };
 
 type DifferItem = {
@@ -540,7 +542,7 @@ export function App() {
       .then(setRepository)
       .catch(() => undefined);
     return () => controller.abort();
-  }, [authChecking, user?.id, view === "differ"]);
+  }, [authChecking, user?.id, view === "offer"]);
 
   useEffect(() => {
     if (!repository?.shared.connected) {
@@ -579,7 +581,7 @@ export function App() {
   }, [user, repository?.personal?.connected, repository?.personal?.updated_at, uploadStamp]);
 
   useEffect(() => {
-    if (!user?.is_author || !repository?.shared.connected || view !== "differ") {
+    if (!user?.is_author || !repository?.shared.connected || view !== "offer") {
       if (!user?.is_author || !repository?.shared.connected) setDifferences([]);
       setDifferLoading(false);
       return;
@@ -929,9 +931,6 @@ export function App() {
       return;
     }
     setView(routeToView(route));
-    if (route.kind === "my_graph") {
-      setGraphLayer("personal");
-    }
     if (route.kind === "start_card") {
       loadedCardRef.current = null;
       if (!user) {
@@ -985,7 +984,7 @@ export function App() {
     const path = openNote && !openNote.path.startsWith("locked:") ? openNote.path : selectedCardPath;
     setGraphCenter(null);
     if (path) {
-      if (isOwnPersonalCard(path) || Boolean(stackedPersonal)) setGraphLayer("personal");
+      setGraphLayer("all");
       setSelectedCardPath(path);
     }
     goHash(viewHash("graph"));
@@ -1208,7 +1207,7 @@ export function App() {
       return;
     }
     setError("");
-    goHash(viewHash("differ"));
+    goHash(viewHash("offer"));
   }
 
   async function proposeSelected() {
@@ -1789,11 +1788,6 @@ export function App() {
           <button className={view === "graph" ? "button button--quiet tab--active" : "button button--quiet"} type="button" onClick={() => backToGraph()}>
             Граф
           </button>
-          {user && (
-            <button className={view === "my_graph" ? "button button--quiet tab--active" : "button button--quiet"} type="button" onClick={() => goHash(viewHash("my_graph"))}>
-              Мой граф
-            </button>
-          )}
           {user?.role === "admin" && (
             <button className={view === "invites" ? "button button--quiet tab--active" : "button button--quiet"} type="button" onClick={() => goHash(viewHash("invites"))}>
               Инвайты
@@ -1807,11 +1801,6 @@ export function App() {
           >
             Поиск
           </button>
-          {user && (
-            <button className={view === "differ" ? "button button--quiet tab--active" : "button button--quiet"} type="button" onClick={() => openDiffer()}>
-              Отличающиеся
-            </button>
-          )}
           {user && (
             <button className={view === "offer" ? "button button--quiet tab--active" : "button button--quiet"} type="button" onClick={() => goHash(viewHash("offer"))}>
               Предложения
@@ -1948,7 +1937,7 @@ export function App() {
                 {openNote && stackedPersonal && user.is_author && (
                   <p className="admin-panel__hint">
                     <button className="auth-link" type="button" onClick={() => openDiffer()}>
-                      Сравнить в Отличающихся
+                      Сравнить в Предложениях
                     </button>
                   </p>
                 )}
@@ -2264,15 +2253,15 @@ export function App() {
             </div>
           </section>
           )}
-          {view === "differ" && repository?.shared.connected && user?.is_author && (
+          {view === "offer" && repository?.shared.connected && user?.is_author && (
             <section className="notes-panel" aria-labelledby="differ-heading">
               <div>
-                <p className="eyebrow">Отличия</p>
-                <h2 id="differ-heading">Отличающиеся</h2>
+                <p className="eyebrow">Предложения</p>
+                <h2 id="differ-heading">Сверка</h2>
                 <p className="admin-panel__hint">
-                  Сравнение личного слоя (git или загруженные .md) с опубликованной общей
-                  в одну сторону: чего в общей ещё нет или что отличается. Git не обязателен.
-                  Личный git при предложении не меняется.
+                  Differ — внутренняя сверка, не отдельный раздел. Сейчас: личное → общая
+                  (чего в ризоме ещё нет или что отличается). Другие направления —
+                  тоже через предложения, не отдельной вкладкой. Git не обязателен.
                 </p>
               </div>
               {error && <p className="form-error" role="alert">{error}</p>}
@@ -2619,7 +2608,13 @@ export function App() {
                           {openProposal.added.includes(item.path) ? " · новая карточка" : ""}
                           {openProposal.changed.includes(item.path) ? " · изменение текста" : ""}
                         </p>
-                        {item.body ? (
+                        {item.html || (item.rows && item.rows.length > 0) ? (
+                          <WikiDiffTable
+                            html={item.html}
+                            rows={item.rows}
+                            added={openProposal.added.includes(item.path)}
+                          />
+                        ) : item.body ? (
                           <MarkdownBody
                             body={item.body}
                             note={{
@@ -2705,15 +2700,15 @@ export function App() {
               <InviteGraph graph={inviteGraph} loading={inviteGraphLoading} />
             </section>
           )}
-          {(view === "graph" || view === "my_graph") && repository?.shared.connected && (
+          {view === "graph" && repository?.shared.connected && (
             <section className="notes-panel notes-panel--graph" aria-labelledby="graph-heading">
               <div>
                 <p className="eyebrow">Граф</p>
-                <h2 id="graph-heading">{view === "my_graph" || graphLayer === "personal" ? "Ваша личная ризома" : "Общая ризома"}</h2>
+                <h2 id="graph-heading">{graphLayer === "personal" ? "Ваша личная ризома" : "Общая ризома"}</h2>
                 <p className="admin-panel__hint">
                   {graphLayer === "personal"
-                    ? "Полный проиндексированный личный git (или загрузки). Слой считается сам: какие заметки входят в «вашу часть ризомы», решает пересечение с общей, не ручной список."
-                    : "Клик по узлу или ссылке открывает карточку; сбоку будет её локальный граф. Координаты раскладки — только отображение, не знание."}
+                    ? "Полный личный склад. По умолчанию на «Граф» — ризома; этот слой — фильтр на том же холсте, не отдельная вкладка."
+                    : "По умолчанию — граф ризомы. Клик по узлу или ссылке открывает карточку; сбоку будет её локальный граф. Координаты раскладки — только отображение, не знание."}
                 </p>
               </div>
               <div className="graph-actions">
@@ -2730,8 +2725,8 @@ export function App() {
                 localCenter={graphCenter}
                 localDepth={graphDepth}
                 canReadNotes
-                filterKind={view === "my_graph" ? "personal" : graphLayer}
-                onFilterKindChange={view === "my_graph" ? undefined : setGraphLayer}
+                filterKind={graphLayer}
+                onFilterKindChange={setGraphLayer}
                 onLocalCenterChange={setGraphCenter}
                 onLocalDepthChange={setGraphDepth}
                 theme={theme}

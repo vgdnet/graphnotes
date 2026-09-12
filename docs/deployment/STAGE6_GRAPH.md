@@ -67,6 +67,11 @@ sun/moon pill, `role="switch"`), not text buttons. Cytoscape label color and
 outline follow CSS theme tokens so graph text stays readable on both canvases.
 No server config.
 
+TZ 2.98 invite map is a **separate** canvas, not this rhizome graph.
+Code Writer deploys the page to `http://172.16.13.14:8080/#/invites`
+(admin). JSON is `GET /api/graph/invites`. Do not put the API path in
+the hash (`#/api/graph/invites` is not a page).
+
 ## Bounds
 
 Same as Stage 5: default page 50, max 200, neighborhood `center` + `depth` 0–4.

@@ -5,10 +5,10 @@ Status: canonical architecture baseline
 Aligned with PRODUCT_SPEC 3.03 (editor queue text diff is MediaWiki
 **wikidiff2** table HTML, ADR-018; not `difflib`. Wikipedia two-column
 layout. Author Differ stays a path-checkbox list.
-Owner 2026-09-12: runtime is a compiled native wikidiff2 C++ helper,
-not `php-cli` / `php-wikidiff2`. PHP in the current backend image is
-leftover and is removed when that helper ships. ADR-018 §3 still
-names the PHP packages — architecture here wins; amend the ADR.) /
+Owner 2026-09-12 / ADR-018 amendment: runtime is a compiled native
+wikidiff2 C++ helper, not `php-cli` / `php-wikidiff2`. This test
+deploy still runs leftover PHP until that helper ships, then those
+packages leave the image.) /
 3.02 (Wikipedia-style editor table) /
 3.01 (Differ is internal: UI on `#/offer`,
 no «Отличающиеся» tab; `#/differ` → `/offer`).

@@ -23,6 +23,7 @@ from app.services.index import IndexerError, drop_proposal_notes, index_proposal
 from app.services.markdown import parse_markdown, unresolved_links
 from app.services.notify import notify_new_proposal
 from app.services.repository import SHARED_SINGLETON_ID, apply_snapshot, published_sha
+from app.services.wikidiff2 import Wikidiff2Error, table_diff
 
 
 class ProposalError(Exception):
@@ -84,7 +85,7 @@ def _public(
     *,
     added: list[str] | None = None,
     changed: list[str] | None = None,
-    diffs: list[dict[str, str]] | None = None,
+    diffs: list[dict[str, object]] | None = None,
 ) -> dict[str, object]:
     return {
         "id": str(row.id),
@@ -281,7 +282,7 @@ async def get_proposal(
     shared = await database.get(SharedRepository, SHARED_SINGLETON_ID)
     added: list[str] = []
     changed: list[str] = []
-    diffs: list[dict[str, str]] = []
+    diffs: list[dict[str, object]] = []
     if shared is not None:
         for path in _paths(row.scope_paths):
             after = await _file(client, shared.owner, shared.name, path, row.head_sha)
@@ -290,11 +291,20 @@ async def get_proposal(
                 added.append(path)
             elif before != after:
                 changed.append(path)
+            try:
+                wiki = table_diff(before or "", after or "")
+            except Wikidiff2Error as exc:
+                raise ProposalError(503, exc.detail) from exc
             diffs.append(
                 {
                     "path": path,
                     "diff": _diff(path, before or "", after or ""),
                     "body": after or "",
+                    "before": before or "",
+                    "html": wiki.html,
+                    "engine": wiki.engine,
+                    "engine_version": wiki.version,
+                    "rows": wiki.rows,
                 }
             )
     return _public(row, author, added=added, changed=changed, diffs=diffs)
@@ -622,3 +632,5 @@ def _diff(path: str, before: str, after: str) -> str:
             n=3,
         )
     )
+
+

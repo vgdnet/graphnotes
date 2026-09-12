@@ -37,9 +37,10 @@
 - Integrator не выдумывает продукт и не правит ТЗ вместо продуктолога.
 - `compose.yaml` остаётся production-safe: backend и frontend на loopback, PostgreSQL без host-порта.
 Образ backend: цель — собранный native helper MediaWiki wikidiff2 C++
-(ТЗ 3.03 / решение владельца 2026-09-12), не `php-cli` / `php-wikidiff2`.
-Пока helper не поставлен, в образе leftover PHP-пакеты; без движка
-очередь editor не рисует таблицу правок (503, не `difflib`). После
-поставки helper PHP-пакеты снимаются.
+(ТЗ 3.03 / ADR-018 amendment / решение владельца 2026-09-12), не
+`php-cli` / `php-wikidiff2`. Этот тестовый выкат ещё без helper: в
+образе leftover PHP-пакеты той же таблицы. Без движка очередь editor
+не рисует таблицу правок (503, не `difflib`). После поставки helper
+PHP-пакеты снимаются.
 - На rhizome-test — overlay `deploy/compose.rhizome-test.yaml` (LAN только у frontend).
 - На rhizome нет credentials с правом push.

@@ -242,9 +242,9 @@ function connectionSummary(origin: string, caps: Capabilities): string {
 function addSiteLinks(el: HTMLElement, origin: string, caps: Capabilities): void {
   try {
     const row = el.createDiv({ cls: 'gn-actions' });
-    const graph = row.createEl('a', { cls: 'gn-link', text: 'Личный граф', href: safeLink(origin, caps.links.personal_graph) });
+    const graph = row.createEl('a', { cls: 'gn-link', text: 'Граф', href: safeLink(origin, caps.links.personal_graph) });
     graph.setAttr('target', '_blank');
-    const differ = row.createEl('a', { cls: 'gn-link', text: 'Differ', href: safeLink(origin, caps.links.differ) });
+    const differ = row.createEl('a', { cls: 'gn-link', text: 'Предложения', href: safeLink(origin, caps.links.differ) });
     differ.setAttr('target', '_blank');
   } catch { /* ignore bad links until server is trusted */ }
 }

@@ -93,6 +93,21 @@ async def test_user_proposal_editor_review_and_publication(
     assert detail.json()["diff"][0]["path"] in {"already.md", "card.md"}
     assert any(item["diff"] for item in detail.json()["diff"])
     assert any(item.get("body") for item in detail.json()["diff"])
+    files = {item["path"]: item for item in detail.json()["diff"]}
+    changed = files["card.md"]
+    assert changed["engine"] == "wikidiff2"
+    assert changed["html"]
+    assert "diff-" in changed["html"]
+    assert changed["before"].startswith("---")
+    assert "# Personal card" in changed["body"]
+    assert changed["rows"]
+    assert any(row["op"] in {"replace", "delete", "insert"} for row in changed["rows"])
+    added = files["already.md"]
+    assert added["engine"] == "wikidiff2"
+    assert "diff-addedline" in added["html"]
+    assert added["before"] == ""
+    assert added["rows"]
+    assert all(row["op"] == "insert" and row["left"] == "" for row in added["rows"])
     _assert_hidden(detail.text)
 
     rejected = await editor.post(

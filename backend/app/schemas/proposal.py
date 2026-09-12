@@ -19,10 +19,21 @@ class ProposalAuthor(BaseModel):
     display_name: str
 
 
+class ProposalDiffRow(BaseModel):
+    op: str
+    left: str
+    right: str
+
+
 class ProposalFileDiff(BaseModel):
     path: str
     diff: str
     body: str = ""
+    before: str = ""
+    html: str = ""
+    engine: str = ""
+    engine_version: str = ""
+    rows: list[ProposalDiffRow] = []
 
 
 class ProposalResponse(BaseModel):

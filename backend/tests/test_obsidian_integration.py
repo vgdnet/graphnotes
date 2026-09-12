@@ -143,7 +143,7 @@ async def test_capabilities_manifest_one_note_transfer(
     assert body["write_allowed"] is True
     assert body["write_block_reason"] is None
     assert "md" in body["formats"]
-    assert body["links"]["personal_graph"].endswith("#/my_graph")
+    assert body["links"]["personal_graph"].endswith("#/graph")
     assert "Cache-Control" in caps.headers
     assert caps.headers["cache-control"] == "no-store"
 

@@ -47,7 +47,7 @@ export async function run(): Promise<void> {
   failed = false;
   try { serverOrigin('http://172.16.13.14:8080', false); } catch { failed = true; }
   assert(failed, 'http requires flag');
-  assertEqual(safeLink('http://172.16.13.14:8080', '/#/my_graph'), 'http://172.16.13.14:8080/#/my_graph', 'same origin link');
+  assertEqual(safeLink('http://172.16.13.14:8080', '/#/graph'), 'http://172.16.13.14:8080/#/graph', 'same origin link');
 
   const caps = parseCapabilities({
     protocol_version: '1.0',
@@ -65,7 +65,7 @@ export async function run(): Promise<void> {
       path_max_length: 180,
       path_max_depth: 8,
     },
-    links: { personal_graph: 'http://172.16.13.14:8080/#/my_graph', differ: 'http://172.16.13.14:8080/#/differ' },
+    links: { personal_graph: 'http://172.16.13.14:8080/#/graph', differ: 'http://172.16.13.14:8080/#/offer' },
   });
   assert(caps.supported_extensions.includes('jpg'), 'jpeg alias jpg');
   assertEqual(caps.limits.manifest_page_size, 200, 'manifest_page_max alias');

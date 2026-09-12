@@ -203,8 +203,8 @@ async def capabilities_payload(
             "personal_remaining_bytes": max(0, quota - used),
         },
         "links": {
-            "personal_graph": f"{base}/#/my_graph",
-            "differ": f"{base}/#/differ",
+            "personal_graph": f"{base}/#/graph",
+            "differ": f"{base}/#/offer",
         },
     }
 

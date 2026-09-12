@@ -2,10 +2,10 @@
 
 Статус: ACTIVE
 Updated: 2026-09-12 (PRODUCT_SPEC **3.03**: editor queue **wikidiff2**.
-Owner 2026-09-12: compile the C++ core as a native helper; `php-cli` /
-`php-wikidiff2` is leftover until that helper ships, then those
-packages leave the backend image. ADR-018 §3 still names PHP — amend
-the ADR; do not keep PHP as the runtime story.
+Owner 2026-09-12 / ADR-018 amendment: compile the C++ core as a native
+helper; this test deploy still runs leftover `php-cli` / `php-wikidiff2`
+until that helper ships, then those packages leave the backend image.
+Do not keep PHP as the install path.
 **2.99**: product TZ → technical TZ →
 `rhizome-test`. TZ 2.89 / §17 shipped on
 `rhizome-test`: invite email link; no Register tab; any account may invite;
@@ -379,9 +379,9 @@ Observer проверяет diff на:
   UI on `/offer`);
 - replacing wikidiff2 with `difflib` for editor review, or dropping
   the native wikidiff2 helper from the backend image without a 503
-  (TZ 3.03 / ADR-018; owner 2026-09-12: do not keep `php-cli` /
-  `php-wikidiff2` as the runtime story — they leave when the helper
-  ships);
+  (TZ 3.03 / ADR-018 amendment: do not keep `php-cli` /
+  `php-wikidiff2` as the install path — leftover on this test deploy,
+  they leave when the helper ships);
 - remounting the «Мой граф» tab or treating `#/my_graph` as a separate
   canvas (TZ 3.00: `/graph` is the rhizome by default);
 - invite map (`GET /api/graph/invites`, `#/invites`) visible to non-admin

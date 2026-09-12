@@ -48,7 +48,8 @@ PUT  /api/personal/notes/{path}       # plugin / API / TZ 2.66 stub; not website
                                     # from a missing-link create (TZ 2.66)
 GET  /api/personal/uploads            # upload history: who / when / path / hash
 
-GET  /api/differ                      # one-way personal → published shared;
+GET  /api/differ                      # internal Differ (TZ 3.01): not a chrome tab;
+                                      # UI is #/offer; one-way personal → published shared;
                                       # connected git: refresh public HEAD first;
                                       # ответ — отличия, в том числе личные карточки
                                       # без пары в общей (просьба «дай, если хочешь»).
@@ -73,8 +74,10 @@ POST /api/admin/mail/test             # operator test send; 503 if SMTP off
 
 GET  /api/graph/shared                # start page; no login; public published layer only; no card bodies;
                                       # optional center+depth 0–4 = local graph (unknown center ≠ first page)
-GET  /api/graph/invites               # invite map for creators: who invited whom + invited_count;
-                                      # currently admin only (TZ 2.98); not the rhizome canvas; no emails
+GET  /api/graph/invites               # JSON only. Page is hash #/invites
+                                      # (rhizome-test: http://172.16.13.14:8080/#/invites).
+                                      # Not #/api/graph/invites. Creators: invited_count.
+                                      # Admin only (TZ 2.98). Code Writer deploys to rhizome-test.
 GET  /api/public/embed/{user_id}      # opt-in achievement: graph snippet and/or counts; no ZIP/bodies; fields TBD (§6.1.4)
 GET  /api/search                      # default layer=visible: role-scoped corpus;
                                       # hits include layer (shared/personal/proposal);
@@ -101,7 +104,9 @@ GET  /api/graph/diff?proposal_id=...  # Stage 8 structural view of Differ/propos
 
 POST /api/proposals
 GET  /api/proposals
-GET  /api/proposals/{id}              # file diffs include proposed Markdown body
+GET  /api/proposals/{id}              # file diffs: proposed body, shared before,
+                                      # unified leftover, html from wikidiff2
+                                      # (TZ 3.03 / ADR-018), rows[] parsed from it
 POST /api/proposals/{id}/approve
 POST /api/proposals/{id}/reject
 POST /api/proposals/{id}/request-changes

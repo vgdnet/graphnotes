@@ -2,8 +2,9 @@
 
 Updated: 2026-09-12
 
-Product model TZ 3.03 (editor accept engine is wikidiff2; ADR-018;
-owner 2026-09-12: native C++ helper, PHP leftover until it ships) /
+Product model TZ 3.03 (editor accept engine is wikidiff2; ADR-018
+amendment: native C++ helper; this test deploy still runs leftover
+PHP until the helper ships) /
 3.02 (Wikipedia-style two-column table; Differ author list stays path checkboxes) /
 3.01 (Differ lives on `/offer`; no «Отличающиеся» tab) /
 3.00 (no «Мой граф» / `/my_graph`; `/graph` defaults to
@@ -371,9 +372,10 @@ TZ 2.5–2.7 on this branch (not merged to main; production
   Differ is an offer under the stack, not the landing. Semantic compare
   later + ADR; author Differ line-by-line UX is still open. TZ 3.02–3.03
   closed Wikipedia-style line compare for **editor accept** only; the
-  engine is wikidiff2 C++ (ADR-018), not `difflib`. Owner 2026-09-12:
-  compile pinned `src/lib` as a native helper; drop `php-cli` /
-  `php-wikidiff2` when that helper ships. ADR-018 §3 still names PHP.
+  engine is wikidiff2 C++ (ADR-018 amendment), not `difflib`. Owner
+  2026-09-12: compile pinned `src/lib` as a native helper; this test
+  deploy still runs leftover `php-cli` / `php-wikidiff2`; those
+  packages leave when the helper ships.
 - TZ 2.55: one `/card/{path}` router; no layer folders. Own note is
   editable, published is not. Hash `personal:` is transitional.
 - TZ 2.54: `[[wikilink]]` inherits the open card layer (personal stays
