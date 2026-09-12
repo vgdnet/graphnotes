@@ -83,13 +83,12 @@ async def test_any_user_invites_and_accept_creates_account(
     )
     assert reused.status_code == 404
 
-    guest_id = accepted.json()["id"]
-    card = await host.get(f"/users/{guest_id}/card")
+    card = await host.get("/users/guest.user/card")
     assert card.status_code == 200
     assert card.json()["inviter"]["username"] == "plain-host"
+    assert "id" not in card.json()["inviter"]
     assert card.json()["invited_at"]
-    host_id = (await host.get("/users/me")).json()["id"]
-    host_card = await guest.get(f"/users/{host_id}/card")
+    host_card = await guest.get("/users/plain-host/card")
     assert host_card.status_code == 200
     assert host_card.json()["inviter"] is None
 
@@ -174,13 +173,11 @@ async def test_cutover_attributes_existing_users_to_efimov(
         assert seed.invited_by_id is None
         assert guest.invited_by_id == seed.id
         assert guest.invited_at is not None
-    efimov_id = (await client.get("/users/me")).json()["id"]
-    other_id = (await other.get("/users/me")).json()["id"]
-    card = await client.get(f"/users/{other_id}/card")
+    card = await client.get("/users/old-account/card")
     assert card.status_code == 200
     assert card.json()["inviter"]["username"] == "efimov"
-    assert card.json()["inviter"]["id"] == efimov_id
-    seed_card = await other.get(f"/users/{efimov_id}/card")
+    assert "id" not in card.json()["inviter"]
+    seed_card = await other.get("/users/efimov/card")
     assert seed_card.json()["inviter"] is None
     async with session_factory() as database:
         await bootstrap_admin(database, "efimov")
@@ -190,4 +187,14 @@ async def test_cutover_attributes_existing_users_to_efimov(
     row = next(item for item in listed.json()["users"] if item["username"] == "old-account")
     assert row["inviter_username"] == "efimov"
     assert row["invited_at"]
+    graph = await client.get("/graph/invites")
+    assert graph.status_code == 200
+    nodes = {item["username"]: item["id"] for item in graph.json()["nodes"]}
+    assert "efimov" in nodes and "old-account" in nodes
+    assert any(
+        item["source"] == nodes["efimov"] and item["target"] == nodes["old-account"]
+        for item in graph.json()["edges"]
+    )
+    forbidden = await other.get("/graph/invites")
+    assert forbidden.status_code == 403
     await other.aclose()

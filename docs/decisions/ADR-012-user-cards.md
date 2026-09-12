@@ -33,6 +33,7 @@ proposal author open that page for any signed-in viewer.
 ## Amendment 2026-09-12
 
 The public address is the GraphNotes **login**, not the internal UUID:
-`#/users/efimov`. `GET /api/users/{login}/card` looks up by username;
-a UUID in the same slot still resolves. The UI replaces a UUID hash with
-the login so later indexing keys people by login.
+`#/users/efimov`. `GET /api/users/{login}/card` looks up by username
+only. A UUID in the URL or API key is **404**; the public card JSON does
+not include user or inviter UUIDs. Do not shine the internal id on the
+internet. Index people by login.

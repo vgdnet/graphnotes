@@ -608,11 +608,10 @@ async def get_user_card(
         inviter_row = await database.get(User, target.invited_by_id)
         if inviter_row is not None:
             invited_at = target.invited_at or target.created_at
-            inviter = {"id": inviter_row.id, "username": inviter_row.username}
+            inviter = {"username": inviter_row.username}
     store = await _public_store_stats(database, target=target, body=body)
     return {
         "user": {
-            "id": target.id,
             "username": target.username,
             "display_name": target.display_name,
             "role": target.role,

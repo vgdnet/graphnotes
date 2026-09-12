@@ -89,7 +89,6 @@ class AdminContributionsResponse(BaseModel):
 
 
 class UserCardPerson(BaseModel):
-    id: UUID
     username: str
     display_name: str
     role: str
@@ -122,7 +121,6 @@ class UserCardStore(BaseModel):
 
 
 class UserCardInviter(BaseModel):
-    id: UUID
     username: str
 
 

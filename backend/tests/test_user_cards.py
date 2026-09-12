@@ -42,19 +42,24 @@ async def test_user_card_hides_other_personal_and_closed(
 
     me = await author.get("/users/me")
     author_id = me.json()["id"]
-    own = await author.get(f"/users/{author_id}/card")
+    own = await author.get("/users/card-author/card")
     assert own.status_code == 200
     assert own.json()["self"] is True
     assert own.json()["user"]["is_author"] is True
+    assert own.json()["user"].get("id") is None
+    assert str(author_id) not in own.text
     assert own.json()["stats"]["accepted"] >= 1
     assert own.json()["closed_count"] == 1
     assert own.json()["achievements"]["proposals"] >= 1
     _assert_hidden(own.text)
 
     stranger = await _second("card-viewer")
-    public = await stranger.get(f"/users/{author_id}/card")
+    assert (await stranger.get(f"/users/{author_id}/card")).status_code == 404
+    public = await stranger.get("/users/card-author/card")
     assert public.status_code == 200
     assert public.json()["self"] is False
+    assert public.json()["user"].get("id") is None
+    assert str(author_id) not in public.text
     assert public.json()["closed_count"] is None
     assert public.json()["review"] is None
     assert public.json()["stats"]["accepted"] >= 1
@@ -71,9 +76,12 @@ async def test_user_card_hides_other_personal_and_closed(
     _assert_hidden(public.text)
 
     guest = AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver")
-    anon = await guest.get(f"/users/{author_id}/card")
+    assert (await guest.get(f"/users/{author_id}/card")).status_code == 404
+    anon = await guest.get("/users/card-author/card")
     assert anon.status_code == 200
     assert "secret.md" not in anon.text
+    assert str(author_id) not in anon.text
+    assert anon.json()["user"].get("id") is None
     store = anon.json()["store"]
     assert store["personal_notes"] >= 1
     assert store["personal_links"] >= 0
@@ -81,10 +89,7 @@ async def test_user_card_hides_other_personal_and_closed(
     assert store["proposed_links"] >= 0
     assert store["proposed_edit_bytes"] >= 0
     assert "Hidden diary" not in anon.text
-    by_login = await guest.get("/users/card-author/card")
-    assert by_login.status_code == 200
-    assert by_login.json()["user"]["id"] == author_id
-    assert by_login.json()["user"]["username"] == "card-author"
+    assert anon.json()["user"]["username"] == "card-author"
     missing = await guest.get("/users/no-such-login/card")
     assert missing.status_code == 404
     await guest.aclose()

@@ -2,8 +2,9 @@
 
 Updated: 2026-09-12
 
-Product model TZ 2.97 (person card `#/users/{login}`, UUID still opens
-and canonicalizes) /
+Product model TZ 2.98 (invite map `#/invites`: separate graph, currently admin-only) /
+2.97 / **2.98** (person card `#/users/{login}` only; public UUID is 404
+and is omitted from card JSON) /
 2.96 (no website `.md`/ZIP upload, including Differ;
 plugin writes the store; last 30 versions for rollback; index / graph /
 Differ use latest only) /

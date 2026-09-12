@@ -18,7 +18,7 @@ export type PersonStore = {
 
 export type PersonCardData = {
   user: {
-    id: string;
+    id?: string;
     username: string;
     display_name: string;
     role: string;
@@ -32,7 +32,7 @@ export type PersonCardData = {
   store?: PersonStore;
   notes: { path: string; title: string; state: string }[];
   invited_at?: string | null;
-  inviter?: { id: string; username: string } | null;
+  inviter?: { username: string } | null;
 };
 
 export function formatStoreBytes(bytes: number): string {
@@ -64,11 +64,9 @@ export function formatInvitedAt(iso: string): string {
 
 export function InviteAttribution({
   invitedAt,
-  inviterId,
   inviterUsername,
 }: {
   invitedAt?: string | null;
-  inviterId?: string | null;
   inviterUsername?: string | null;
 }) {
   if (!inviterUsername || !invitedAt) return null;
@@ -137,7 +135,6 @@ export function PersonCardPage({
             </span>
             <InviteAttribution
               invitedAt={card.invited_at}
-              inviterId={card.inviter?.id}
               inviterUsername={card.inviter?.username}
             />
             {(card.user.website || card.user.telegram || card.user.phone) ? (

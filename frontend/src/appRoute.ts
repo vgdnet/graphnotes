@@ -4,6 +4,7 @@ import { parseAuthHash, type AuthMailPurpose } from "./authMail.js";
 export type ShellView =
   | "graph"
   | "my_graph"
+  | "invites"
   | "settings"
   | "differ"
   | "queue"
@@ -18,11 +19,13 @@ export type ShellView =
 export type AppRoute =
   | { kind: "graph" }
   | { kind: "my_graph" }
+  | { kind: "invites" }
   | { kind: "search" }
   | { kind: "start_card" }
   | { kind: "card"; path: string }
   | { kind: "user" }
   | { kind: "person"; login: string }
+  | { kind: "person_unknown" }
   | { kind: "offer" }
   | { kind: "queue" }
   | { kind: "contribution" }
@@ -31,9 +34,10 @@ export type AppRoute =
   | { kind: "about" }
   | { kind: "auth"; purpose?: AuthMailPurpose; token?: string };
 
-const VIEW_HASH: Record<Exclude<AppRoute["kind"], "card" | "start_card" | "auth" | "person">, string> = {
+const VIEW_HASH: Record<Exclude<AppRoute["kind"], "card" | "start_card" | "auth" | "person" | "person_unknown">, string> = {
   graph: "#/graph",
   my_graph: "#/my_graph",
+  invites: "#/invites",
   search: "#/search",
   user: "#/user",
   offer: "#/offer",
@@ -48,11 +52,14 @@ export function viewHash(kind: keyof typeof VIEW_HASH): string {
   return VIEW_HASH[kind];
 }
 
-const PERSON_UUID = /^\/users\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i;
+const PERSON_UUID = /^\/users\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const PERSON_LOGIN = /^\/users\/([a-z0-9][a-z0-9_.-]{2,31})$/i;
+const LOGIN_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export function personCardHash(login: string): string {
-  return `#/users/${login.replace(/^@/, "").trim().toLowerCase()}`;
+  const value = login.replace(/^@/, "").trim().toLowerCase();
+  if (!value || LOGIN_UUID.test(value)) return "#/graph";
+  return `#/users/${value}`;
 }
 
 export function parseAppRoute(hash: string): AppRoute {
@@ -60,10 +67,10 @@ export function parseAppRoute(hash: string): AppRoute {
   const value = raw.startsWith("/") ? raw : `/${raw}`;
   if (value === "/" || value === "" || value === "/graph") return { kind: "graph" };
   if (value === "/my_graph") return { kind: "my_graph" };
+  if (value === "/invites") return { kind: "invites" };
   if (value === "/search") return { kind: "search" };
   if (value === "/user") return { kind: "user" };
-  const personUuid = PERSON_UUID.exec(value);
-  if (personUuid) return { kind: "person", login: personUuid[1] };
+  if (PERSON_UUID.test(value)) return { kind: "person_unknown" };
   const personLogin = PERSON_LOGIN.exec(value);
   if (personLogin) return { kind: "person", login: personLogin[1] };
   if (value === "/offer") return { kind: "offer" };
@@ -89,6 +96,8 @@ export function routeToView(route: AppRoute): ShellView {
   switch (route.kind) {
     case "my_graph":
       return "my_graph";
+    case "invites":
+      return "invites";
     case "search":
       return "search";
     case "start_card":
@@ -103,6 +112,7 @@ export function routeToView(route: AppRoute): ShellView {
     case "contribution":
       return "contribution";
     case "person":
+    case "person_unknown":
       return "person";
     case "differ":
       return "differ";

@@ -2,7 +2,11 @@
 
 Updated: 2026-09-12
 Status: canonical architecture baseline
-Aligned with PRODUCT_SPEC 2.97. Person card URL is `#/users/{login}`
+Aligned with PRODUCT_SPEC 2.98. Invite map `#/invites`
+(`GET /api/graph/invites`) is a separate cytoscape graph of
+`users.invited_by_id`, not the rhizome canvas and not an admin screen.
+Currently admin-only; leftover to show more widely later.
+Person card URL is `#/users/{login}`
 (`#/users/efimov`); UUID still resolves and canonicalizes to login.
 Website `.md`/ZIP upload buttons are
 **gone** (including Differ «Загрузить в личный слой»); the plugin writes
@@ -98,10 +102,11 @@ personal-bottom + Differ offer — **shipped 2.59**); `/queue` = editor
 proposal queue; `/user` = **account settings** (not the public person
 card); `#/users/{login}` = **public person card** (TZ 2.60 / **2.97**: achievements —
 accepted notes/links, proposal count, shared created/edited events; feed
-names and proposal author open it; `GET /api/users/{login}/card` (UUID still resolves);
+names and proposal author open it; `GET /api/users/{login}/card` (UUID key is 404; no public UUID);
 TZ 2.87: «Приглашен %date% по приглашению от @user»
 from stored inviter UUID / login — omit if none); `/offer` = **my** proposals into the rhizome; `/graph` = shared
-rhizome canvas (fCoSE); `/search` = card search (SQL `note_index`,
+rhizome canvas (fCoSE); `/invites` = who-invited-whom map (currently admin;
+not the rhizome canvas); `/search` = card search (SQL `note_index`,
 `layer=visible`; Elasticsearch only after the first approved rhizome
 production deploy — ADR-015 / TZ 2.83); `/my_graph` = personal graph layer only;
 `/contribution` = Мой вклад. `/differ` stays Отличающиеся (compare /
@@ -711,7 +716,7 @@ Shared publication and Differ:
 - `GET  /api/admin/operator`
 - `PUT  /api/admin/operator` (persist public site URL for mail links)
 - `POST /api/admin/mail/test`
-- `GET  /api/users/{login}/card` (public person card by login; UUID still resolves; not a GitHub
+- `GET  /api/users/{login}/card` (public person card by login only; UUID key 404; no public UUID; not a GitHub
   profile; not personal or closed bodies)
 - `GET  /api/shared/notes` (public titles; not card bodies)
 - `GET  /api/shared/notes/{path}` (published shared card body; guest OK, TZ 2.64)
@@ -737,6 +742,7 @@ Removed from product surface (TZ 2.5 / 2.6):
 
 Graph visualization and Graph Diff (Stage-owned):
 - `GET  /api/graph/shared` (`/graph` canvas; no login; public published layer only)
+- `GET  /api/graph/invites` (`#/invites` who-invited-whom; currently admin; TZ 2.98)
 - `GET  /api/graph/personal` (`/my_graph`; ваша личная ризома; caller’s full indexed tree or uploads)
 - `GET  /api/graph/personal-overlay` (ваша часть ризомы; shared page + automatic wikilink stitch)
 - `GET  /api/search` (`layer=visible|overlay|personal|shared`; visible is

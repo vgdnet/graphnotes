@@ -1,3 +1,4 @@
+import re
 import uuid
 
 from fastapi import APIRouter, HTTPException, status
@@ -212,16 +213,21 @@ async def revoke_my_integration_token(
         raise _http_from_integration(exc) from exc
 
 
+_PUBLIC_UUID_KEY = re.compile(
+    r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+    re.IGNORECASE,
+)
+
+
 async def _public_card_user(database: DatabaseSession, user_key: str) -> User:
     key = user_key.strip()
+    if _PUBLIC_UUID_KEY.fullmatch(key):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="user not found")
     try:
-        target = await database.get(User, uuid.UUID(key))
+        login = normalize_username(key)
     except ValueError:
-        try:
-            login = normalize_username(key)
-        except ValueError:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="user not found") from None
-        target = await database.scalar(select(User).where(User.username == login))
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="user not found") from None
+    target = await database.scalar(select(User).where(User.username == login))
     if target is None or not target.is_active:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="user not found")
     return target
