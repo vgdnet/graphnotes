@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { GraphView } from "./GraphView";
 import type { FilterKind, GraphResponse } from "./GraphView";
-import { InviteGraph, type InviteGraphPayload } from "./InviteGraph";
 import { graphRequestParams } from "./graphQuery";
 import { GraphDiffView } from "./GraphDiffView";
 import type { GraphDiffResponse } from "./GraphDiffView";
@@ -133,6 +132,15 @@ type NoteDetail = NoteProjection & { body: string; content_hash: string; source?
 
 type NoteListResponse = {
   notes: NoteProjection[];
+  revision: string | null;
+};
+
+type IngestReport = {
+  accepted: string[];
+  rejected: { path: string; reason: string }[];
+  skipped: string[];
+  conflicted: string[];
+  warnings: string[];
   revision: string | null;
 };
 
@@ -327,7 +335,7 @@ function sharedLabel(status: RepositoryStatus | null): string {
 }
 
 function personalLabel(status: RepositoryStatus | null): string {
-  if (!status?.connected) return "Личный git не связан. В личный склад сейчас пишет плагин Obsidian.";
+  if (!status?.connected) return "Личный git не связан — можно загрузить .md в локальный склад.";
   if (status.has_content) return `Связан git ${status.owner}/${status.name}. Файлы копируются в локальный склад.`;
   return `Git ${status.owner}/${status.name} связан, коммитов пока нет.`;
 }
@@ -422,13 +430,12 @@ export function App() {
   const [openNote, setOpenNote] = useState<NoteDetail | null>(null);
   const [missingCard, setMissingCard] = useState<{ path: string; title: string } | null>(null);
   const [stackedPersonal, setStackedPersonal] = useState<NoteDetail | null>(null);
+  const [report, setReport] = useState<IngestReport | null>(null);
   const [uploadStamp, setUploadStamp] = useState(0);
   const [contributions, setContributions] = useState<ContributionsResponse | null>(null);
   const [uploadEvents, setUploadEvents] = useState<UploadEventItem[]>([]);
   const [sharedGraph, setSharedGraph] = useState<GraphResponse | null>(null);
-  const [inviteGraph, setInviteGraph] = useState<InviteGraphPayload | null>(null);
   const [graphLoading, setGraphLoading] = useState(false);
-  const [inviteLoading, setInviteLoading] = useState(false);
   const [graphCenter, setGraphCenter] = useState<string | null>(null);
   const [graphDepth, setGraphDepth] = useState(1);
   const [graphLayer, setGraphLayer] = useState<FilterKind>("all");
@@ -679,9 +686,6 @@ export function App() {
       return;
     }
     const routeNow = parseAppRoute(locationHash);
-    if (routeNow.kind === "invites") {
-      return;
-    }
     const viewingCard = routeNow.kind === "card" ? routeNow.path : null;
     const cardIsPersonal = Boolean(viewingCard && isOwnPersonalCard(viewingCard));
     const fetchCenter = viewingCard ? cardFilePath(viewingCard) : graphCenter;
@@ -716,41 +720,12 @@ export function App() {
     repository?.shared.index_status,
     repository?.personal?.connected,
     repository?.personal?.updated_at,
+    report?.revision,
     graphCenter,
     graphDepth,
     graphLayer,
     locationHash,
   ]);
-
-  useEffect(() => {
-    if (authChecking) return;
-    if (view !== "invites") return;
-    if (user?.role !== "admin") {
-      if (window.location.hash !== viewHash("graph")) {
-        window.location.hash = viewHash("graph");
-      }
-      return;
-    }
-    const controller = new AbortController();
-    setInviteLoading(true);
-    setError("");
-    void fetch("/api/graph/invites", { signal: controller.signal })
-      .then(async (response) => {
-        if (!response.ok) throw new Error(await readError(response));
-        return (await response.json()) as InviteGraphPayload;
-      })
-      .then((body) => {
-        if (!controller.signal.aborted) setInviteGraph(body);
-      })
-      .catch((requestError: unknown) => {
-        if (requestError instanceof DOMException && requestError.name === "AbortError") return;
-        setError(requestError instanceof Error ? requestError.message : "Ошибка соединения");
-      })
-      .finally(() => {
-        if (!controller.signal.aborted) setInviteLoading(false);
-      });
-    return () => controller.abort();
-  }, [authChecking, view, user?.role]);
 
   async function loadCardLayer(path: string): Promise<NoteDetail | null> {
     const response = await fetch(cardApiUrl(path));
@@ -1314,6 +1289,36 @@ export function App() {
     }
   }
 
+  async function importFallback(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const formElement = event.currentTarget;
+    const file = (new FormData(formElement).get("file") as File | null);
+    if (!file) return;
+    setSubmitting(true);
+    setError("");
+    const payload = new FormData();
+    payload.set("file", file);
+    if (personalRevision) payload.set("expected_sha", personalRevision);
+    try {
+      const response = await fetch("/api/personal/import-md", { method: "POST", body: payload });
+      if (!response.ok) throw new Error(await readError(response));
+      const body = (await response.json()) as IngestReport;
+      setReport(body);
+      setUploadStamp((value) => value + 1);
+      formElement.reset();
+      const notes = await fetch("/api/personal/notes");
+      if (notes.ok) {
+        const listed = (await notes.json()) as NoteListResponse;
+        setPersonalNotes(listed.notes);
+        setPersonalRevision(listed.revision);
+      }
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "Ошибка соединения");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
   async function openPersonalNote(path: string) {
     setSubmitting(true);
     setError("");
@@ -1792,11 +1797,6 @@ export function App() {
               Мой граф
             </button>
           )}
-          {user?.role === "admin" && (
-            <button className={view === "invites" ? "button button--quiet tab--active" : "button button--quiet"} type="button" onClick={() => goHash(viewHash("invites"))}>
-              Инвайты
-            </button>
-          )}
           <button
             className={view === "card" || view === "search" ? "button button--quiet tab--active" : "button button--quiet"}
             type="button"
@@ -2113,7 +2113,7 @@ export function App() {
                       ) : (
                         "репозиторий"
                       )}
-                      . Git копирует `.md` в локальный склад. С сайта файлы не загружают — пишет плагин.
+                      . Git копирует `.md` в локальный склад. Загрузка файлов тоже пишет туда.
                     </p>
                     <p className="admin-panel__hint">
                       Отключение git не стирает уже скопированные файлы.
@@ -2268,9 +2268,9 @@ export function App() {
                 <p className="eyebrow">Отличия</p>
                 <h2 id="differ-heading">Отличающиеся</h2>
                 <p className="admin-panel__hint">
-                  Сравнение последней версии личного склада с опубликованной общей
-                  в одну сторону: чего в общей ещё нет или что отличается.
-                  Пишет плагин Obsidian. Старые редакции (до 30) на Differ не выходят.
+                  Сравнение личного слоя (git или загруженные .md) с опубликованной общей
+                  в одну сторону: чего в общей ещё нет или что отличается. Git не обязателен.
+                  Личный git при предложении не меняется.
                 </p>
               </div>
               {error && <p className="form-error" role="alert">{error}</p>}
@@ -2312,6 +2312,20 @@ export function App() {
               >
                 Предложить в общую
               </button>
+              <form className="connect-form" onSubmit={(event) => void importFallback(event)}>
+                <label>
+                  Загрузка .md или ZIP в локальный склад
+                  <input name="file" type="file" accept=".md,.zip,text/markdown,application/zip" required />
+                </label>
+                <button className="button button--quiet" type="submit" disabled={submitting}>
+                  Загрузить в личный слой
+                </button>
+              </form>
+              {report && (
+                <p className="ingest-report" role="status">
+                  Принято: {report.accepted.length}. Пропущено: {report.skipped.length}. Конфликт: {report.conflicted.length}.
+                </p>
+              )}
               {uploadEvents.length > 0 && (
                 <div>
                   <p className="admin-panel__hint">История загрузок в личный слой — в GraphNotes, не в git log.</p>
@@ -2689,21 +2703,6 @@ export function App() {
             )}
           </section>
           )}
-          {view === "invites" && user.role === "admin" && (
-            <section className="notes-panel notes-panel--graph" aria-labelledby="invite-graph-heading">
-              <div>
-                <p className="eyebrow">Граф</p>
-                <h2 id="invite-graph-heading">Карта инвайтов</h2>
-                <p className="admin-panel__hint">
-                  Кто кого пригласил. Стрелка от пригласившего к приглашённому.
-                  Это не граф ризомы. Клик по узлу открывает карточку человека.
-                  Ромб — учётка без пригласившего (зерно или заведена admin’ом).
-                </p>
-              </div>
-              {error && <p className="form-error" role="alert">{error}</p>}
-              <InviteGraph graph={inviteGraph} loading={inviteLoading} />
-            </section>
-          )}
           {(view === "graph" || view === "my_graph") && repository?.shared.connected && (
             <section className="notes-panel notes-panel--graph" aria-labelledby="graph-heading">
               <div>
@@ -2711,7 +2710,7 @@ export function App() {
                 <h2 id="graph-heading">{view === "my_graph" || graphLayer === "personal" ? "Ваша личная ризома" : "Общая ризома"}</h2>
                 <p className="admin-panel__hint">
                   {graphLayer === "personal"
-                    ? "Полный личный склад (последняя версия каждого файла). Слой считается сам: какие заметки входят в «вашу часть ризомы», решает пересечение с общей, не ручной список."
+                    ? "Полный проиндексированный личный git (или загрузки). Слой считается сам: какие заметки входят в «вашу часть ризомы», решает пересечение с общей, не ручной список."
                     : "Клик по узлу или ссылке открывает карточку; сбоку будет её локальный граф. Координаты раскладки — только отображение, не знание."}
                 </p>
               </div>
