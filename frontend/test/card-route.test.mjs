@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { cardApiUrl, cardHash, cardSearchHash, canonicalCardHash, parseCardRoute, pathFromCardHash, isOwnPersonalCard, canShowCardEditButton, normalizeCardPath, qualifyCardPath, wikiCardHash, missingNotePath, missingNoteTitle } from "../test-out/cardRoute.js";
+import { cardApiUrl, cardHash, cardSearchHash, canonicalCardHash, differFileApiUrl, parseCardRoute, pathFromCardHash, isOwnPersonalCard, canShowCardEditButton, normalizeCardPath, qualifyCardPath, wikiCardHash, missingNotePath, missingNoteTitle } from "../test-out/cardRoute.js";
 import { parseAppRoute, routeToView, viewHash, personCardHash } from "../test-out/appRoute.js";
 import { renderBlocks } from "../test-out/markdownRender.js";
 
@@ -38,6 +38,11 @@ test("empty #/card/ is legacy search; #/card is the start card", () => {
   assert.equal(personCardHash("efimov"), "#/users/efimov");
   assert.equal(personCardHash("@Efimov"), "#/users/efimov");
   assert.equal(personCardHash("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"), "#/graph");
+  assert.equal(differFileApiUrl("fresh.md"), "/api/differ/files/fresh.md");
+  assert.equal(
+    differFileApiUrl("Темы/Память.md"),
+    "/api/differ/files/%D0%A2%D0%B5%D0%BC%D1%8B/%D0%9F%D0%B0%D0%BC%D1%8F%D1%82%D1%8C.md",
+  );
   assert.equal(viewHash("graph"), "#/graph");
   assert.equal(canonicalCardHash("personal:notes/mine.md"), cardHash("notes/mine.md"));
   assert.match(canonicalCardHash("proposal:aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee:card.md"), /proposal/);

@@ -51,6 +51,80 @@ async def list_differences(
     return payload
 
 
+def _safe_differ_path(path: str) -> str:
+    value = path.strip()
+    parts = value.split("/")
+    if (
+        not value
+        or value.startswith("/")
+        or "\\" in value
+        or any(part in {"", ".", ".."} or part.startswith(".") for part in parts)
+    ):
+        raise ProposalError(400, "path is invalid")
+    return value
+
+
+async def get_difference_file(
+    database: AsyncSession,
+    user: User,
+    path: str,
+    client: GitHubAppClient,
+) -> dict[str, object]:
+    note_path = _safe_differ_path(path)
+    shared = await database.get(SharedRepository, SHARED_SINGLETON_ID)
+    if shared is None or not published_sha(shared):
+        raise ProposalError(409, "the shared rhizome is not connected")
+    await refresh_caller_git(database, user.id, client)
+    closed = await closed_paths_for_user(database, user.id)
+    if note_path in closed:
+        raise ProposalError(404, "path is closed")
+    upload = await database.scalar(
+        select(PersonalUpload).where(
+            PersonalUpload.user_id == user.id,
+            PersonalUpload.path == note_path,
+        )
+    )
+    if upload is None:
+        raise ProposalError(404, "personal card not found")
+    shared_note = await database.scalar(select(SharedNote).where(SharedNote.path == note_path))
+    if shared_note is None:
+        kind = "added"
+        incoming_body = ""
+        incoming_updated = None
+    elif shared_note.body != upload.body:
+        kind = "changed"
+        incoming_body = shared_note.body
+        incoming_updated = shared_note.updated_at
+    else:
+        kind = "same"
+        incoming_body = shared_note.body
+        incoming_updated = shared_note.updated_at
+    author = {
+        "id": str(user.id),
+        "username": user.username,
+        "display_name": user.display_name or user.username,
+    }
+    return {
+        "path": upload.path,
+        "title": _title_from_path(upload.path),
+        "kind": kind,
+        "incoming": {
+            "layer": "shared",
+            "path": upload.path,
+            "body": incoming_body,
+            "author": None,
+            "updated_at": incoming_updated,
+        },
+        "current": {
+            "layer": "personal",
+            "path": upload.path,
+            "body": upload.body,
+            "author": author,
+            "updated_at": upload.updated_at,
+        },
+    }
+
+
 async def _differ_from_uploads(
     database: AsyncSession,
     uploads: list[PersonalUpload],

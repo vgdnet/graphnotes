@@ -148,3 +148,13 @@ export function missingNoteTitle(path: string): string {
 export function cardApiUrl(path: string): string {
   return `/api/cards/${encodeURI(path)}`;
 }
+
+/** Same encoding as Card Merge `differFileUrl`: encode each path segment. */
+export function differFileApiUrl(path: string): string {
+  const encoded = path
+    .trim()
+    .split("/")
+    .map((part) => encodeURIComponent(part))
+    .join("/");
+  return `/api/differ/files/${encoded}`;
+}

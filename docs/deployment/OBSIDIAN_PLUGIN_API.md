@@ -70,7 +70,11 @@ empty. Quit does not start a transfer. First dump of an existing vault is
 time. TZ 2.91: one personal copy; local wins; no conflict UI. Other
 server bytes are overwritten with local (`expected_version` from
 manifest / GET content). No `force=true`. Shared / Differ / proposals
-are not written. Differ-to-plugin offers are leftover, not this version.
+are not written. Differ read is a **separate** desktop plugin
+(`obsidian-card-merge`, TZ 3.04): `GET /api/differ` and
+`GET /api/differ/files/{path}` with the same `gnp_` token
+(`personal:read`). Same JSON as `#/offer`. It does not POST proposals
+and does not write shared.
 
 ## Ready methods
 

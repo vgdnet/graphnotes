@@ -3,15 +3,15 @@ from uuid import UUID
 
 from fastapi import APIRouter, HTTPException
 
-from app.api.dependencies import CurrentAuthor, CurrentUser, DatabaseSession
-from app.schemas.differ import DifferResponse
+from app.api.dependencies import CurrentAuthor, CurrentAuthorReader, CurrentUser, DatabaseSession
+from app.schemas.differ import DifferFileResponse, DifferResponse
 from app.schemas.proposal import (
     ProposalCreateRequest,
     ProposalDecisionRequest,
     ProposalListResponse,
     ProposalResponse,
 )
-from app.services.differ import list_differences
+from app.services.differ import get_difference_file, list_differences
 from app.services.github import GitHubAppClient
 from app.services.proposal import ProposalError, create_proposal, decide, get_proposal, list_proposals
 
@@ -28,7 +28,7 @@ def _raise(error: ProposalError) -> NoReturn:
 
 @router.get("/differ", response_model=DifferResponse)
 async def differ_endpoint(
-    user: CurrentAuthor,
+    user: CurrentAuthorReader,
     database: DatabaseSession,
 ) -> DifferResponse:
     try:
@@ -36,6 +36,19 @@ async def differ_endpoint(
     except ProposalError as exc:
         _raise(exc)
     return DifferResponse.model_validate(body)
+
+
+@router.get("/differ/files/{note_path:path}", response_model=DifferFileResponse)
+async def differ_file_endpoint(
+    note_path: str,
+    user: CurrentAuthorReader,
+    database: DatabaseSession,
+) -> DifferFileResponse:
+    try:
+        body = await get_difference_file(database, user, note_path, _client())
+    except ProposalError as exc:
+        _raise(exc)
+    return DifferFileResponse.model_validate(body)
 
 
 @router.get("/shared/archive", response_model=None)

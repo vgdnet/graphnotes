@@ -50,11 +50,16 @@ GET  /api/personal/uploads            # upload history: who / when / path / hash
 
 GET  /api/differ                      # internal Differ (TZ 3.01): not a chrome tab;
                                       # UI is #/offer; one-way personal → published shared;
+                                      # cookie session or Bearer gnp_ (personal:read);
                                       # connected git: refresh public HEAD first;
                                       # ответ — отличия, в том числе личные карточки
                                       # без пары в общей (просьба «дай, если хочешь»).
-                                      # Сначала кабинет (ТЗ 2.88); плагин читает позже,
-                                      # тем же маршрутом, не пишет в общую
+                                      # Сайт и плагин Card Merge — один маршрут (ТЗ 3.04)
+GET  /api/differ/files/{path}         # та же сверка, одно тело: incoming=общая,
+                                      # current=личное; author/updated_at;
+                                      # cookie или Bearer personal:read; не пишет;
+                                      # сайт: «Текст сверки» на /offer;
+                                      # плагин: левая панель MergeView
 GET  /api/contributions/me            # author's notes, links, proposals, counts; derived
                                       # editor/admin also receive own review stats
 GET  /api/users/{login}/card          # public person card (guest + signed-in, TZ 2.98):

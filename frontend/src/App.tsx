@@ -11,7 +11,7 @@ import type { GraphDiffResponse } from "./GraphDiffView";
 import { CardHistory } from "./CardHistory";
 import { MarkdownBody } from "./MarkdownBody";
 import { CardSearch } from "./CardSearch";
-import { cardApiUrl, cardFilePath, cardHash, cardSearchHash, isOwnPersonalCard, missingNotePath, missingNoteTitle } from "./cardRoute";
+import { cardApiUrl, cardFilePath, cardHash, cardSearchHash, differFileApiUrl, isOwnPersonalCard, missingNotePath, missingNoteTitle } from "./cardRoute";
 import { parseAppRoute, personCardHash, routeToView, viewHash, type ShellView } from "./appRoute";
 import { AuthPanel, type AuthMode } from "./AuthPanel";
 import { ActorLink, InviteAttribution, PersonCardPage } from "./PersonCard";
@@ -158,6 +158,22 @@ type DifferItem = {
   path: string;
   title: string;
   kind: "added" | "changed" | string;
+};
+
+type DifferSide = {
+  layer: string;
+  path: string;
+  body: string;
+  author?: { username: string; display_name: string } | null;
+  updated_at?: string | null;
+};
+
+type DifferFile = {
+  path: string;
+  title: string;
+  kind: string;
+  incoming: DifferSide;
+  current: DifferSide;
 };
 
 type DifferResponse = { differences: DifferItem[] };
@@ -414,6 +430,10 @@ export function App() {
   const [personalRevision, setPersonalRevision] = useState<string | null>(null);
   const [differences, setDifferences] = useState<DifferItem[]>([]);
   const [differLoading, setDifferLoading] = useState(false);
+  const [differFile, setDifferFile] = useState<DifferFile | null>(null);
+  const [differFilePath, setDifferFilePath] = useState<string | null>(null);
+  const [differFileLoading, setDifferFileLoading] = useState(false);
+  const differFileAbort = useRef<AbortController | null>(null);
   const [proposedPaths, setProposedPaths] = useState<string[]>([]);
   const [proposals, setProposals] = useState<Proposal[]>([]);
   const [queueTab, setQueueTab] = useState<QueueTab>("new");
@@ -593,7 +613,12 @@ export function App() {
         if (!response.ok) throw new Error(await readError(response));
         return (await response.json()) as DifferResponse;
       })
-      .then((body) => setDifferences(body.differences))
+      .then((body) => {
+        setDifferences(body.differences);
+        setDifferFile(null);
+        setDifferFilePath(null);
+        setDifferFileLoading(false);
+      })
       .catch((requestError: unknown) => {
         if (requestError instanceof DOMException && requestError.name === "AbortError") return;
         setDifferences([]);
@@ -1208,6 +1233,26 @@ export function App() {
     }
     setError("");
     goHash(viewHash("offer"));
+  }
+
+  async function openDifferFile(path: string) {
+    setError("");
+    setDifferFilePath(path);
+    setDifferFileLoading(true);
+    differFileAbort.current?.abort();
+    const controller = new AbortController();
+    differFileAbort.current = controller;
+    try {
+      const response = await fetch(differFileApiUrl(path), { signal: controller.signal });
+      if (!response.ok) throw new Error(await readError(response));
+      setDifferFile((await response.json()) as DifferFile);
+    } catch (requestError) {
+      if (requestError instanceof DOMException && requestError.name === "AbortError") return;
+      setDifferFile(null);
+      setError(requestError instanceof Error ? requestError.message : "Не удалось открыть сверку");
+    } finally {
+      if (!controller.signal.aborted) setDifferFileLoading(false);
+    }
   }
 
   async function proposeSelected() {
@@ -2278,6 +2323,14 @@ export function App() {
                           <strong>{item.title}</strong>
                           <small>{item.path} · {differKindLabel(item.kind)}</small>
                         </button>
+                        <button
+                          className="button button--quiet"
+                          type="button"
+                          aria-pressed={differFilePath === item.path}
+                          onClick={() => void openDifferFile(item.path)}
+                        >
+                          Текст сверки
+                        </button>
                         <input
                           type="checkbox"
                           checked={proposedPaths.includes(item.path)}
@@ -2294,6 +2347,29 @@ export function App() {
                     </li>
                   ))}
                 </ul>
+              )}
+              {(differFileLoading || differFile) && (
+                <div className="differ-file" aria-live="polite">
+                  <p className="admin-panel__hint">
+                    Слева общая, справа личное. Та же пара, что в плагине Card Merge.
+                    Чекбоксы выбирают, что предложить в очередь.
+                    {differFile ? ` Сейчас: ${differFile.path}.` : ""}
+                  </p>
+                  {differFileLoading && !differFile ? (
+                    <p className="admin-panel__hint" role="status">Открываем текст сверки…</p>
+                  ) : differFile ? (
+                    <div className="differ-file__panes">
+                      <section>
+                        <h3>В общей</h3>
+                        <pre>{differFile.incoming.body || "— карточки в ризоме нет —"}</pre>
+                      </section>
+                      <section>
+                        <h3>В личном{differFile.current.author ? ` · ${differFile.current.author.display_name}` : ""}</h3>
+                        <pre>{differFile.current.body}</pre>
+                      </section>
+                    </div>
+                  ) : null}
+                </div>
               )}
               <button
                 className="button button--primary"
