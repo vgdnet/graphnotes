@@ -158,6 +158,7 @@ type DifferItem = {
   path: string;
   title: string;
   kind: "added" | "changed" | string;
+  updated_at?: string | null;
 };
 
 type DifferSide = {

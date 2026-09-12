@@ -2,7 +2,9 @@
 
 Updated: 2026-09-12
 
-Product model TZ 3.05 (one canon for all agents; leftover runtime is
+Product model TZ 3.06 (Card Merge sidebar «Очередь правок» = GET /api/differ;
+not website /queue) /
+3.05 (one canon for all agents; leftover runtime is
 unfinished code, not a second spec) /
 3.03 (editor accept engine is wikidiff2; ADR-018
 amendment: native C++ helper; `php-cli` in the image is unfinished

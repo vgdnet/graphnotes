@@ -2,7 +2,8 @@
 
 Updated: 2026-09-12
 Status: canonical architecture baseline
-Aligned with PRODUCT_SPEC 3.05 (one canon for all agents: product TZ,
+Aligned with PRODUCT_SPEC 3.06 (Card Merge sidebar queue = GET /api/differ;
+not website /queue) / 3.05 (one canon for all agents: product TZ,
 this file, accepted ADRs. Leftover runtime is unfinished code, not a
 second spec) /
 3.03 (editor queue text diff is MediaWiki
@@ -759,11 +760,13 @@ Personal layer (plugin write to the local store; git connector leftover):
 - `DELETE /api/personal/closed-paths/{path}`
 
 Shared publication and Differ:
-- `GET  /api/differ` (internal; UI `#/offer`; cookie or Bearer `personal:read`;
+- `GET  /api/differ` (internal; UI `#/offer` and Card Merge sidebar «Очередь правок»
+  TZ 3.06; cookie or Bearer `personal:read`; items: path, title, kind, updated_at;
   refresh connected personal public HEAD, then one-way
   personal layer → published shared; git not required for upload-only authors)
 - `GET  /api/differ/files/{path}` (same Differ; `incoming` = published shared body,
-  `current` = personal working copy; website «Текст сверки» and Card Merge plugin)
+  `current` = personal working copy; website «Текст сверки» and Card Merge plugin;
+  `{detail}` errors: 400 invalid path, 404 missing/closed, 409 shared not connected)
 - `GET  /api/contributions/me` (author’s notes/links/proposals/counts; derived; git not required)
 - `GET  /api/admin/contributions` (admin: same stats for every account; TZ 2.7 / §5.4.2)
 - `GET  /api/admin/users` (search/filter; last login and session count)
@@ -844,10 +847,13 @@ No conflict UI. Differing server bytes are overwritten with local using
 Publisher still does not write shared or create proposals.
 Interrupted plan + token persist in `data.json`; changed
 bytes before upload cancel the plan and rebuild it. 2.69 «send only on
-command» for vault edits is withdrawn. TZ 2.88 / 3.04: Differ API
+command» for vault edits is withdrawn. TZ 2.88 / 3.04 / **3.06**: Differ API
 (`GET /api/differ`, `GET /api/differ/files/{path}`) lists personal →
 shared diffs and returns both Markdown sides. `#/offer` and
-`obsidian-card-merge` consume that pair. Publisher
+`obsidian-card-merge` consume that pair (sidebar «Очередь правок» =
+the list, not `/queue`). Card Merge also pings
+`GET /integrations/obsidian/v1/capabilities`. It does not POST
+proposals or write the personal store. Publisher
 `/integrations/obsidian/v1` still does not publish to shared.
 
 Browser/plugin URLs use the `/api` prefix. FastAPI routes do **not**:
@@ -867,9 +873,13 @@ token value and SHA-256 for Bearer lookup (`integration_tokens.token` +
 plugin persists the same token in its `data.json`. Compromise → revoke
 in `/user`; restored access → mint a new key in the cabinet and paste
 it into the plugin.
-Successful Bearer calls append `integration_token_access` (username,
+Successful Bearer calls on `/integrations/obsidian/v1` append
+`integration_token_access` (username,
 token name/prefix, IP from `X-Forwarded-For` / `X-Real-IP` / peer,
-User-Agent, route). Same token+IP within
+User-Agent, route). Leftover: `GET /differ` and
+`GET /differ/files/{path}` authenticate the same token but do not
+insert an access row (`last_used_at` still updates). Same token+IP
+within
 `GRAPHNOTES_INTEGRATION_ACCESS_DEBOUNCE_SECONDS` (default 3600) is one
 row; a new IP always inserts. Retention
 `GRAPHNOTES_INTEGRATION_ACCESS_RETENTION_DAYS` (default 183), clamped
@@ -916,8 +926,8 @@ overwrite plugin writes. After files commit, reindex personal
 - `DELETE /integrations/obsidian/v1/transfers/{id}` (204 if not applying)
 
 Error envelope on this prefix only:
-`{error:{code,message,request_id,retryable,details}}`. Existing APIs keep
-`{detail}`.
+`{error:{code,message,request_id,retryable,details}}`. Existing APIs
+including `/differ` keep `{detail}`.
 
 States: `awaiting_upload → ready → applying → indexing → succeeded`;
 also `conflict` / `failed` / `cancelled` / `expired`; `indexing_failed`

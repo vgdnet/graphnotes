@@ -54,10 +54,16 @@ GET  /api/differ                      # internal Differ (TZ 3.01): not a chrome 
                                       # connected git: refresh public HEAD first;
                                       # ответ — отличия, в том числе личные карточки
                                       # без пары в общей (просьба «дай, если хочешь»).
-                                      # Сайт и плагин Card Merge — один маршрут (ТЗ 3.04)
+                                      # Сайт и плагин Card Merge — один маршрут (ТЗ 3.04).
+                                      # ТЗ 3.06: этот же список = боковая «Очередь правок»
+                                      # в плагине (не /queue). Элемент: path, title, kind,
+                                      # updated_at личного склада.
 GET  /api/differ/files/{path}         # та же сверка, одно тело: incoming=общая,
                                       # current=личное; author/updated_at;
                                       # cookie или Bearer personal:read; не пишет;
+                                      # ошибки как веб-API: {detail}
+                                      # (400 path is invalid, 404 not found/closed,
+                                      # 409 shared not connected, 401/403 auth);
                                       # сайт: «Текст сверки» на /offer;
                                       # плагин: левая панель MergeView
 GET  /api/contributions/me            # author's notes, links, proposals, counts; derived
@@ -129,22 +135,30 @@ GET  /api/integrations/obsidian/v1/transfers/{id}
 DELETE /api/integrations/obsidian/v1/transfers/{id}   # cancel if not applying
 ```
 
-Плагин Obsidian (ТЗ 2.68–2.76 / **2.82** / §6.3.4) пишет **только** в личное хранилище
-владельца токена — тот же склад, что `PUT /api/personal/notes/{path}` и
-`POST /api/personal/import-md`. Общую ризому, `shared_notes`, предложения и
-Differ эти методы не меняют.
+Плагин **GraphNotes Publisher** (ТЗ 2.68–2.76 / **2.82** / §6.3.4) пишет
+**только** в личное хранилище владельца токена — тот же склад, что
+`PUT /api/personal/notes/{path}` и `POST /api/personal/import-md`. Общую
+ризому, `shared_notes`, предложения и Differ эти методы не меняют.
 
-Авторизация передачи: `Authorization: Bearer <token>`. UUID склада сервер
-берёт из токена; клиент **не** передаёт `user_id`, чтобы выбрать чужое
-хранилище. Scopes: `personal:read`, `personal:write`, опционально
+Плагин **GraphNotes Card Merge** (`obsidian-card-merge/`, ТЗ **3.04** /
+**3.06**) тот же ключ только **читает**: `GET /api/differ`,
+`GET /api/differ/files/{path}`, и `GET /capabilities` как проверку входа.
+В общую и в личный склад GraphNotes он не пишет.
+
+Авторизация передачи и чтения Differ: `Authorization: Bearer <token>`.
+UUID склада сервер берёт из токена; клиент **не** передаёт `user_id`,
+чтобы выбрать чужое хранилище. Scopes: `personal:read` (Differ и
+capabilities), `personal:write` (пакет Publisher), опционально
 `personal:delete`. Управление токенами — cookie-сессия
 `/api/users/me/integration-tokens` (простой ключ `gnp_…` хранится в
 кабинете и снова отдаётся владельцу сессии, чтобы скопировать позже,
-ТЗ 2.76; ошибки как у остального веб-API: `{detail}`). Плагин помнит
-тот же ключ в `data.json`. История входов —
+ТЗ 2.76; ошибки как у остального веб-API: `{detail}`). Каждый плагин
+помнит тот же ключ в своём `data.json`. История входов —
 `GET /api/users/me/integration-tokens/access` (кто, IP, User-Agent, имя
 и отпечаток токена, маршрут; без ключа; ~183 дня, потолок ~366).
-Отдельная база логов — не этот контракт.
+Сейчас строки пишет префикс `/integrations/obsidian/v1`; чтение Differ
+по Bearer журнал не дополняет (leftover). Отдельная база логов — не этот
+контракт.
 
 Ошибки префикса `/api/integrations/obsidian/v1` — конверт
 `{error:{code,message,request_id,retryable,details}}`. Коды: `invalid_token`,

@@ -4,6 +4,7 @@ import {
   differFileUrl,
   differUrl,
   MERGE_VIEW_TYPE,
+  QUEUE_VIEW_TYPE,
   normalizeSettings,
   parseCapabilities,
   parseDifferFile,
@@ -28,6 +29,8 @@ export async function run(): Promise<void> {
   assert(PLUGIN_ID !== publisherPluginId, 'must not reuse Publisher plugin id');
   assertEqual(MERGE_VIEW_TYPE, 'graphnotes-card-merge', 'view type');
   assert(MERGE_VIEW_TYPE !== publisherViewType, 'must not reuse Publisher sidebar view');
+  assertEqual(QUEUE_VIEW_TYPE, 'graphnotes-card-merge-queue', 'queue view');
+  assert(QUEUE_VIEW_TYPE !== publisherViewType, 'queue view ≠ Publisher');
 
   const settings = normalizeSettings({
     server: ' http://172.16.13.14:8080 ',
@@ -49,9 +52,10 @@ export async function run(): Promise<void> {
   );
 
   const listed = parseDifferList({
-    differences: [{ path: 'fresh.md', title: 'fresh', kind: 'added' }],
+    differences: [{ path: 'fresh.md', title: 'fresh', kind: 'added', updated_at: '2026-09-12T02:00:00Z' }],
   });
   assertEqual(listed[0]?.path, 'fresh.md', 'list path');
+  assertEqual(listed[0]?.updatedAt, '2026-09-12T02:00:00Z', 'queue stamp');
 
   const pair = parseDifferFile({
     path: 'fresh.md',

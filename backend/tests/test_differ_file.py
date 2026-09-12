@@ -28,6 +28,7 @@ async def test_differ_file_is_the_same_pair_for_cookie_and_plugin_token(
     assert listed.status_code == 200
     assert listed.json()["differences"][0]["path"] == "fresh.md"
     assert listed.json()["differences"][0]["kind"] == "added"
+    assert listed.json()["differences"][0]["updated_at"]
 
     cookie_file = await author.get("/differ/files/fresh.md")
     assert cookie_file.status_code == 200

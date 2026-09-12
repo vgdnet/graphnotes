@@ -9,6 +9,7 @@ import {
   type SessionUser,
 } from './apiService';
 import { CardMergeView, MERGE_VIEW_TYPE, type MergeHost, type MergeSession } from './diffView';
+import { CardQueueView, QUEUE_VIEW_TYPE } from './queueView';
 
 export default class GraphNotesCardMergePlugin extends Plugin implements MergeHost {
   settings: MergePluginSettings = { ...DEFAULT_SETTINGS };
@@ -18,7 +19,13 @@ export default class GraphNotesCardMergePlugin extends Plugin implements MergeHo
     this.settings = normalizeSettings(await this.loadData());
     if (!this.settings.token) await this.adoptPublisherLogin();
     this.registerView(MERGE_VIEW_TYPE, leaf => new CardMergeView(leaf, this));
-    this.addRibbonIcon('git-compare', 'GraphNotes: сравнить карточку', () => new OpenMergeModal(this.app, this).open());
+    this.registerView(QUEUE_VIEW_TYPE, leaf => new CardQueueView(leaf, this));
+    this.addRibbonIcon('git-compare', 'GraphNotes: очередь правок', () => void this.openQueue(true));
+    this.addCommand({
+      id: 'open-queue',
+      name: 'Открыть очередь правок',
+      callback: () => void this.openQueue(true),
+    });
     this.addCommand({
       id: 'open-merge',
       name: 'Сравнить и слить карточку',
@@ -35,6 +42,26 @@ export default class GraphNotesCardMergePlugin extends Plugin implements MergeHo
       },
     });
     this.addSettingTab(new CardMergeSettingTab(this.app, this));
+    this.app.workspace.onLayoutReady(() => void this.openQueue(false));
+  }
+
+  async openQueue(reveal: boolean): Promise<void> {
+    const { workspace } = this.app;
+    const existing = workspace.getLeavesOfType(QUEUE_VIEW_TYPE)[0];
+    if (existing) {
+      if (reveal) workspace.revealLeaf(existing);
+      return;
+    }
+    const leaf = await workspace.ensureSideLeaf(QUEUE_VIEW_TYPE, 'right', { reveal, active: reveal });
+    if (reveal) workspace.revealLeaf(leaf);
+  }
+
+  async openQueuedCard(path: string): Promise<void> {
+    const local = this.app.vault.getAbstractFileByPath(path);
+    const localPath = local?.path ?? path;
+    this.settings.lastDifferPath = path;
+    await this.persist();
+    await openMergeLeaf(this.app, { localPath, differPath: path, remotePath: '' });
   }
 
   onunload(): void {

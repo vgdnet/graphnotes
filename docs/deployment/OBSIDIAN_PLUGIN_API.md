@@ -33,11 +33,12 @@ promoted. Do not point the plugin at production while testing.
 4. The token starts with `gnp_`. The cabinet **stores** it and shows it
    again (TZ 2.75). SHA-256 is also stored for Bearer lookup, not instead
    of the key.
-5. Copy it from Settings into GraphNotes Publisher. The plugin keeps the
-   same token in `data.json`.
-6. Compromise: revoke the key on the same tab (plugin stops writing).
-   When access is restored, mint a new key in the cabinet and paste it
-   into the plugin. Default TTL 30 days, max 90.
+5. Copy it from Settings into GraphNotes Publisher and/or GraphNotes
+   Card Merge. Each plugin keeps the same key in its own `data.json`.
+6. Compromise: revoke the key on the same tab (Publisher stops writing;
+   Card Merge stops reading Differ). When access is restored, mint a new
+   key in the cabinet and paste it into the plugin(s). Default TTL 30
+   days, max 90.
 
 Web token routes (cookie session, errors `{ "detail": "..." }`):
 
@@ -71,12 +72,120 @@ time. TZ 2.91: one personal copy; local wins; no conflict UI. Other
 server bytes are overwritten with local (`expected_version` from
 manifest / GET content). No `force=true`. Shared / Differ / proposals
 are not written. Differ read is a **separate** desktop plugin
-(`obsidian-card-merge`, TZ 3.04): `GET /api/differ` and
+(`obsidian-card-merge`, TZ 3.04 / **3.06**): `GET /api/differ` and
 `GET /api/differ/files/{path}` with the same `gnp_` token
-(`personal:read`). Same JSON as `#/offer`. It does not POST proposals
+(`personal:read`). Same JSON as `#/offer`. Sidebar «Очередь правок»
+is that list (not website `/queue`). It does not POST proposals
 and does not write shared.
 
-## Ready methods
+### Technical editor check (TZ 3.06)
+
+- View type `graphnotes-card-merge-queue` ≠ Publisher `graphnotes-publisher-sync`.
+- Sidebar fetches only `GET /api/differ` (Bearer). No `/api/differ/queue`.
+- Click opens merge via `GET /api/differ/files/{path}`.
+- Does not call approve/reject/POST `/proposals`.
+- Website `/queue` (wikidiff2) is unchanged.
+
+## Card Merge / Differ read (TZ 3.04 / 3.06)
+
+Not a second prefix. Card Merge (`obsidian-card-merge/`,
+`graphnotes-card-merge`) uses the **same** Differ the website `#/offer`
+uses. FastAPI paths have no `/api`; Nginx strips it.
+
+| Browser / plugin | FastAPI |
+| --- | --- |
+| `GET /api/differ` | `GET /differ` |
+| `GET /api/differ/files/{path}` | `GET /differ/files/{path}` |
+| `GET /api/integrations/obsidian/v1/capabilities` | ping / whoami only |
+
+Auth: `Authorization: Bearer gnp_…` with `personal:read`, **or** the
+website cookie session. Differ also requires an accepted author
+contract (403 `{detail}` like the rest of `/differ`). The client must
+not send `user_id`. Card Merge does not POST `/proposals`, does not
+write shared, and does not call the transfer methods above.
+
+Errors on `/differ` keep the ordinary web envelope `{ "detail": "…" }`,
+not the v1 `{error:{code,…}}` wrapper. Typical:
+
+| Status | `detail` | When |
+| --- | --- | --- |
+| 401 | `authentication required` / token message | no cookie and no Bearer, or bad/expired/revoked token |
+| 403 | author-contract text, or `insufficient_scope` | not an author, or token lacks `personal:read` |
+| 400 | `path is invalid` | `..`, leading `/`, hidden segment |
+| 404 | `personal card not found` / `path is closed` | no personal row, or closed path |
+| 409 | `the shared rhizome is not connected` | no published shared SHA |
+
+Leftover: successful `/differ` Bearer calls do **not** append
+`integration_token_access`. Only `/integrations/obsidian/v1` records
+the access log. Token `last_used_at` still updates on authenticate.
+
+```http
+GET /api/differ
+Authorization: Bearer gnp_…
+Accept: application/json
+```
+
+```json
+{
+  "differences": [
+    {
+      "path": "fresh.md",
+      "title": "fresh",
+      "kind": "added",
+      "updated_at": "2026-09-12T02:00:00Z"
+    }
+  ]
+}
+```
+
+List `kind` is `added` (personal card missing from published shared) or
+`changed`. Identical paths are omitted. `updated_at` is the personal
+store stamp. Closed paths are omitted.
+
+```http
+GET /api/differ/files/fresh.md
+Authorization: Bearer gnp_…
+Accept: application/json
+```
+
+```json
+{
+  "path": "fresh.md",
+  "title": "fresh",
+  "kind": "added",
+  "incoming": {
+    "layer": "shared",
+    "path": "fresh.md",
+    "body": "",
+    "author": null,
+    "updated_at": null
+  },
+  "current": {
+    "layer": "personal",
+    "path": "fresh.md",
+    "body": "# Fresh\n",
+    "author": {"id": "uuid", "username": "alice", "display_name": "Alice"},
+    "updated_at": "2026-09-12T02:00:00Z"
+  }
+}
+```
+
+File `kind` is `added` | `changed` | `same` (manual path that already
+matches). `incoming` is published shared (empty body when `added`);
+`current` is the personal working copy. Card Merge puts `incoming` on
+the left and the vault file on the right. Save writes only the vault.
+
+Capabilities (same as Publisher) is only «Проверить подключение»:
+
+```http
+GET /api/integrations/obsidian/v1/capabilities
+Authorization: Bearer gnp_…
+```
+
+`personal:read` is enough. `write_allowed` is for Publisher; Card Merge
+ignores a write block.
+
+## Ready methods (Publisher v1)
 
 All under `/api/integrations/obsidian/v1`. Auth: Bearer token.
 Personal data responses: `Cache-Control: no-store`. Errors:

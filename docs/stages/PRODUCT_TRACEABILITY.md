@@ -60,7 +60,8 @@
 | 6.6 | Differ entity; one-way personal → published shared; merge-into-shared rules | 7 |
 | 6.6 | Connected git: Differ/proposal read **current public HEAD** (Obsidian push); poller/webhook backup; no second clone | 7 |
 | 6.6.2 | Author contribution; Differ extended, not replaced; three states personal/proposed/accepted | next wave |
-| 6.6.3 | Differ API lists personal → shared diffs and itself offers personal cards missing from shared («дай, если хочешь»); cabinet first, then the same Differ in a later plugin iteration; plugin does not publish to shared now (TZ 2.82 / 2.88) | accepted model; cabinet next wave; plugin leftover |
+| 6.6.3 | Differ API lists personal → shared diffs and itself offers personal cards missing from shared; `#/offer` and Card Merge read `GET /api/differ` + `GET /api/differ/files/{path}` (TZ 3.04); plugin does not publish to shared (TZ 2.82 / 2.88) | shipped read pair |
+| 6.6.4 | Card Merge sidebar «Очередь правок» = same `GET /api/differ` (TZ 3.06); not website `/queue` | view `graphnotes-card-merge-queue` |
 | 6.5 | Author focus «мой вклад» and provenance on shared graph | next wave (after 6 overlay) |
 | 6.7 | proposal queue tabs New / In progress / Rejected; text and links first, then Graph Diff; reject/return with author comment | 7, 8 |
 | 6.7 | textual and graph impact before publication | 7, 8 |

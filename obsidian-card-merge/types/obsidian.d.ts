@@ -80,6 +80,7 @@ declare module 'obsidian' {
     getLeaf(newLeaf?: boolean | 'tab' | 'split' | 'window'): WorkspaceLeaf;
     revealLeaf(leaf: WorkspaceLeaf): void;
     onLayoutReady(callback: () => any): void;
+    ensureSideLeaf(type: string, side: 'left' | 'right', options?: { active?: boolean; split?: boolean; reveal?: boolean }): Promise<WorkspaceLeaf>;
   }
   export class MarkdownView {
     file: TFile | null;

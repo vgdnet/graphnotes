@@ -135,9 +135,20 @@ async def _differ_from_uploads(
     }
     differences: list[dict[str, str]] = []
     for row in sorted(uploads, key=lambda item: item.path):
+        stamp = row.updated_at
         if row.path not in shared_rows:
-            differences.append({"path": row.path, "title": _title_from_path(row.path), "kind": "added"})
+            differences.append({
+                "path": row.path,
+                "title": _title_from_path(row.path),
+                "kind": "added",
+                "updated_at": stamp,
+            })
             continue
         if shared_rows[row.path] != row.body:
-            differences.append({"path": row.path, "title": _title_from_path(row.path), "kind": "changed"})
+            differences.append({
+                "path": row.path,
+                "title": _title_from_path(row.path),
+                "kind": "changed",
+                "updated_at": stamp,
+            })
     return {"differences": differences}

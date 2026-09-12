@@ -96,3 +96,33 @@
   text-align: left;
   margin: 0 0 6px;
 }
+
+.gnm-queue {
+  padding: 8px 12px;
+}
+
+.gnm-queue-refresh {
+  width: 100%;
+  margin: 8px 0;
+}
+
+.gnm-queue-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.gnm-queue-item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  width: 100%;
+  margin: 0 0 8px;
+  text-align: left;
+}
+
+.gnm-queue-item small {
+  color: var(--text-muted);
+  font-size: var(--font-small);
+}

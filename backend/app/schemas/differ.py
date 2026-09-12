@@ -9,6 +9,7 @@ class DifferItem(BaseModel):
     path: str
     title: str
     kind: str
+    updated_at: datetime | None = None
 
 
 class DifferResponse(BaseModel):

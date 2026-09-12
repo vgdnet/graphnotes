@@ -2,6 +2,7 @@
 export const PLUGIN_ID = 'graphnotes-card-merge';
 /** Distinct from Publisher sidebar `graphnotes-publisher-sync`. */
 export const MERGE_VIEW_TYPE = 'graphnotes-card-merge';
+export const QUEUE_VIEW_TYPE = 'graphnotes-card-merge-queue';
 
 export interface MergeSession {
   localPath: string;
@@ -47,6 +48,7 @@ export interface DifferItem {
   path: string;
   title: string;
   kind: string;
+  updatedAt: string;
 }
 
 export interface DifferSide {
@@ -202,6 +204,7 @@ export function parseDifferItem(value: unknown): DifferItem {
     path,
     title: textField(rec.title)?.trim() || path,
     kind: textField(rec.kind)?.trim() || 'changed',
+    updatedAt: timestampField(rec.updated_at),
   };
 }
 
