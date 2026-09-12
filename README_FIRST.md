@@ -1,4 +1,8 @@
-# GraphNotes Codex context package
+# GraphNotes Codex context package (historical bootstrap instructions)
+
+> Stage 1 bootstrap is complete. Current workers must use
+> `docs/context/STAGE_STATUS.md` and the active Stage file. Technical Observer
+> workers should start with `START_TECHNICAL_OBSERVER.md`.
 
 This package is intended to be copied/extracted into the root of the LOCAL GraphNotes source repository on `nord`.
 

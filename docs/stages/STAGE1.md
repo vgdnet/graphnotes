@@ -5,11 +5,11 @@ Branch: `feature/01-project-bootstrap`
 Primary coding environment: `nord`
 Target integration host: `rhizome-test`
 
-Owner decision on 2026-08-17: deployment to stable `rhizome`
+Owner decision on 2026-08-17: deployment to production `rhizome`
 (`172.16.13.13`) is deferred until a separate explicit request. Stage 1 is
 accepted based on reproducible integration and reboot validation on
 `rhizome-test` (`172.16.13.14`). This does not remove the promotion gate for a
-future stable deployment.
+future production deployment.
 
 ## Goal
 Build the minimal GraphNotes source repository and runnable application skeleton without implementing product business features early.
@@ -162,7 +162,7 @@ Before declaring Stage 1 complete, run and record the applicable checks:
 - PostgreSQL is persistent and not public on Rhizome
 - secrets are not committed
 - `rhizome-test` integration is verified, including reboot behavior
-- stable `rhizome` is inventoried read-only and left unchanged until deployment
+- production `rhizome` is inventoried read-only and left unchanged until deployment
   is explicitly requested
 - stage completion handoff is written
 

@@ -1,4 +1,7 @@
-# First prompt for Codex - GraphNotes Stage 1
+# Historical prompt for Codex - GraphNotes Stage 1
+
+> Stage 1 is complete. Do not use this file to start the current Stage. Read
+> `docs/context/STAGE_STATUS.md` and the active Stage file instead.
 
 Open Codex from the local GraphNotes repository root and send this prompt:
 

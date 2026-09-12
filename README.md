@@ -1,7 +1,8 @@
 # GraphNotes
 
-GraphNotes is a multi-user Markdown knowledge system. Stage 1 establishes the
-application skeleton only; product features are intentionally deferred.
+GraphNotes is a shared-rhizome layer over Markdown in Git (see
+`docs/product/PRODUCT_SPEC.md` and ADR-008). Stage 1 in this tree is the
+application skeleton; later product features follow the staged roadmap.
 
 ## Backend development
 

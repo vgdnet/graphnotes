@@ -52,7 +52,7 @@ Compose project: `graphnotes`
 - PostgreSQL `5432` is internal only and has no host binding
 
 The frontend Nginx proxies `/api/` to the backend through the internal Compose
-network. Stable-host Nginx routing was not configured because deployment to
+network. Production-host Nginx routing was not configured because deployment to
 `rhizome` is explicitly deferred.
 
 ## Configuration and secrets
@@ -88,14 +88,14 @@ The following passed on `rhizome-test`:
   bindings; the committed systemd unit waited for the LAN address before
   recreating frontend
 
-## Stable host inventory and deferral
+## Production host inventory and deferral
 
 Read-only inspection confirmed `rhizome` at `172.16.13.13`, hostname `rhizome`,
 Debian 13. `/opt/graphnotes` is an old Git worktree with no commits and untracked
 files; its `.env` is empty. Docker Engine `29.7.2` and Compose `v5.4.0` are
 installed, but no GraphNotes containers run and host Nginx is not installed.
 
-The owner explicitly deferred stable deployment. No files, services, Git state,
+The owner explicitly deferred production deployment. No files, services, Git state,
 or network configuration were changed on `rhizome`.
 
 ## Known technical debt
@@ -104,8 +104,8 @@ or network configuration were changed on `rhizome`.
   versions, but package constraints should be made explicit during product work
 - backend tests emit a Starlette deprecation warning about the current test
   client integration
-- stable-host deployment, read-only Git credential verification, Nginx setup,
-  and end-to-end stable routing remain future deployment work
+- production deployment, read-only Git credential verification, Nginx setup,
+  and end-to-end production routing remain future deployment work
 
 ## Stage 2 handoff
 
