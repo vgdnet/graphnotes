@@ -10,8 +10,10 @@ from app.models.github import PersonalRepository, SharedRepository
 from app.models.graph import NoteLayer
 from app.models.personal_upload import PersonalUpload
 from app.schemas.graph import GraphDiffResponse, GraphResponse, RebuildRequest
+from app.schemas.invites import InviteGraphResponse
 from app.schemas.search import SearchResponse
 from app.services.github import GitHubAppClient
+from app.services.invites import list_invite_graph
 from app.services.graph_diff import proposal_graph_diff
 from app.services.index import (
     IndexerError,
@@ -97,6 +99,12 @@ async def shared_graph(
         shared.observed_sha, shared.indexed_sha, shared.index_status
     )
     return GraphResponse.model_validate(payload)
+
+
+@router.get("/graph/invites", response_model=InviteGraphResponse)
+async def invite_graph(_: CurrentAdmin, database: DatabaseSession) -> InviteGraphResponse:
+    payload = await list_invite_graph(database)
+    return InviteGraphResponse.model_validate(payload)
 
 
 @router.get("/graph/personal", response_model=GraphResponse)

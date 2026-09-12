@@ -23,3 +23,18 @@ class FeedEvent(BaseModel):
 class NoteFeedResponse(BaseModel):
     path: str
     events: list[FeedEvent]
+
+
+class CardRevisionItem(BaseModel):
+    id: UUID
+    n: int
+    kind: str
+    created_at: datetime
+    content_hash: str
+    change: str
+    actor: FeedActor | None
+
+
+class CardRevisionListResponse(BaseModel):
+    path: str
+    revisions: list[CardRevisionItem]

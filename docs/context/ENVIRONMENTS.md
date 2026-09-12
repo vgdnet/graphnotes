@@ -104,6 +104,10 @@ Current deployment decision:
   `rhizome-test`** (TZ 2.89). Do not deploy this wave to production
   `rhizome` until a separate owner decision. Alembic `0020` attributes
   existing accounts (except `efimov`) to `@efimov`.
+- TZ 2.94 card revisions (Alembic `0021`) and the TZ 2.98 invite map
+  (`#/invites`, `GET /api/graph/invites`, currently admin) are the same
+  `rhizome-test` wave. Do not apply `0021` on production `rhizome`
+  until an approved revision.
 
 Rules:
 - deploy only a revision already validated on `rhizome-test`

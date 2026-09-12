@@ -27,7 +27,7 @@ from app.services.git_paths import PathError, normalize_git_path
 from app.services.github import GitHubAppClient, GitHubAppError
 from app.services.index import IndexerError, ensure_personal_current, ensure_shared_current
 from app.services.markdown import parse_markdown, unresolved_links
-from app.services.provenance import record_personal_edit_events
+from app.services.provenance import record_card_revision, record_personal_edit_events
 from app.services.noise import (
     WhiteNoiseContentError,
     inspect_markdown_text,
@@ -206,6 +206,7 @@ async def _upsert_personal_upload(
             PersonalUpload.user_id == user_id, PersonalUpload.path == path
         )
     )
+    before = current.body if current is not None else ""
     if current is None:
         try:
             async with database.begin_nested():
@@ -218,6 +219,14 @@ async def _upsert_personal_upload(
                     )
                 )
                 await database.flush()
+            await record_card_revision(
+                database,
+                path=path,
+                source=text,
+                owner_user_id=user_id,
+                actor_user_id=user_id,
+                before_text="",
+            )
             return
         except IntegrityError:
             current = await database.scalar(
@@ -227,15 +236,30 @@ async def _upsert_personal_upload(
             )
             if current is None:
                 raise
+            before = current.body
     if current.body != text:
         current.body = text
         current.content_hash = content_hash
+        await record_card_revision(
+            database,
+            path=path,
+            source=text,
+            owner_user_id=user_id,
+            actor_user_id=user_id,
+            before_text=before,
+        )
 
 
 async def _upsert_shared_note(
-    database: AsyncSession, path: str, text: str, content_hash: str
+    database: AsyncSession,
+    path: str,
+    text: str,
+    content_hash: str,
+    *,
+    actor_user_id=None,
 ) -> None:
     current = await database.scalar(select(SharedNote).where(SharedNote.path == path))
+    before = current.body if current is not None else ""
     if current is None:
         try:
             async with database.begin_nested():
@@ -243,6 +267,14 @@ async def _upsert_shared_note(
                     SharedNote(path=path, body=text, content_hash=content_hash)
                 )
                 await database.flush()
+            await record_card_revision(
+                database,
+                path=path,
+                source=text,
+                owner_user_id=None,
+                actor_user_id=actor_user_id,
+                before_text="",
+            )
             return
         except IntegrityError:
             current = await database.scalar(
@@ -250,9 +282,18 @@ async def _upsert_shared_note(
             )
             if current is None:
                 raise
+            before = current.body
     if current.body != text:
         current.body = text
         current.content_hash = content_hash
+        await record_card_revision(
+            database,
+            path=path,
+            source=text,
+            owner_user_id=None,
+            actor_user_id=actor_user_id,
+            before_text=before,
+        )
 
 
 async def _uploads_for(database: AsyncSession, user_id) -> list[PersonalUpload]:
@@ -349,6 +390,7 @@ async def copy_shared_git_into_store(
     row: SharedRepository,
     *,
     previous_sha: str | None,
+    actor_user_id=None,
 ) -> bool:
     """Copy shared GitHub Markdown into the local rhizome store (TZ 2.63).
 
@@ -380,7 +422,13 @@ async def copy_shared_git_into_store(
         parsed = parse_markdown(path, text)
         current = by_path.get(path)
         if current is None or current.body != text:
-            await _upsert_shared_note(database, path, text, parsed.content_hash)
+            await _upsert_shared_note(
+                database,
+                path,
+                text,
+                parsed.content_hash,
+                actor_user_id=actor_user_id,
+            )
     stale = [item.path for item in existing if item.path not in fetched]
     if stale:
         await database.execute(delete(SharedNote).where(SharedNote.path.in_(stale)))
@@ -803,12 +851,29 @@ async def _import_without_git(
             database.add(row)
             existing_rows[path] = row
             accepted.append(path)
+            await record_card_revision(
+                database,
+                path=path,
+                source=text,
+                owner_user_id=user.id,
+                actor_user_id=user.id,
+                before_text="",
+            )
         elif current.body == text:
             skipped.append(path)
         else:
+            before_text = current.body
             current.body = text
             current.content_hash = parsed.content_hash
             accepted.append(path)
+            await record_card_revision(
+                database,
+                path=path,
+                source=text,
+                owner_user_id=user.id,
+                actor_user_id=user.id,
+                before_text=before_text,
+            )
     record_audit_event(
         database,
         action="notes.import_md",

@@ -1,14 +1,20 @@
 # GraphNotes — канонический контекст Technical Observer
 
 Статус: ACTIVE
-Updated: 2026-09-12 (TZ 2.89 / §17 shipped on `rhizome-test`:
-invite email link; no Register tab; any account may invite; person card
-«Приглашен … от @user»; existing accounts except `efimov` attributed to
-`@efimov`. Do not deploy production `rhizome`.
+Updated: 2026-09-12 (PRODUCT_SPEC **2.98**. TZ 2.89 / §17 shipped on
+`rhizome-test`: invite email link; no Register tab; any account may invite;
+person card «Приглашен … от @user»; existing accounts except `efimov`
+attributed to `@efimov`. TZ 2.98 invite map `#/invites` /
+`GET /api/graph/invites` is admin-only for now: `@login · N` +
+`invited_count` node size; click → `#/users/{login}`; not the rhizome
+canvas. TZ 2.93 website editor off; TZ 2.94 `card_revisions` last 30
+on demand; TZ 2.96 no website `.md`/ZIP upload UI; TZ 2.90 plugin writes
+on sidebar «Передать правки на сервер» / ribbon / close / idle minutes,
+not every keystroke. Do not deploy production `rhizome`.
 TZ 2.83: Elasticsearch iteration starts **only after
 the first approved rhizome production deploy**; SQL `/search` until then;
-do not add ES to Compose. TZ 2.82: plugin copies vault edits after save;
-no card picker; first dump «Отправить всё»; TZ 2.88: Differ API lists
+do not add ES to Compose. TZ 2.82/2.90: plugin copies vault edits
+without a card picker; first dump «Отправить все правки»; TZ 2.88: Differ API lists
 diffs and missing-from-shared offers — cabinet first, plugin later;
 §6.6.3 marks/topics are site
 UI leftover. TZ 2.81: Login tab mail-code / `#/auth/login-code`
@@ -107,10 +113,11 @@ PostgreSQL, узлы, связи, теги, поисковый индекс и �
 Личный hosted Markdown — продуктовый путь (ТЗ 2.62). Поиск — `note_index`.
 Выгрузка своей — со склада `.md`, не из индекса.
 
-Плагин Obsidian (ТЗ 2.68–2.82 / MASTER §12.1) — HTTP API в **тот же**
-`personal_uploads` / `personal_assets`. Клиент 2.82 копирует правки vault
-после сохранения; выбор карточек не обязателен; «только по команде»
-(2.69) снято. Не git copy-in при apply, не запись
+Плагин Obsidian (ТЗ 2.68–2.91 / MASTER §12.1) — HTTP API в **тот же**
+`personal_uploads` / `personal_assets`. Клиент 2.90 копит правки локально;
+сеть — кнопка «Передать правки на сервер» в боковой панели / лента /
+закрыл файл / минуты, не каждый символ. Выбор карточек не обязателен;
+«только по команде» (2.69) снято. Не git copy-in при apply, не запись
 в `shared_notes`, не предложение, не обход Differ. Таблицы transfer не канон
 знания. Ключ хранится в кабинете и копируется в плагин (ТЗ 2.75); отзыв
 блокирует, новый ключ снова из кабинета. SHA-256 — только поиск Bearer.
@@ -129,21 +136,27 @@ PostgreSQL, узлы, связи, теги, поисковый индекс и �
   copy-in (TZ 2.63); Differ remains the write gate; `note_index` has no
   bodies; personal hosted Markdown is the product default (TZ 2.61);
 - GraphNotes for authors is a Publish analog with rights and one shared
-  rhizome (TZ 2.61), not a second Obsidian: thin
-  in-app editor is **own personal cards only** after «Отредактировать
-  карточку» (`PUT /api/personal/notes/{path}`,
-  `source` + `expected_hash`, author contract, git XOR upload, no new path,
-  409 if stale);
-  in-app history is `rhizome_events.owner_user_id` (no bodies);
+  rhizome (TZ 2.61), not a second Obsidian: website in-app editor is **off**
+  (TZ 2.93) until reverse download / reverse sync; do not mount
+  `PersonalCardEditor` / MDXEditor / «Отредактировать карточку»;
+  `PUT /api/personal/notes/{path}` stays for plugin / API and TZ 2.66 stub
+  create; later leftover: take another participant’s card into one’s rhizome
+  unlocks edit + reverse sync for those cards (not historical
+  `take-from-shared` restored as-is);
+  history is `rhizome_events.owner_user_id` (no bodies) for contribution
+  counts; card page history is `card_revisions` last 30 (TZ 2.94), loaded
+  only after «История правок» (`GET /api/cards/{path}/revisions`); do not
+  fetch `/feed` or `/revisions` when opening the card;
   shared / others' personal / proposal stay read-only; do not ship a
   vault-replacing second Obsidian; ADR-008 leftover «no hosted vault» vs TZ 2.61;
 - app routes (TZ 2.58 / 2.60): `/card` start card (admin settings); `/card/{path}`
   card (2.55–2.56 stack + Differ offer); `/queue` editor queue; `/user`
-  **settings** (not person card); `#/users/{uuid}` **public person card**
-  (`GET /api/users/{id}/card`, achievement counters, no unpublished paths;
-  TZ 2.87: invited_at + inviter login as @user, omit if none);
+  **settings** (not person card); `#/users/{login}` **public person card**
+  (`GET /api/users/{login}/card`, achievement counters, no unpublished paths;
+  UUID key is 404; TZ 2.87: invited_at + inviter login as @user, omit if none);
   `/offer` **my** proposals; `/graph`
-  shared canvas; `/search` card search; `/my_graph` personal graph;
+  shared canvas; `/invites` invite map (currently admin; TZ 2.98);
+  `/search` card search; `/my_graph` personal graph;
   `/contribution` Мой вклад; `/differ` stays Отличающиеся; `/` → `/graph`.
   Do not invent `/accepted/differ`. TZ 2.57 `/user`=person and
   `/offer`=combined queue — withdrawn;
@@ -234,17 +247,16 @@ openable for those shared paths (TZ 2.64)
 body; user = shared ∪ own personal; editor adds reviewable proposals;
 admin opens every card they can. `layer=overlay` is the graph stitch, not
 the card-search default. Hits carry layer; proposal notes are indexed on
-create. Card `#/card/{path}` is view-first; «Отредактировать карточку» and
-MDXEditor exist only for own personal (author contract) on the class
-`#/card/personal:{path}` (hash `personal%3A` is the same). TZ 2.53: that
-route must mount `PersonalCardEditor`; it was broken when the editor was
-unwired so those URLs looked shared/read-only. Shared stays read-only.
+create. Card `#/card/{path}` is **read-only** (TZ 2.93). Do not mount
+`PersonalCardEditor` / MDXEditor / «Отредактировать карточку». Class
+`#/card/personal:{path}` (hash `personal%3A`) is the own-personal layer,
+still preview only. Shared stays read-only.
 TZ 2.54: wiki hrefs inherit the open card layer (`qualifyCardPath`); do not
 collapse a personal wiki click onto unprefixed shared.
-In-app history is
-`rhizome_events.owner_user_id` on `GET /api/cards/{path}/feed` (no bodies).
-It is not a second comparison model and must present contribution
-provenance (author attribution) for included nodes/links when available.
+Card edit history is `card_revisions` (TZ 2.94): last 30 snapshots +
+unified diff, `GET /api/cards/{path}/revisions`, only after the button.
+`GET /api/cards/{path}/feed` stays body-less contribution events and must
+not be fetched on card open. It is not a second comparison model.
 Missing entitlement tables / «ризома автора» for payers is **N/A** this
 wave (ADR-016 leftover), not FAIL. Inventing a second knowledge repo,
 payment gateway, SMTP redesign, vsepsy login, Elasticsearch or Celery
@@ -345,13 +357,20 @@ Observer проверяет diff на:
 - отсутствие связи результата с точным commit SHA.
 - accidental workspace/multiple-shared-rhizome abstraction;
 - leftover take-into-git or shared ZIP/clone UX after TZ 2.5;
-- in-app editor that writes shared, others' personal, or proposal cards,
-  or invents a blank new path from an existing card (missing-link create
-  of a personal card is TZ 2.66), or opens the editor without
-  «Отредактировать карточку» / without author rights (TZ 2.50: view-first;
-  TZ 2.49 widget is MDXEditor, not a vault clone; TZ 2.48 allows own
-  personal `PUT` only); personal in-app events leaking into the shared
-  card feed for the same git path;
+- invite map (`GET /api/graph/invites`, `#/invites`) visible to non-admin
+  before an explicit leftover to open it; mixing it into `/graph` or the
+  admin cabinet;
+- website `.md`/ZIP upload button remounted (TZ 2.96: plugin only until
+  an API syncs into the local store); Differ/index/graph reading
+  `card_revisions` instead of the latest working copy;
+- website Markdown editor remounted before reverse download / reverse sync
+  (TZ 2.93), or an in-app editor that writes shared, others' personal, or
+  proposal cards, or invents a blank new path from an existing card
+  (missing-link create of a personal card is TZ 2.66); personal events
+  leaking into the shared card feed for the same git path; fetching
+  `/feed` or `/revisions` when merely opening a card (TZ 2.94); keeping
+  more than 30 revisions per card; historical
+  `take-from-shared` restored as-is;
 - entitlement / payment / «ризома автора» tables shipped as if they were
   this slice (TZ 2.41 names the model; `closed_paths` already exists);
 - Differ that requires git when the caller has uploads, or that treats

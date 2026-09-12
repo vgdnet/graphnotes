@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { GraphView } from "./GraphView";
 import type { FilterKind, GraphResponse } from "./GraphView";
+import { InviteGraph, type InviteGraphPayload } from "./InviteGraph";
 import { graphRequestParams } from "./graphQuery";
 import { GraphDiffView } from "./GraphDiffView";
 import type { GraphDiffResponse } from "./GraphDiffView";
@@ -132,15 +133,6 @@ type NoteDetail = NoteProjection & { body: string; content_hash: string; source?
 
 type NoteListResponse = {
   notes: NoteProjection[];
-  revision: string | null;
-};
-
-type IngestReport = {
-  accepted: string[];
-  rejected: { path: string; reason: string }[];
-  skipped: string[];
-  conflicted: string[];
-  warnings: string[];
   revision: string | null;
 };
 
@@ -430,8 +422,9 @@ export function App() {
   const [openNote, setOpenNote] = useState<NoteDetail | null>(null);
   const [missingCard, setMissingCard] = useState<{ path: string; title: string } | null>(null);
   const [stackedPersonal, setStackedPersonal] = useState<NoteDetail | null>(null);
-  const [report, setReport] = useState<IngestReport | null>(null);
   const [uploadStamp, setUploadStamp] = useState(0);
+  const [inviteGraph, setInviteGraph] = useState<InviteGraphPayload | null>(null);
+  const [inviteGraphLoading, setInviteGraphLoading] = useState(false);
   const [contributions, setContributions] = useState<ContributionsResponse | null>(null);
   const [uploadEvents, setUploadEvents] = useState<UploadEventItem[]>([]);
   const [sharedGraph, setSharedGraph] = useState<GraphResponse | null>(null);
@@ -720,7 +713,7 @@ export function App() {
     repository?.shared.index_status,
     repository?.personal?.connected,
     repository?.personal?.updated_at,
-    report?.revision,
+    uploadStamp,
     graphCenter,
     graphDepth,
     graphLayer,
@@ -869,7 +862,6 @@ export function App() {
   useEffect(() => {
     if (personUnknown) {
       setPersonCard(null);
-      setError("Карточка открывается по логину.");
       return;
     }
     if (!personLogin) {
@@ -894,6 +886,33 @@ export function App() {
     return () => controller.abort();
   }, [personLogin, personUnknown]);
   useEffect(() => {
+    if (authChecking || user?.role !== "admin") {
+      setInviteGraph(null);
+      setInviteGraphLoading(false);
+      return;
+    }
+    if (parseAppRoute(locationHash).kind !== "invites") return;
+    const controller = new AbortController();
+    setInviteGraphLoading(true);
+    void fetch("/api/graph/invites", { signal: controller.signal })
+      .then(async (response) => {
+        if (!response.ok) throw new Error(await readError(response));
+        return (await response.json()) as InviteGraphPayload;
+      })
+      .then((body) => {
+        if (!controller.signal.aborted) setInviteGraph(body);
+      })
+      .catch((requestError: unknown) => {
+        if (requestError instanceof DOMException && requestError.name === "AbortError") return;
+        setInviteGraph(null);
+        setError(requestError instanceof Error ? requestError.message : "Не удалось открыть карту инвайтов");
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setInviteGraphLoading(false);
+      });
+    return () => controller.abort();
+  }, [authChecking, user?.role, locationHash]);
+  useEffect(() => {
     if (authChecking) return;
     const route = parseAppRoute(locationHash);
     if (route.kind === "auth") {
@@ -901,6 +920,14 @@ export function App() {
       return;
     }
     setAuthOpen(false);
+    if (route.kind === "invites" && user?.role !== "admin") {
+      goHash(viewHash("graph"));
+      return;
+    }
+    if (route.kind === "person_unknown") {
+      goHash(viewHash("graph"));
+      return;
+    }
     setView(routeToView(route));
     if (route.kind === "my_graph") {
       setGraphLayer("personal");
@@ -1281,36 +1308,6 @@ export function App() {
       const mine = await fetch("/api/contributions/me");
       if (mine.ok) {
         setContributions((await mine.json()) as ContributionsResponse);
-      }
-    } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "Ошибка соединения");
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
-  async function importFallback(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const formElement = event.currentTarget;
-    const file = (new FormData(formElement).get("file") as File | null);
-    if (!file) return;
-    setSubmitting(true);
-    setError("");
-    const payload = new FormData();
-    payload.set("file", file);
-    if (personalRevision) payload.set("expected_sha", personalRevision);
-    try {
-      const response = await fetch("/api/personal/import-md", { method: "POST", body: payload });
-      if (!response.ok) throw new Error(await readError(response));
-      const body = (await response.json()) as IngestReport;
-      setReport(body);
-      setUploadStamp((value) => value + 1);
-      formElement.reset();
-      const notes = await fetch("/api/personal/notes");
-      if (notes.ok) {
-        const listed = (await notes.json()) as NoteListResponse;
-        setPersonalNotes(listed.notes);
-        setPersonalRevision(listed.revision);
       }
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "Ошибка соединения");
@@ -1795,6 +1792,11 @@ export function App() {
           {user && (
             <button className={view === "my_graph" ? "button button--quiet tab--active" : "button button--quiet"} type="button" onClick={() => goHash(viewHash("my_graph"))}>
               Мой граф
+            </button>
+          )}
+          {user?.role === "admin" && (
+            <button className={view === "invites" ? "button button--quiet tab--active" : "button button--quiet"} type="button" onClick={() => goHash(viewHash("invites"))}>
+              Инвайты
             </button>
           )}
           <button
@@ -2312,20 +2314,6 @@ export function App() {
               >
                 Предложить в общую
               </button>
-              <form className="connect-form" onSubmit={(event) => void importFallback(event)}>
-                <label>
-                  Загрузка .md или ZIP в локальный склад
-                  <input name="file" type="file" accept=".md,.zip,text/markdown,application/zip" required />
-                </label>
-                <button className="button button--quiet" type="submit" disabled={submitting}>
-                  Загрузить в личный слой
-                </button>
-              </form>
-              {report && (
-                <p className="ingest-report" role="status">
-                  Принято: {report.accepted.length}. Пропущено: {report.skipped.length}. Конфликт: {report.conflicted.length}.
-                </p>
-              )}
               {uploadEvents.length > 0 && (
                 <div>
                   <p className="admin-panel__hint">История загрузок в личный слой — в GraphNotes, не в git log.</p>
@@ -2703,6 +2691,20 @@ export function App() {
             )}
           </section>
           )}
+          {view === "invites" && user.role === "admin" && (
+            <section className="notes-panel notes-panel--graph" aria-labelledby="invites-heading">
+              <div>
+                <p className="eyebrow">Создатели</p>
+                <h2 id="invites-heading">Инвайты</h2>
+                <p className="admin-panel__hint">
+                  Кто кого пригласил. Число и размер узла — сколько прямых связей.
+                  Это не ризома и не админка. Клик по узлу открывает карточку человека.
+                </p>
+              </div>
+              {error && <p className="form-error" role="alert">{error}</p>}
+              <InviteGraph graph={inviteGraph} loading={inviteGraphLoading} />
+            </section>
+          )}
           {(view === "graph" || view === "my_graph") && repository?.shared.connected && (
             <section className="notes-panel notes-panel--graph" aria-labelledby="graph-heading">
               <div>
@@ -2857,7 +2859,7 @@ export function App() {
           />
         )}
         {view === "about" && legalAboutPanel}
-        {view !== "card" && view !== "search" && view !== "about" && view !== "person" && repository?.shared.connected && (
+        {view !== "card" && view !== "search" && view !== "about" && view !== "person" && view !== "invites" && repository?.shared.connected && (
           <section className="notes-panel notes-panel--graph" aria-labelledby="public-graph-heading">
             <div>
               <p className="eyebrow">Граф</p>

@@ -21,3 +21,8 @@ Public JSON omits Git SHAs, branches and PR URLs.
 Git remains the canon of note text. Rebuild of the derived index does not
 require the feed; the feed is product history that git log cannot express
 (the commit is made by the app, not the author's UUID).
+
+TZ 2.94 leftover vs this ADR: the card page no longer auto-loads the feed.
+On-demand **«История правок»** reads `card_revisions` — last 30 snapshots
+and a unified diff. That table is edit history, not a second living canon.
+`rhizome_events` stay body-less for contribution counts.

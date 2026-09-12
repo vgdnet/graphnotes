@@ -35,8 +35,34 @@ declare module 'obsidian' {
     on(name: 'modify' | 'create' | 'delete', cb: (file: TAbstractFile) => any): any;
     on(name: 'rename', cb: (file: TAbstractFile, oldPath: string) => any): any;
   }
+  export class WorkspaceLeaf {
+    view: View;
+    setViewState(state: { type: string; active?: boolean; state?: unknown }): Promise<void>;
+  }
+  export class View {
+    app: App;
+    leaf: WorkspaceLeaf;
+    containerEl: HTMLElement;
+    contentEl: HTMLElement;
+    constructor(leaf: WorkspaceLeaf);
+    getViewType(): string;
+    getDisplayText(): string;
+    getIcon(): string;
+    onOpen(): Promise<void>;
+    onClose(): Promise<void>;
+  }
+  export class ItemView extends View {}
   export class Workspace {
+    getActiveFile(): TFile | null;
     getActiveViewOfType<T>(type: new (...args: any[]) => T): T | null;
+    getLeavesOfType(viewType: string): WorkspaceLeaf[];
+    getRightLeaf(split: boolean): WorkspaceLeaf | null;
+    getLeftLeaf(split: boolean): WorkspaceLeaf | null;
+    revealLeaf(leaf: WorkspaceLeaf): void;
+    onLayoutReady(callback: () => any): void;
+    ensureSideLeaf(type: string, side: 'left' | 'right', options?: { active?: boolean; split?: boolean; reveal?: boolean }): Promise<WorkspaceLeaf>;
+    on(name: 'file-open', cb: (file: TFile | null) => any): any;
+    on(name: 'active-leaf-change', cb: (leaf: unknown) => any): any;
   }
   export class MarkdownView {
     file: TFile | null;
@@ -64,7 +90,9 @@ declare module 'obsidian' {
     addRibbonIcon(icon: string, title: string, callback: () => void): HTMLElement;
     addCommand(command: { id: string; name: string; callback: () => void }): void;
     addSettingTab(tab: PluginSettingTab): void;
+    registerView(type: string, creator: (leaf: WorkspaceLeaf) => View): void;
     registerEvent(eventRef: any): any;
+    registerInterval(id: number): number;
   }
   export class PluginSettingTab {
     app: App;
@@ -79,6 +107,7 @@ declare module 'obsidian' {
     addText(cb: (text: { inputEl: HTMLInputElement; setPlaceholder(v: string): any; setValue(v: string): any; onChange(cb: (v: string) => void): any }) => any): this;
     addToggle(cb: (toggle: { setValue(v: boolean): any; onChange(cb: (v: boolean) => void): any }) => any): this;
     addButton(cb: (button: { setButtonText(v: string): any; setCta(): any; onClick(cb: () => void): any }) => any): this;
+    addDropdown(cb: (dropdown: { addOption(value: string, display: string): any; setValue(v: string): any; onChange(cb: (v: string) => any): any }) => any): this;
   }
   export class Modal {
     app: App;

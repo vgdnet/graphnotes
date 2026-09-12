@@ -11,13 +11,34 @@ export interface Pending {
 }
 export interface ConnectionData { clientId: string; baseline: Baselines; pending?: Pending }
 export interface HistoryEntry { at: string; transferId?: string; state: string; count: number }
+export interface LastDebug {
+  at: string;
+  event: string;
+  api: 'ok' | 'error';
+  origin?: string;
+  error?: string;
+  writeAllowed?: boolean;
+  remote?: number;
+  sent?: number;
+  same?: number;
+  conflicts?: string[];
+}
+export type AutoMode = 'manual' | 'close' | 'idle' | 'interval';
+export const AUTO_MODES: AutoMode[] = ['manual', 'close', 'idle', 'interval'];
+export function clampAutoMinutes(value: number): number {
+  if (!Number.isFinite(value)) return 5;
+  return Math.min(120, Math.max(1, Math.round(value)));
+}
 export interface SavedData {
   server: string;
   allowHttp: boolean;
   token: string;
   autoSync: boolean;
+  autoMode: AutoMode;
+  autoMinutes: number;
   connections: Record<string, ConnectionData>;
   history: HistoryEntry[];
+  lastDebug?: LastDebug;
 }
 export const supported = new Set(['md', 'png', 'jpg', 'jpeg', 'gif', 'webp', 'pdf']);
 export function fileKind(path: string): Kind {
@@ -57,6 +78,10 @@ export function classify(localHash: string | undefined, remote: RemoteFile | und
   if (remote.version === base.version) return 'changed';
   return localHash === base.localHash ? 'remote' : 'conflict';
 }
+export function rememberSame(baseline: Baselines, path: string, remote: RemoteFile, localHash: string): void {
+  baseline[path] = { sha256: remote.sha256, version: remote.version, localHash };
+}
+
 export function applyResults(baseline: Baselines, operations: Operation[], results: RemoteFile[]): void {
   const byPath = new Map(results.map(r => [r.path, r]));
   // Validate before changing the persisted baseline. Never infer success from a new manifest.
@@ -74,3 +99,35 @@ export function applyResults(baseline: Baselines, operations: Operation[], resul
 export const changeLabels: Record<Change, string> = {
   new: 'Новый', changed: 'Изменён локально', same: 'Совпадает', remote: 'Изменён на сервере', conflict: 'Конфликт', deleted: 'Удалён локально'
 };
+
+export function deleteOp(
+  path: string,
+  remote: RemoteFile | undefined,
+  base: Baseline | undefined,
+): Operation | null {
+  const change = classify(undefined, remote, base);
+  if (change === 'same') return null;
+  if (!remote?.version) return null;
+  return { op: 'delete', path, expected_version: remote.version };
+}
+
+export function chunkOps(
+  operations: Operation[],
+  limits: { batch_max_operations: number; batch_max_bytes: number },
+): Operation[][] {
+  const chunks: Operation[][] = [];
+  let current: Operation[] = [];
+  let bytes = 0;
+  for (const op of operations) {
+    const size = op.op === 'upsert' ? op.size : 0;
+    if (current.length && (current.length >= limits.batch_max_operations || bytes + size > limits.batch_max_bytes)) {
+      chunks.push(current);
+      current = [];
+      bytes = 0;
+    }
+    current.push(op);
+    bytes += size;
+  }
+  if (current.length) chunks.push(current);
+  return chunks;
+}

@@ -34,6 +34,7 @@ async def list_differences(
     if shared is None or not published_sha(shared):
         raise ProposalError(409, "the shared rhizome is not connected")
     closed = await closed_paths_for_user(database, user.id)
+    # Working copy only (TZ 2.96). card_revisions are rollback history, not Differ.
     uploads = list(
         (
             await database.scalars(

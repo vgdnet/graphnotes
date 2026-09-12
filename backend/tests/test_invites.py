@@ -189,8 +189,11 @@ async def test_cutover_attributes_existing_users_to_efimov(
     assert row["invited_at"]
     graph = await client.get("/graph/invites")
     assert graph.status_code == 200
-    nodes = {item["username"]: item["id"] for item in graph.json()["nodes"]}
-    assert "efimov" in nodes and "old-account" in nodes
+    by_name = {item["username"]: item for item in graph.json()["nodes"]}
+    assert "efimov" in by_name and "old-account" in by_name
+    assert by_name["efimov"]["invited_count"] == 1
+    assert by_name["old-account"]["invited_count"] == 0
+    nodes = {name: item["id"] for name, item in by_name.items()}
     assert any(
         item["source"] == nodes["efimov"] and item["target"] == nodes["old-account"]
         for item in graph.json()["edges"]

@@ -4,10 +4,11 @@ Updated: 2026-09-12
 Status: canonical architecture baseline
 Aligned with PRODUCT_SPEC 2.98. Invite map `#/invites`
 (`GET /api/graph/invites`) is a separate cytoscape graph of
-`users.invited_by_id`, not the rhizome canvas and not an admin screen.
-Currently admin-only; leftover to show more widely later.
+`users.invited_by_id` for creators: node shows `invited_count`.
+Not the rhizome canvas and not an admin screen. Currently admin-only.
 Person card URL is `#/users/{login}`
-(`#/users/efimov`); UUID still resolves and canonicalizes to login.
+(`#/users/efimov`). A UUID in the hash or in
+`GET /api/users/{…}/card` is **404** and is not canonicalized to login.
 Website `.md`/ZIP upload buttons are
 **gone** (including Differ «Загрузить в личный слой»); the plugin writes
 the personal store. A future upload API must sync into that same local
@@ -38,9 +39,10 @@ vsepsy.ru. Do not deploy this wave to production `rhizome`. TZ 2.83: the Elastic
 deploy**. Not this branch; do not add ES to Compose; SQL `/search` until
 then; §6.5.3 questions 1–9 stay unanswered for that later wave.
 TZ 2.90 / §12.1: GraphNotes Publisher queues vault edits and copies them
-on ribbon / file close / idle minutes / interval (not every keystroke), into
+on the sidebar ItemView «Передать правки на сервер», ribbon paper-plane,
+file close, idle minutes, or interval (not every keystroke), into
 the owner's `personal_uploads` / `personal_assets` (no card picker
-required; first dump is «Отправить всё»; matching bytes skipped). Shared
+required; first dump is «Отправить все правки»; matching bytes skipped). Shared
 rhizome, Differ and proposals stay unchanged. TZ 2.88: Differ API lists
 diffs and missing-from-shared offers; cabinet first, plugin later.
 Contribution marks/topics (§6.6.3) are not this plugin transfer API.
@@ -96,17 +98,19 @@ Auth is one chrome (login / register /
 forgot); reset lookup is login or email, mail only to stored inbox. App routes (owner list; typo `/seach` →
 **`/search`**, hash `#/…`): `/card` = admin start card (path in
 `installation_settings`, Admin → Установка, 404 if unset);
-`/card/{path}` = that card (TZ 2.55–2.56: no layer in URL; own editable,
-shared not; same path in both layers = **stack** rhizome-top /
+`/card/{path}` = that card (TZ 2.55–2.56: no layer in URL; website
+read-only, TZ 2.93; same path in both layers = **stack** rhizome-top /
 personal-bottom + Differ offer — **shipped 2.59**); `/queue` = editor
 proposal queue; `/user` = **account settings** (not the public person
-card); `#/users/{login}` = **public person card** (TZ 2.60 / **2.97**: achievements —
+card); `#/users/{login}` = **public person card** (TZ 2.60 / **2.97** / **2.98**: achievements —
 accepted notes/links, proposal count, shared created/edited events; feed
 names and proposal author open it; `GET /api/users/{login}/card` (UUID key is 404; no public UUID);
 TZ 2.87: «Приглашен %date% по приглашению от @user»
-from stored inviter UUID / login — omit if none); `/offer` = **my** proposals into the rhizome; `/graph` = shared
-rhizome canvas (fCoSE); `/invites` = who-invited-whom map (currently admin;
-not the rhizome canvas); `/search` = card search (SQL `note_index`,
+from stored inviter login — omit if none); `/offer` = **my** proposals into the rhizome; `/graph` = shared
+rhizome canvas (fCoSE); `/invites` = invite map for creators (TZ 2.98):
+`@login · N` + node size from `invited_count`; click → `#/users/{login}`;
+diamond if no inviter; currently admin; non-admin hash redirects to `/graph`;
+not the rhizome canvas and not an admin screen); `/search` = card search (SQL `note_index`,
 `layer=visible`; Elasticsearch only after the first approved rhizome
 production deploy — ADR-015 / TZ 2.83); `/my_graph` = personal graph layer only;
 `/contribution` = Мой вклад. `/differ` stays Отличающиеся (compare /
@@ -697,9 +701,10 @@ Personal layer (plugin write to the local store; git connector leftover):
   white noise → 400 `content is not Markdown notes` + account lock)
 - `GET  /api/personal/notes` (read-only index of the caller's personal layer)
 - `GET  /api/personal/notes/{id}`
-- `PUT  /api/personal/notes/{path}` (TZ 2.50: own personal only after the
-  card-page edit button; `source` + `expected_hash`; author contract;
-  local store; no new path; 409 stale; records owner-scoped feed events)
+- `PUT  /api/personal/notes/{path}` (plugin / API and TZ 2.66 stub create;
+  not the website editor, TZ 2.93; `source` + `expected_hash`; author
+  contract; local store; 409 stale; records owner-scoped feed events
+  and a `card_revisions` snapshot)
 - `GET  /api/personal/uploads` (upload history: who / when / path / hash)
 - `GET  /api/personal/closed-paths`
 - `PUT  /api/personal/closed-paths`
@@ -742,7 +747,8 @@ Removed from product surface (TZ 2.5 / 2.6):
 
 Graph visualization and Graph Diff (Stage-owned):
 - `GET  /api/graph/shared` (`/graph` canvas; no login; public published layer only)
-- `GET  /api/graph/invites` (`#/invites` who-invited-whom; currently admin; TZ 2.98)
+- `GET  /api/graph/invites` (`#/invites` who-invited-whom + `invited_count`;
+  node size / `@login · N`; currently admin; TZ 2.98)
 - `GET  /api/graph/personal` (`/my_graph`; ваша личная ризома; caller’s full indexed tree or uploads)
 - `GET  /api/graph/personal-overlay` (ваша часть ризомы; shared page + automatic wikilink stitch)
 - `GET  /api/search` (`layer=visible|overlay|personal|shared`; visible is
@@ -769,7 +775,8 @@ Product requirement: §6.3.4 / §5.5.7 / TZ 2.82 / 2.90. Operator examples:
 (`obsidian-plugin/`, GraphNotes Publisher) is part of this product
 (TZ 2.69). GraphNotes owns the HTTP API and the personal store.
 TZ 2.90 client: vault create/modify/delete/rename enqueue locally.
-Network runs on ribbon «Записать», file close, idle minutes after the
+Network runs on the sidebar ItemView «Передать правки на сервер»,
+ribbon paper-plane, file close, idle minutes after the
 last edit, or an interval if the queue is not empty — not on every
 `modify`. Default `autoMode: idle`, `autoMinutes: 5`. Obsidian quit does
 not start a transfer (same limit as Obsidian Git). Card picking is not
@@ -874,5 +881,6 @@ table `integration_token_access`, not the admin audit journal.
 
 Alembic: `0017_obsidian_integration`, `0018_integration_token_access`,
 `0020_invites` (invite table + `users.invited_by_id` / `invited_at`;
-cutover UPDATE to `@efimov`). Integration checks: `rhizome-test`
-only; do not apply on `rhizome` until an approved revision.
+cutover UPDATE to `@efimov`), `0021_card_revisions` (last 30 snapshots;
+index / graph / Differ still read the working copy). Integration checks:
+`rhizome-test` only; do not apply on `rhizome` until an approved revision.

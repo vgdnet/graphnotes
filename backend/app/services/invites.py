@@ -186,3 +186,40 @@ async def _unused_invite(database: AsyncSession, token: str) -> Invite | None:
         )
     )
     return invite
+
+
+async def list_invite_graph(database: AsyncSession) -> dict[str, object]:
+    """Who invited whom. Built from users.invited_by_id, not invite letters."""
+    users = list(
+        (
+            await database.scalars(select(User).order_by(User.created_at.asc(), User.username.asc()))
+        ).all()
+    )
+    known = {user.id for user in users}
+    invited_count = {user.id: 0 for user in users}
+    for user in users:
+        if user.invited_by_id is not None and user.invited_by_id in known:
+            invited_count[user.invited_by_id] += 1
+    nodes = [
+        {
+            "id": str(user.id),
+            "username": user.username,
+            "display_name": user.display_name,
+            "role": user.role,
+            "is_active": user.is_active,
+            "invited_by_id": str(user.invited_by_id) if user.invited_by_id else None,
+            "invited_at": user.invited_at
+            or (user.created_at if user.invited_by_id is not None else None),
+            "invited_count": invited_count[user.id],
+        }
+        for user in users
+    ]
+    edges = [
+        {
+            "source": str(user.invited_by_id),
+            "target": str(user.id),
+        }
+        for user in users
+        if user.invited_by_id is not None and user.invited_by_id in known
+    ]
+    return {"nodes": nodes, "edges": edges}

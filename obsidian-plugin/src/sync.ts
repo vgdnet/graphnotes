@@ -1,14 +1,14 @@
 import { Notice, TAbstractFile, TFile, type App } from 'obsidian';
 import { Api, sourcesApplied, type Capabilities, type Transfer } from './api';
 import {
-  applyResults, classify, connectionKey, eligible, fileKind, safePath, sha256,
-  type Operation, type RemoteFile, type SavedData,
+  applyResults, classify, chunkOps, connectionKey, deleteOp, eligible, fileKind, rememberSame, safePath, sha256,
+  type LastDebug, type Operation, type RemoteFile, type SavedData,
 } from './core';
 import { vaultEligible } from './links';
 import { cancelTransfer, runTransfer, SnapshotChangedError } from './runner';
 import { connectionOf, pushHistory } from './store';
 
-const DEBOUNCE_MS = 2500;
+const STRUCTURAL_MS = 1500;
 
 export interface SyncPlugin {
   app: App;
@@ -16,17 +16,20 @@ export interface SyncPlugin {
   token: string;
   persist(): Promise<void>;
   connect(signal: AbortSignal): { origin: string; api: Api };
-  registerEvent(eventRef: any): any;
+  registerEvent(eventRef: unknown): unknown;
+  registerInterval(id: number): number;
   beginSync(): AbortSignal;
-  onConflicts(paths: string[]): void;
 }
 
 export class VaultSync {
-  private timer: ReturnType<typeof setTimeout> | null = null;
+  private idleTimer: ReturnType<typeof setTimeout> | null = null;
+  private structuralTimer: ReturnType<typeof setTimeout> | null = null;
+  private intervalId: number | null = null;
   private queued = new Set<string>();
   private removed = new Set<string>();
   private running = false;
   private again: 'queued' | 'all' | null = null;
+  private openPath: string | null = null;
 
   get busy(): boolean {
     return this.running;
@@ -36,6 +39,7 @@ export class VaultSync {
 
   watch(): void {
     const vault = this.plugin.app.vault;
+    const workspace = this.plugin.app.workspace;
     this.plugin.registerEvent(vault.on('modify', file => this.onFile(file)));
     this.plugin.registerEvent(vault.on('create', file => this.onFile(file)));
     this.plugin.registerEvent(vault.on('delete', file => this.onRemove(file.path)));
@@ -43,6 +47,28 @@ export class VaultSync {
       this.onRemove(oldPath);
       this.onFile(file);
     }));
+    this.plugin.registerEvent(workspace.on('file-open', file => this.onOpen(file)));
+    this.plugin.registerEvent(workspace.on('active-leaf-change', () => this.onOpen(workspace.getActiveFile())));
+    this.openPath = workspace.getActiveFile()?.path ?? null;
+    this.reconfigure();
+  }
+
+  reconfigure(): void {
+    this.clearIdle();
+    if (this.intervalId != null) {
+      window.clearInterval(this.intervalId);
+      this.intervalId = null;
+    }
+    if (this.plugin.saved.autoMode === 'interval' && this.plugin.saved.autoSync) {
+      const ms = this.plugin.saved.autoMinutes * 60_000;
+      this.intervalId = window.setInterval(() => this.flushIfPending(), ms);
+      this.plugin.registerInterval(this.intervalId);
+    }
+  }
+
+  writeNow(notice = true): void {
+    if (this.queued.size || this.removed.size) void this.flush('queued', notice);
+    else this.pushAll(notice);
   }
 
   pushAll(notice = true): void {
@@ -55,25 +81,61 @@ export class VaultSync {
     return !!this.plugin.token.trim() && !!this.plugin.saved.server.trim();
   }
 
+  private onOpen(file: TFile | null): void {
+    const next = file?.path ?? null;
+    const prev = this.openPath;
+    this.openPath = next;
+    if (this.plugin.saved.autoMode !== 'close' || !this.plugin.saved.autoSync || !this.ready()) return;
+    if (prev && prev !== next && (this.queued.has(prev) || this.removed.has(prev))) {
+      void this.flush('queued', false);
+    }
+  }
+
   private onFile(file: TAbstractFile): void {
-    if (!(file instanceof TFile) || !eligible(file.path) || !this.plugin.saved.autoSync || !this.ready()) return;
+    if (!(file instanceof TFile) || !eligible(file.path) || !this.ready()) return;
     this.queued.add(file.path);
-    this.schedule();
+    this.afterQueue('edit');
   }
 
   private onRemove(path: string): void {
-    if (!eligible(path) || !this.plugin.saved.autoSync || !this.ready()) return;
+    if (!eligible(path) || !this.ready()) return;
     this.queued.delete(path);
     this.removed.add(path);
-    this.schedule();
+    this.afterQueue('structural');
   }
 
-  private schedule(): void {
-    if (this.timer) clearTimeout(this.timer);
-    this.timer = setTimeout(() => {
-      this.timer = null;
+  private afterQueue(kind: 'edit' | 'structural'): void {
+    if (!this.plugin.saved.autoSync) return;
+    const mode = this.plugin.saved.autoMode;
+    if (mode === 'idle') this.scheduleIdle();
+    if (mode === 'close' && kind === 'structural') this.scheduleStructural();
+  }
+
+  private scheduleIdle(): void {
+    this.clearIdle();
+    this.idleTimer = setTimeout(() => {
+      this.idleTimer = null;
       void this.flush('queued', false);
-    }, DEBOUNCE_MS);
+    }, this.plugin.saved.autoMinutes * 60_000);
+  }
+
+  private scheduleStructural(): void {
+    if (this.structuralTimer) clearTimeout(this.structuralTimer);
+    this.structuralTimer = setTimeout(() => {
+      this.structuralTimer = null;
+      void this.flush('queued', false);
+    }, STRUCTURAL_MS);
+  }
+
+  private clearIdle(): void {
+    if (this.idleTimer) {
+      clearTimeout(this.idleTimer);
+      this.idleTimer = null;
+    }
+  }
+
+  private flushIfPending(): void {
+    if (this.queued.size || this.removed.size) void this.flush('queued', false);
   }
 
   async flush(scope: 'queued' | 'all', notice: boolean): Promise<void> {
@@ -89,12 +151,62 @@ export class VaultSync {
     try {
       await this.send(scope, notice);
     } catch (error) {
-      new Notice(error instanceof Error ? error.message : 'Не удалось отправить правки в GraphNotes.');
+      const message = error instanceof Error ? error.message : 'Не удалось отправить правки в GraphNotes.';
+      await this.debug({
+        at: new Date().toISOString(),
+        event: `flush:${scope}`,
+        api: 'error',
+        error: message,
+      });
+      new Notice(message);
     } finally {
       this.running = false;
       const next = this.again;
       this.again = null;
       if (next) void this.flush(next, notice);
+    }
+  }
+
+  async replaceWithLocal(paths: string[]): Promise<void> {
+    if (this.running) {
+      new Notice('Сейчас уже идёт передача. Дождитесь конца или нажмите «Проверить / продолжить».');
+      return;
+    }
+    if (!this.ready()) {
+      new Notice('Укажите адрес и токен GraphNotes.');
+      return;
+    }
+    this.running = true;
+    try {
+      const signal = this.plugin.beginSync();
+      const { api } = this.plugin.connect(signal);
+      const caps = await api.capabilities();
+      if (!caps.write_allowed || !caps.scopes.includes('personal:write')) {
+        new Notice('Сервер не разрешил запись в личное хранилище.');
+        return;
+      }
+      const conn = connectionOf(this.plugin.saved, connectionKey(api.origin, caps.user.id));
+      if (conn.pending) {
+        const continued = await this.runPending(api, conn, true, signal);
+        if (!continued) return;
+      }
+      const operations: Operation[] = [];
+      for (const path of paths) {
+        const op = await this.replaceOp(path, api, caps);
+        if (op) operations.push(op);
+      }
+      if (!operations.length) {
+        new Notice('Нет локальных файлов для замены серверной версии.');
+        return;
+      }
+      await this.commitOps(api, conn, caps, operations, true, signal);
+    } catch (error) {
+      new Notice(error instanceof Error ? error.message : 'Не удалось заменить серверную версию.');
+    } finally {
+      this.running = false;
+      const next = this.again;
+      this.again = null;
+      if (next) void this.flush(next, false);
     }
   }
 
@@ -108,6 +220,14 @@ export class VaultSync {
     const { api } = this.plugin.connect(signal);
     const caps = await api.capabilities();
     if (!caps.write_allowed || !caps.scopes.includes('personal:write')) {
+      await this.debug({
+        at: new Date().toISOString(),
+        event: `send:${scope}`,
+        api: 'ok',
+        origin: api.origin,
+        writeAllowed: false,
+        error: caps.write_block_reason ?? 'write_not_allowed',
+      });
       new Notice('Сервер не разрешил запись в личное хранилище.');
       return;
     }
@@ -124,11 +244,11 @@ export class VaultSync {
       return;
     }
     const operations: Operation[] = [];
-    const conflicts: string[] = [];
+    let same = 0;
 
     for (const path of paths) {
-      const op = await this.upsertOp(path, remote.get(path), conn.baseline[path], caps);
-      if (op === 'conflict') conflicts.push(path);
+      const op = await this.upsertOp(path, remote.get(path), conn.baseline, caps);
+      if (op === 'same') same += 1;
       else if (op) operations.push(op);
     }
     if (caps.scopes.includes('personal:delete')) {
@@ -137,18 +257,44 @@ export class VaultSync {
         : removed;
       for (const path of extra) {
         const op = deleteOp(path, remote.get(path), conn.baseline[path]);
-        if (op === 'conflict') conflicts.push(path);
-        else if (op) operations.push(op);
+        if (op) operations.push(op);
       }
     }
 
+    if (same) await this.plugin.persist();
+    await this.debug({
+      at: new Date().toISOString(),
+      event: `send:${scope}`,
+      api: 'ok',
+      origin: api.origin,
+      writeAllowed: caps.write_allowed,
+      remote: remote.size,
+      sent: operations.length,
+      same,
+    });
+
     if (!operations.length) {
-      if (conflicts.length) this.plugin.onConflicts(conflicts);
-      else if (notice) new Notice('Нет локальных правок для личного хранилища.');
+      if (notice) new Notice('Нет локальных правок для личного хранилища.');
       return;
     }
 
-    for (const chunk of chunkOps(operations, caps)) {
+    await this.commitOps(api, conn, caps, operations, notice, signal);
+  }
+
+  private async debug(entry: LastDebug): Promise<void> {
+    this.plugin.saved.lastDebug = entry;
+    await this.plugin.persist();
+  }
+
+  private async commitOps(
+    api: Api,
+    conn: ReturnType<typeof connectionOf>,
+    caps: Capabilities,
+    operations: Operation[],
+    notice: boolean,
+    signal: AbortSignal,
+  ): Promise<void> {
+    for (const chunk of chunkOps(operations, caps.limits)) {
       conn.pending = { key: crypto.randomUUID(), createdAt: new Date().toISOString(), operations: chunk };
       await this.plugin.persist();
       let transfer: Transfer | false;
@@ -172,7 +318,6 @@ export class VaultSync {
       }
     }
     if (notice) new Notice(`В личное хранилище отправлено файлов: ${operations.length}. Общая ризома не изменена.`);
-    if (conflicts.length) this.plugin.onConflicts(conflicts);
   }
 
   private async runPending(
@@ -180,6 +325,7 @@ export class VaultSync {
     conn: ReturnType<typeof connectionOf>,
     notice: boolean,
     signal: AbortSignal,
+    retried = false,
   ): Promise<Transfer | false> {
     if (!conn.pending) return false;
     const pending = conn.pending;
@@ -210,9 +356,26 @@ export class VaultSync {
       catch { /* already applied */ }
       if (transfer.state === 'succeeded') delete conn.pending;
     } else if (transfer.state === 'conflict') {
-      const paths = transfer.errors.map(error => error.path).filter((path): path is string => !!path);
-      this.plugin.onConflicts(paths.length ? paths : pending.operations.map(op => op.path));
       delete conn.pending;
+      if (retried) {
+        await this.plugin.persist();
+        return false;
+      }
+      const paths = transfer.errors.map(error => error.path).filter((path): path is string => !!path);
+      const retry = paths.length ? paths : pending.operations.map(op => op.path);
+      const caps = await api.capabilities();
+      const operations: Operation[] = [];
+      for (const path of retry) {
+        const op = await this.replaceOp(path, api, caps);
+        if (op) operations.push(op);
+      }
+      if (!operations.length) {
+        await this.plugin.persist();
+        return false;
+      }
+      conn.pending = { key: crypto.randomUUID(), createdAt: new Date().toISOString(), operations };
+      await this.plugin.persist();
+      return this.runPending(api, conn, notice, signal, true);
     } else if (transfer.state === 'cancelled' || transfer.state === 'expired' || transfer.state === 'failed') {
       delete conn.pending;
       if (transfer.errors[0]?.message) new Notice(transfer.errors[0].message);
@@ -225,23 +388,45 @@ export class VaultSync {
     return transfer;
   }
 
+  private async replaceOp(path: string, api: Api, caps: Capabilities): Promise<Operation | null> {
+    const file = this.plugin.app.vault.getAbstractFileByPath(path);
+    if (!(file instanceof TFile) || !eligible(path)) return null;
+    const bytes = new Uint8Array(await this.plugin.app.vault.readBinary(file));
+    const kind = fileKind(file.path);
+    const max = kind === 'markdown' ? caps.limits.markdown_max_bytes : caps.limits.attachment_max_bytes;
+    if (bytes.byteLength > max || path.length > caps.limits.path_max_length) return null;
+    if (caps.limits.path_max_depth && path.split('/').length > caps.limits.path_max_depth) return null;
+    const content = await api.content(path);
+    return {
+      op: 'upsert',
+      path: safePath(path),
+      kind,
+      expected_version: content.version ?? null,
+      sha256: sha256(bytes),
+      size: bytes.byteLength,
+    };
+  }
+
   private async upsertOp(
     path: string,
     remote: RemoteFile | undefined,
-    base: { sha256: string; version: string; localHash: string } | undefined,
+    baseline: { [path: string]: { sha256: string; version: string; localHash: string } },
     caps: Capabilities,
-  ): Promise<Operation | 'conflict' | null> {
+  ): Promise<Operation | 'same' | null> {
     const file = this.plugin.app.vault.getAbstractFileByPath(path);
     if (!(file instanceof TFile) || !eligible(path)) return null;
     const bytes = new Uint8Array(await this.plugin.app.vault.readBinary(file));
     const hash = sha256(bytes);
-    const change = classify(hash, remote, base);
-    if (change === 'same' || change === 'remote') return null;
-    if (change === 'conflict') return 'conflict';
+    const change = classify(hash, remote, baseline[path]);
+    if (change === 'same') {
+      if (remote) rememberSame(baseline, path, remote, hash);
+      return 'same';
+    }
+    if (change === 'remote') return null;
     const kind = fileKind(file.path);
     const max = kind === 'markdown' ? caps.limits.markdown_max_bytes : caps.limits.attachment_max_bytes;
-    if (bytes.byteLength > max || path.length > caps.limits.path_max_length) return 'conflict';
-    if (caps.limits.path_max_depth && path.split('/').length > caps.limits.path_max_depth) return 'conflict';
+    if (bytes.byteLength > max || path.length > caps.limits.path_max_length) return null;
+    if (caps.limits.path_max_depth && path.split('/').length > caps.limits.path_max_depth) return null;
     const ext = file.extension.toLowerCase();
     if (!caps.supported_extensions.includes(ext) && !(ext === 'jpg' && caps.supported_extensions.includes('jpeg'))) return null;
     return {
@@ -253,33 +438,4 @@ export class VaultSync {
       size: bytes.byteLength,
     };
   }
-}
-
-function deleteOp(
-  path: string,
-  remote: RemoteFile | undefined,
-  base: { sha256: string; version: string; localHash: string } | undefined,
-): Operation | 'conflict' | null {
-  const change = classify(undefined, remote, base);
-  if (change === 'same') return null;
-  if (change !== 'deleted' || !remote?.version) return change === 'conflict' ? 'conflict' : null;
-  return { op: 'delete', path, expected_version: remote.version };
-}
-
-function chunkOps(operations: Operation[], caps: Capabilities): Operation[][] {
-  const chunks: Operation[][] = [];
-  let current: Operation[] = [];
-  let bytes = 0;
-  for (const op of operations) {
-    const size = op.op === 'upsert' ? op.size : 0;
-    if (current.length && (current.length >= caps.limits.batch_max_operations || bytes + size > caps.limits.batch_max_bytes)) {
-      chunks.push(current);
-      current = [];
-      bytes = 0;
-    }
-    current.push(op);
-    bytes += size;
-  }
-  if (current.length) chunks.push(current);
-  return chunks;
 }

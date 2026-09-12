@@ -1,8 +1,10 @@
+import difflib
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.card_revision import CARD_REVISION_LIMIT, CardRevision
 from app.models.github import SharedRepository
 from app.models.graph import NoteIndex, NoteLayer, NoteLink
 from app.models.proposal import Proposal
@@ -137,6 +139,132 @@ async def record_publication_events(
             )
 
 
+def card_revision_diff(path: str, before_text: str, after_text: str) -> str:
+    return "".join(
+        difflib.unified_diff(
+            before_text.splitlines(keepends=True),
+            after_text.splitlines(keepends=True),
+            fromfile=f"a/{path}",
+            tofile=f"b/{path}",
+            n=3,
+        )
+    )
+
+
+def _owner_clause(owner_id: UUID | None):
+    if owner_id is not None:
+        return CardRevision.owner_user_id == owner_id
+    return CardRevision.owner_user_id.is_(None)
+
+
+async def record_card_revision(
+    database: AsyncSession,
+    *,
+    path: str,
+    source: str,
+    owner_user_id: UUID | None,
+    actor_user_id: UUID | None,
+    before_text: str | None = None,
+) -> None:
+    """Keep the last CARD_REVISION_LIMIT snapshots. Skip unchanged bytes."""
+    if before_text is not None and before_text == source:
+        return
+    try:
+        path = normalize_git_path(path)
+    except PathError:
+        path = path.strip()
+    digest = parse_markdown(path, source).content_hash
+    latest = await database.scalar(
+        select(CardRevision)
+        .where(CardRevision.path == path, _owner_clause(owner_user_id))
+        .order_by(CardRevision.n.desc())
+        .limit(1)
+    )
+    if latest is not None and latest.content_hash == digest:
+        return
+    next_n = (latest.n + 1) if latest is not None else 1
+    database.add(
+        CardRevision(
+            path=path,
+            owner_user_id=owner_user_id,
+            actor_user_id=actor_user_id,
+            n=next_n,
+            content_hash=digest,
+            source=source,
+        )
+    )
+    await database.flush()
+    kept = list(
+        (
+            await database.scalars(
+                select(CardRevision.id)
+                .where(CardRevision.path == path, _owner_clause(owner_user_id))
+                .order_by(CardRevision.n.desc())
+            )
+        ).all()
+    )
+    extra = kept[CARD_REVISION_LIMIT:]
+    if extra:
+        await database.execute(delete(CardRevision).where(CardRevision.id.in_(extra)))
+
+
+async def list_card_revisions(
+    database: AsyncSession,
+    path: str,
+    *,
+    owner_id: UUID | None = None,
+) -> dict[str, object]:
+    try:
+        path = normalize_git_path(path)
+    except PathError:
+        path = path.strip()
+    rows = list(
+        (
+            await database.scalars(
+                select(CardRevision)
+                .where(CardRevision.path == path, _owner_clause(owner_id))
+                .order_by(CardRevision.n.desc())
+                .limit(CARD_REVISION_LIMIT)
+            )
+        ).all()
+    )
+    actor_ids = {row.actor_user_id for row in rows if row.actor_user_id}
+    users: dict[UUID, User] = {}
+    if actor_ids:
+        for user in (await database.scalars(select(User).where(User.id.in_(actor_ids)))).all():
+            users[user.id] = user
+    chronological = list(reversed(rows))
+    previous = ""
+    change_by_id: dict[UUID, str] = {}
+    first_id = chronological[0].id if chronological else None
+    for row in chronological:
+        change_by_id[row.id] = card_revision_diff(path, previous, row.source)
+        previous = row.source
+    payload = []
+    for row in rows:
+        actor = users.get(row.actor_user_id) if row.actor_user_id else None
+        payload.append(
+            {
+                "id": str(row.id),
+                "n": row.n,
+                "kind": "created" if row.id == first_id else "edited",
+                "created_at": row.created_at,
+                "content_hash": row.content_hash,
+                "change": change_by_id[row.id],
+                "actor": (
+                    {
+                        "id": str(actor.id),
+                        "username": actor.username,
+                        "display_name": actor.display_name,
+                    }
+                    if actor is not None
+                    else None
+                ),
+            }
+        )
+    return {"path": path, "revisions": payload}
+
+
 async def record_personal_edit_events(
     database: AsyncSession,
     *,
@@ -145,7 +273,15 @@ async def record_personal_edit_events(
     before_text: str,
     after_text: str,
 ) -> None:
-    """Card history for an in-app personal save. No Markdown bodies."""
+    """Card history for a personal save. Events stay body-less; snapshots go to revisions."""
+    await record_card_revision(
+        database,
+        path=path,
+        source=after_text,
+        owner_user_id=user.id,
+        actor_user_id=user.id,
+        before_text=before_text,
+    )
     before = parse_markdown(path, before_text)
     after = parse_markdown(path, after_text)
     database.add(

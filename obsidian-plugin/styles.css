@@ -13,3 +13,6 @@
 .graphnotes-publisher .gn-link { padding: 6px; }
 .graphnotes-publisher .gn-working button, .graphnotes-publisher .gn-working input, .graphnotes-publisher .gn-working select { pointer-events: none; opacity: .65; }
 .graphnotes-publisher pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+.gn-sidebar { padding: 8px 12px; }
+.gn-sidebar .gn-muted { color: var(--text-muted); font-size: var(--font-small); }
+.gn-sidebar .gn-write { width: 100%; margin-top: 8px; }

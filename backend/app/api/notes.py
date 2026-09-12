@@ -27,9 +27,9 @@ from app.schemas.comments import (
     CommentListResponse,
     CommentModerateRequest,
 )
-from app.schemas.provenance import NoteFeedResponse
+from app.schemas.provenance import CardRevisionListResponse, NoteFeedResponse
 from app.services.comments import CommentError, create_comment, list_comments, moderate_comment
-from app.services.provenance import list_note_feed
+from app.services.provenance import list_card_revisions, list_note_feed
 from app.services.github import GitHubAppClient
 from app.services.closed_corpus import (
     ClosedCorpusError,
@@ -150,6 +150,27 @@ async def shared_note(
     except IngestError as exc:
         _raise(exc)
     return NoteDetail.model_validate(payload)
+
+
+@router.get("/cards/{note_path:path}/revisions", response_model=CardRevisionListResponse)
+async def rhizome_card_revisions(
+    note_path: str,
+    database: DatabaseSession,
+    user: OptionalUser,
+) -> CardRevisionListResponse:
+    layer, owner_id, proposal_id, path = parse_card_ref(note_path)
+    if layer == "proposal" or proposal_id is not None:
+        return CardRevisionListResponse.model_validate({"path": path, "revisions": []})
+    if layer == "personal":
+        if user is None:
+            raise HTTPException(status_code=401, detail="authentication required")
+        target = owner_id or user.id
+        if owner_id is not None and owner_id != user.id and user.role != UserRole.ADMIN.value:
+            raise HTTPException(status_code=404, detail="note was not found")
+        payload = await list_card_revisions(database, path, owner_id=target)
+        return CardRevisionListResponse.model_validate(payload)
+    payload = await list_card_revisions(database, path)
+    return CardRevisionListResponse.model_validate(payload)
 
 
 @router.get("/cards/{note_path:path}/feed", response_model=NoteFeedResponse)

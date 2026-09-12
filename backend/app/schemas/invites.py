@@ -57,3 +57,24 @@ class InviteCreateResponse(BaseModel):
     id: UUID
     email: str
     expires_at: datetime
+
+
+class InviteGraphNode(BaseModel):
+    id: UUID
+    username: str
+    display_name: str
+    role: str
+    is_active: bool
+    invited_by_id: UUID | None = None
+    invited_at: datetime | None = None
+    invited_count: int = 0
+
+
+class InviteGraphEdge(BaseModel):
+    source: UUID
+    target: UUID
+
+
+class InviteGraphResponse(BaseModel):
+    nodes: list[InviteGraphNode]
+    edges: list[InviteGraphEdge]

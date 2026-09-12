@@ -73,8 +73,8 @@ POST /api/admin/mail/test             # operator test send; 503 if SMTP off
 
 GET  /api/graph/shared                # start page; no login; public published layer only; no card bodies;
                                       # optional center+depth 0–4 = local graph (unknown center ≠ first page)
-GET  /api/graph/invites               # invite map (who invited whom); currently admin only (TZ 2.98);
-                                      # not the rhizome canvas; no emails
+GET  /api/graph/invites               # invite map for creators: who invited whom + invited_count;
+                                      # currently admin only (TZ 2.98); not the rhizome canvas; no emails
 GET  /api/public/embed/{user_id}      # opt-in achievement: graph snippet and/or counts; no ZIP/bodies; fields TBD (§6.1.4)
 GET  /api/search                      # default layer=visible: role-scoped corpus;
                                       # hits include layer (shared/personal/proposal);

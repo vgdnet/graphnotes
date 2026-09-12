@@ -1,7 +1,7 @@
 # Product requirements to Stage traceability
 
 Статус: DERIVED / MAINTAINED
-Источник: `docs/product/PRODUCT_SPEC.md` version 2.88
+Источник: `docs/product/PRODUCT_SPEC.md` version 2.91
 
 Матрица маршрутизирует канонические требования в Stage-файлы и не изменяет
 `PRODUCT_SPEC.md`.
@@ -41,17 +41,18 @@
 | 6.1.3 | vsepsy.ru email+password opens rhizome.vsepsy.ru; no second register; no catalog merge; no /ops roles | next wave + ADR (identity) |
 | 6.1.4 | Opt-in rhizome achievement (graph and/or counts) for vsepsy.ru and own site; card fields for the public internet TBD | next wave + ADR |
 | 5.3 | Admin-only tab «Администрирование»: «Пользователи» (roles, block, set password) and action log | 2 |
+| 17.5 | Invite map `#/invites` for creators: who invited how many (`invited_count`); currently admin (TZ 2.98) | 2 |
 | 5.3.1 | Admin sets a new password for any account; plaintext never stored/logged; sessions of target end | 2 |
 | 5.4.2 | User sees own contribution stats; public person card `#/users/{uuid}` with achievement counters | 6 |
 | 6.2 | local personal + shared stores; GitHub copy-in (TZ 2.63); leftover merge-out; no product clone/ZIP of shared | 3 |
 | 6.3 | no download of published shared; personal working copy is GraphNotes store; git/Dropbox/Drive = copy-in, not a second canon | 4 (upload copies in), 7 (Differ vs local copy) |
-| 6.3.4 / 5.5.7 | GraphNotes Publisher + API: **free** copy of the local graph into the same personal store (TZ 2.82: vault edits auto-copy; first dump = send all); personal API key stored and shown again in Settings, copied into plugin `data.json` (TZ 2.76); access log / revoke; not shared, not Differ | plugin auto-copy accepted 2.82; token/API shipped 2.79 |
+| 6.3.4 / 5.5.7 | GraphNotes Publisher + API: **free** copy of the local graph into the same personal store (TZ 2.90: queue locally; write on sidebar ItemView «Передать правки на сервер» / ribbon paper-plane / file close / idle minutes / interval, not every keystroke; first dump = send all); personal API key stored and shown again in Settings, copied into plugin `data.json` (TZ 2.76); access log / revoke; not shared, not Differ | plugin write triggers 2.90; token/API shipped 2.79 |
 | 6.3.2 | Graph personal overlay: from git if connected else server store; layer menu/legend «ваша ризома», never «ваш git» | 6 |
 | 6.3.1 | Upload history in GraphNotes (who/when/hash), not user git log | next wave |
 | 6.4 | revisioned shared/personal/proposal derived index and rebuild | 5 |
-| 6.4.1 | Rhizome card change stats (who/when/which link); actor name opens `#/users/{uuid}`; personal in-app edits owner-scoped; no bodies in PostgreSQL | 6 |
+| 6.4.1 | Card «История правок» on demand (TZ 2.94): last 30 revisions + text diff; actor name opens `#/users/{uuid}`; `rhizome_events` stay body-less for contribution | 6 |
 | 6.5 | bounded shared Graph API, personal overlay, local ego-graph view (весь / локальный, depth 1–4, «Показать всё»), Cytoscape UI, **fCoSE** live layout | 5, 6 |
-| 6.5.2 | `#/search` role-scoped search; `#/card/{path}` view-first; `#/users/{uuid}` person card; own personal edit after «Отредактировать карточку» | 6, 7, 8 |
+| 6.5.2 | `#/search` role-scoped search; `#/card/{path}` **read-only** (TZ 2.93: no website editor until reverse sync); `#/users/{uuid}` person card | 6, 7, 8 |
 | 6.5.3 | Elasticsearch next search (ADR-015); SQL until then; questions 1–9 unanswered (TZ 2.83) | **only after the first approved rhizome production deploy**; not this branch |
 | 16 | Guest anti-scrape of published cards (1 IP → many unique paths); after `rhizome` prod only; not `rhizome-test` (TZ 2.80) | after first production deploy; ADR before code |
 | 17 | Invite email link; no Register tab; person card «Приглашен %date% по приглашению от @user»; same on vsepsy.ru (TZ 2.85–2.87) | shipped on rhizome-test (TZ 2.89); Alembic 0020 attributes existing accounts except efimov to @efimov |
@@ -76,7 +77,7 @@
 | Differ; proposals; connected git HEAD refresh on GET /differ; no shared ZIP archive UX | 7 |
 | author contribution / provenance | next wave |
 | personal/shared Graph API and rebuild | 5 |
-| search cards; card page payload; card feed (`GET /api/cards/{path}/feed`) | 6 |
+| search cards; card page payload; on-demand revisions (`GET /api/cards/{path}/revisions`) | 6 |
 | shared graph UI and personal overlay | 6 |
 | proposals, decisions, rollback | 7 |
 | proposal graph diff | 8 |
@@ -95,7 +96,7 @@
 | Isolated connected personal git | 3, 4 |
 | One shared rhizome readable in-app (graph/cards/Markdown); no product ZIP/clone of corpus | 3, 5, 6 |
 | No GraphNotes write of selected shared notes into personal git; no ZIP download of shared | 7; Stage 4 take-from-shared historical only |
-| Safe MD/ZIP upload (≤10 000 ZIP members; zip-bomb size/ratio guards); never into connected git | 4 |
+| Website MD/ZIP upload UI off (TZ 2.96); plugin writes store; future upload API must sync to local store; last 30 versions for rollback; index/graph/Differ = latest only | 4 |
 | White-noise personal ingest rejected; account locked; admins mailed; existing notes kept (TZ 2.67) | 4 |
 | User creates proposal from Differ selection | 7 |
 | Differ git input is the latest pulled public HEAD | 7 |

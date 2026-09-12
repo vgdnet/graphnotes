@@ -18,6 +18,7 @@ from app.models.integration import (
 from app.models.personal_upload import PersonalUpload, UploadEvent
 from app.models.shared_note import SharedNote
 from app.models.proposal import Proposal
+from app.models.card_revision import CardRevision
 from app.models.rhizome_event import RhizomeEvent
 from app.models.invite import Invite
 from app.models.user import User, UserRole
@@ -28,6 +29,7 @@ __all__ = [
     "EmailToken",
     "Invite",
     "InstallationSetting",
+    "CardRevision",
     "ClosedPath",
     "NoteComment",
     "GitHubWebhookDelivery",

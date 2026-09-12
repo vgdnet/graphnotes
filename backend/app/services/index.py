@@ -84,7 +84,11 @@ async def rebuild_shared(
 
     try:
         synced = await copy_shared_git_into_store(
-            database, client, row, previous_sha=row.indexed_sha
+            database,
+            client,
+            row,
+            previous_sha=row.indexed_sha,
+            actor_user_id=actor_user_id,
         )
     except GitHubAppError as exc:
         row.index_status = "error"
@@ -253,7 +257,10 @@ async def _store_texts_for_layer(
     layer: str,
     owner_id: uuid.UUID | None,
 ) -> dict[str, str] | None:
-    """Working-copy Markdown for index rebuild (TZ 2.63). None = leftover GitHub."""
+    """Latest working-copy Markdown for index/graph (TZ 2.63 / 2.96).
+
+    Never reads ``card_revisions``. None = leftover GitHub.
+    """
     if layer == NoteLayer.SHARED.value:
         rows = list((await database.scalars(select(SharedNote))).all())
         return {row.path: row.body for row in rows}
@@ -309,7 +316,11 @@ async def _rebuild(
             from app.services.ingest import copy_shared_git_into_store
 
             await copy_shared_git_into_store(
-                database, client, binding, previous_sha=binding.indexed_sha
+                database,
+                client,
+                binding,
+                previous_sha=binding.indexed_sha,
+                actor_user_id=actor_user_id,
             )
         elif layer == NoteLayer.PERSONAL.value and owner_id is not None and isinstance(
             binding, PersonalRepository
@@ -481,6 +492,8 @@ async def reindex_personal_uploads(database: AsyncSession, user_id: uuid.UUID) -
     """Rebuild the personal derived index from the local store only.
 
     Must not copy git into personal_uploads: that would overwrite plugin writes.
+    Indexes the latest working copy per path (TZ 2.96). Do not index
+    ``card_revisions`` — those are rollback snapshots, not the graph.
     """
     if await _running_rebuild(database, NoteLayer.PERSONAL.value, user_id):
         raise IndexerError(409, "index rebuild is already running")

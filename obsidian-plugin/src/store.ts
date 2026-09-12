@@ -1,7 +1,10 @@
-import type { ConnectionData, HistoryEntry, Pending, SavedData } from './core';
+import { AUTO_MODES, clampAutoMinutes, type AutoMode, type ConnectionData, type HistoryEntry, type LastDebug, type Pending, type SavedData } from './core';
 
 export function emptySaved(): SavedData {
-  return { server: '', allowHttp: false, token: '', autoSync: true, connections: {}, history: [] };
+  return {
+    server: '', allowHttp: false, token: '', autoSync: true,
+    autoMode: 'idle', autoMinutes: 5, connections: {}, history: [],
+  };
 }
 
 export function normalizeSaved(raw: unknown): SavedData {
@@ -13,7 +16,13 @@ export function normalizeSaved(raw: unknown): SavedData {
   if (typeof data.token === 'string' && data.token.startsWith('gnp_') && data.token.length <= 200) {
     saved.token = data.token.trim();
   }
-  saved.autoSync = data.autoSync !== false;
+  if (typeof data.autoMode === 'string' && AUTO_MODES.includes(data.autoMode as AutoMode)) {
+    saved.autoMode = data.autoMode as AutoMode;
+  } else {
+    saved.autoMode = data.autoSync === false ? 'manual' : 'idle';
+  }
+  saved.autoMinutes = clampAutoMinutes(typeof data.autoMinutes === 'number' ? data.autoMinutes : 5);
+  saved.autoSync = saved.autoMode !== 'manual';
   if (data.connections && typeof data.connections === 'object' && !Array.isArray(data.connections)) {
     for (const [key, value] of Object.entries(data.connections as Record<string, unknown>)) {
       const conn = normalizeConnection(value);
@@ -23,7 +32,26 @@ export function normalizeSaved(raw: unknown): SavedData {
   if (Array.isArray(data.history)) {
     saved.history = data.history.map(normalizeHistory).filter((e): e is HistoryEntry => !!e).slice(0, 20);
   }
+  const debug = normalizeDebug(data.lastDebug);
+  if (debug) saved.lastDebug = debug;
   return saved;
+}
+
+function normalizeDebug(value: unknown): LastDebug | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
+  const data = value as Record<string, any>;
+  if (typeof data.at !== 'string' || typeof data.event !== 'string' || (data.api !== 'ok' && data.api !== 'error')) {
+    return undefined;
+  }
+  const debug: LastDebug = { at: data.at, event: data.event, api: data.api };
+  if (typeof data.origin === 'string') debug.origin = data.origin;
+  if (typeof data.error === 'string') debug.error = data.error.slice(0, 500);
+  if (typeof data.writeAllowed === 'boolean') debug.writeAllowed = data.writeAllowed;
+  if (Number.isSafeInteger(data.remote)) debug.remote = data.remote;
+  if (Number.isSafeInteger(data.sent)) debug.sent = data.sent;
+  if (Number.isSafeInteger(data.same)) debug.same = data.same;
+  if (Array.isArray(data.conflicts)) debug.conflicts = data.conflicts.filter((p: unknown) => typeof p === 'string').slice(0, 20);
+  return debug;
 }
 
 function normalizeConnection(value: unknown): ConnectionData | null {

@@ -1,8 +1,9 @@
 import { parseCapabilities, parseFileContent, parseTransfer, sourcesApplied } from '../src/api';
-import { applyResults, classify, safeLink, safePath, serverOrigin, sha256, type Baselines, type Operation } from '../src/core';
+import { applyResults, chunkOps, classify, deleteOp, rememberSame, safeLink, safePath, serverOrigin, sha256, type Baselines, type Operation } from '../src/core';
 import { canRetry, collectBlobs, SnapshotChangedError } from '../src/runner';
 import { normalizeSaved } from '../src/store';
 import { ApiError } from '../src/api';
+import { SIDEBAR_VIEW_TYPE, WRITE_BUTTON_LABEL } from '../src/sidebar';
 
 function assert(cond: unknown, message: string): asserts cond {
   if (!cond) throw new Error(message);
@@ -127,8 +128,34 @@ export async function run(): Promise<void> {
   assertEqual(saved.server, 'http://172.16.13.14:8080', 'saved server');
   assertEqual(saved.token, 'gnp_secret', 'token kept in plugin data');
   assertEqual(saved.autoSync, true, 'auto sync default');
-  assertEqual(normalizeSaved({ server: 'https://x', token: 'gnp_x', autoSync: false }).autoSync, false, 'auto sync off kept');
+  assertEqual(saved.autoMode, 'idle', 'idle default');
+  assertEqual(saved.autoMinutes, 5, 'five minutes default');
+  assertEqual(normalizeSaved({ server: 'https://x', token: 'gnp_x', autoSync: false }).autoMode, 'manual', 'old autoSync off');
+  assertEqual(normalizeSaved({ server: 'https://x', token: 'gnp_x', autoMode: 'close' }).autoMode, 'close', 'close mode kept');
   assertEqual(normalizeSaved({ server: 'https://x', token: 'not-a-gnp' }).token, '', 'rejects non-gnp token');
 
-  console.log('ok', 21);
+  const deleted = deleteOp('a.md', remote, { sha256: hashA, version: 'v1', localHash: hashA });
+  assert(deleted !== null && deleted.op === 'delete', 'delete when local gone');
+  const moved = deleteOp('a.md', remote, { sha256: hashA, version: 'v0', localHash: hashA });
+  assert(moved !== null && moved.op === 'delete' && moved.expected_version === 'v1', 'delete uses current remote version');
+  assertEqual(deleteOp('missing.md', undefined, undefined), null, 'delete unknown path');
+
+  const chunks = chunkOps([
+    { op: 'upsert', path: 'a.md', kind: 'markdown', expected_version: null, sha256: hashA, size: 4 },
+    { op: 'upsert', path: 'b.md', kind: 'markdown', expected_version: null, sha256: hashB, size: 4 },
+    { op: 'delete', path: 'c.md', expected_version: 'v1' },
+  ], { ...caps.limits, batch_max_operations: 2, batch_max_bytes: 100 });
+  assertEqual(chunks.length, 2, 'chunk by operations');
+  assertEqual(chunks[0]?.length, 2, 'first chunk full');
+  assertEqual(chunks[1]?.length, 1, 'delete fits next chunk');
+
+  const adopted: Baselines = {};
+  rememberSame(adopted, remote.path, remote, hashA);
+  assertEqual(classify(hashB, remote, adopted[remote.path]), 'changed', 'edit after same is change not conflict');
+  assertEqual(normalizeSaved({ server: 'https://x', token: 'gnp_x', lastDebug: { at: '2026-09-12T00:00:00Z', event: 'send:all', api: 'ok', remote: 3 } }).lastDebug?.remote, 3, 'debug kept');
+
+  assertEqual(SIDEBAR_VIEW_TYPE, 'graphnotes-publisher-sync', 'sidebar view type');
+  assertEqual(WRITE_BUTTON_LABEL, 'Передать правки на сервер', 'sidebar write label');
+
+  console.log('ok', 34);
 }

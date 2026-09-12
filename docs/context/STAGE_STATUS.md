@@ -2,7 +2,7 @@
 
 Updated: 2026-09-12
 
-Product model TZ 2.98 (invite map `#/invites`: separate graph, currently admin-only) /
+Product model TZ 2.98 (invite map `#/invites` for creators: who has how many invite links) /
 2.97 / **2.98** (person card `#/users/{login}` only; public UUID is 404
 and is omitted from card JSON) /
 2.96 (no website `.md`/ZIP upload, including Differ;
@@ -25,9 +25,9 @@ may invite by email link; no Register tab; person card «Приглашен …
 Alembic `0020`; production `rhizome` not deployed) /
 2.83 (Elasticsearch iteration starts **only after the
 first approved rhizome production deploy**; SQL `/search` until then) /
-2.82 (plugin copies vault edits after save into the personal store; no
-card picker required; first dump «Отправить всё»; contribution marks
-on the site are leftover UI) /
+2.90 (plugin queues vault edits; write on sidebar «Передать правки на
+сервер» / ribbon / file close / idle minutes; first dump «Отправить
+все правки»; contribution marks on the site are leftover UI) /
 2.81 (login-by-mail on the Login tab) / 2.79 (2.72–2.76 shipped) / §6.3.4: Obsidian plugin **API** writes
 vault files into the owner's existing personal store (`personal_uploads` +
 `personal_assets`). Desktop plugin **GraphNotes Publisher** lives in
@@ -70,15 +70,16 @@ Current implementation stage is Stage 8. ADR-009: Differ is one-way personal
 TZ 2.59 shipped the 2.58 sitemap in the hash UI: `/card` start card
 (Admin → Установка); `/card/{path}` card + stack 2.56; `/queue` editor
 queue; `/user` settings; `/offer` my proposals; `/graph` shared canvas;
-`/search` SQL card search; `/my_graph` personal graph; `/contribution`
+`/invites` invite map (currently admin, TZ 2.98); `/search` SQL card
+search; `/my_graph` personal graph; `/contribution`
 Мой вклад; `/differ` Отличающиеся; `/` → `/graph`. Unified auth:
-login / register / forgot; reset by login or email; letter to stored
+login / forgot; reset by login or email; letter to stored
 inbox only. Elasticsearch (ADR-015 / TZ 2.83) starts **only after the
 first approved rhizome production deploy**; not this branch; SQL search
 until then. Payment gateway remains later.
 TZ 2.89 shipped 2.85–2.87 on `rhizome-test`: `POST /api/invites`,
 `POST /api/auth/invite/accept`, `POST /api/auth/register` → 410;
-`/user` invite form; `#/users/{uuid}` attribution line.
+`/user` invite form; `#/users/{login}` attribution line.
 TZ 2.13: Settings at `/user` hold required email, optional contacts, git
 and author contract. TZ 2.14: start page is `/graph`. TZ 2.64: guests open published
 shared cards from the graph and wikilinks; personal / queue / comments
@@ -438,8 +439,12 @@ TZ 2.5–2.7 on this branch (not merged to main; production
   `#/auth/login-code?token=` still opens a session. Plugin manifest
   credits Юрий Ефимов. Cabinet hint: token default 30 days, max 90.
   Production `rhizome` not deployed.
-- leftover: TZ 2.82 / §6.6.3 rhizome marks («дай, если хочешь») and
-  topic suggestions — accepted product model, site UI not this delivery;
+- leftover: TZ 2.88 / §6.6.3 Differ offers in the Obsidian plugin —
+  cabinet first; plugin later, same Differ, not a second compare;
+  rhizome marks / topic suggestions remain site leftover;
+- leftover: rollback from card history (TZ 2.96) — store last 30
+  versions; restore-from-history is not this wave;
+- leftover: open the invite map (`#/invites`) wider than admin;
 - leftover: TZ 2.83 / ADR-015 Elasticsearch iteration starts **only after
   the first approved rhizome production deploy**; not this branch; SQL
   `/search` until then; §6.5.3 questions 1–9 unanswered; do not add ES

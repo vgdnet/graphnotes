@@ -57,14 +57,19 @@ never the key). Separate logs DB is later.
 Plugin transfer APIs use `Authorization: Bearer <token>`. They never
 create tokens.
 
-## Client behaviour (TZ 2.82)
+## Client behaviour (TZ 2.82 / 2.88 / 2.90)
 
-The HTTP prefix is unchanged. GraphNotes Publisher copies eligible vault
-edits after save (no card picker). First dump of an existing vault is
-«Отправить всё». Matching bytes are not uploaded. One transfer at a
-time. Conflicts still use `GET /files/content` plus a new transfer with
-the current version; there is no `force=true`. Shared / Differ /
-proposals are not written. §6.6.3 marks/topics are site UI leftover.
+The HTTP prefix is unchanged. GraphNotes Publisher queues eligible vault
+edits locally. It does not call the API on every `modify`. Write triggers
+(TZ 2.90, same idea as Obsidian Git): sidebar ItemView «Передать правки
+на сервер»; ribbon paper-plane; close the file;
+N minutes after the last edit; or every N minutes if the queue is not
+empty. Quit does not start a transfer. First dump of an existing vault is
+«Отправить все правки». Matching bytes are not uploaded. One transfer at a
+time. TZ 2.91: one personal copy; local wins; no conflict UI. Other
+server bytes are overwritten with local (`expected_version` from
+manifest / GET content). No `force=true`. Shared / Differ / proposals
+are not written. Differ-to-plugin offers are leftover, not this version.
 
 ## Ready methods
 
