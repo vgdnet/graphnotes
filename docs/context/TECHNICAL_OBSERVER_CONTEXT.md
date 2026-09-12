@@ -1,11 +1,11 @@
 # GraphNotes — канонический контекст Technical Observer
 
 Статус: ACTIVE
-Updated: 2026-09-12 (PRODUCT_SPEC **3.03**: editor queue **wikidiff2**.
-Owner 2026-09-12 / ADR-018 amendment: compile the C++ core as a native
-helper; this test deploy still runs leftover `php-cli` / `php-wikidiff2`
-until that helper ships, then those packages leave the backend image.
-Do not keep PHP as the install path.
+Updated: 2026-09-12 (PRODUCT_SPEC **3.05**: one canon for all agents —
+this file is a working brief, not a second TZ. **3.03**: editor queue
+**wikidiff2**. Owner 2026-09-12 / ADR-018 amendment: compile the C++
+core as a native helper. `php-cli` / `php-wikidiff2` in the image is
+unfinished code, not an alternate canon. Do not keep PHP as the install path.
 **2.99**: product TZ → technical TZ →
 `rhizome-test`. TZ 2.89 / §17 shipped on
 `rhizome-test`: invite email link; no Register tab; any account may invite;
@@ -21,8 +21,8 @@ not every keystroke. Do not deploy production `rhizome`.
 TZ 2.83: Elasticsearch iteration starts **only after
 the first approved rhizome production deploy**; SQL `/search` until then;
 do not add ES to Compose. TZ 2.82/2.90: plugin copies vault edits
-without a card picker; first dump «Отправить все правки»; TZ 2.88: Differ API lists
-diffs and missing-from-shared offers — cabinet first, plugin later;
+without a card picker; first dump «Отправить все правки»; TZ 2.88 / 3.04:
+Differ API lists diffs and file pairs — `#/offer` and Card Merge;
 §6.6.3 marks/topics are site
 UI leftover. TZ 2.81: Login tab mail-code / `#/auth/login-code`
 uses the existing SMTP contour. TZ 2.80: guest anti-scrape of published cards is
@@ -44,6 +44,11 @@ shared stores)
 Этот файл задаёт рабочий регламент отдельного Technical Observer проекта
 GraphNotes. Его можно передать новому воркеру целиком. Он не заменяет
 канонические документы проекта и не создаёт новых архитектурных решений.
+**Канон всегда один (ТЗ 3.05):** product editor, technical editor, code
+writer, наблюдатели и агенты Codex/Cursor читают одну истину —
+`PRODUCT_SPEC.md`, `MASTER_CONTEXT.md`, принятые ADR. Нет личного ТЗ у
+агента. Если код и ТЗ расходятся — остановиться; leftover runtime не
+второй канон.
 
 ## 1. Роль
 
@@ -102,7 +107,9 @@ Technical Observer:
 
 Обсуждение, prompt или код сами по себе не отменяют принятое требование или
 ADR. Глобальное изменение должно быть явно принято и синхронизировано с ADR,
-контекстом и продуктовой спецификацией, когда она затронута.
+контекстом и продуктовой спецификацией, когда она затронута. Этот файл
+не второй канон: при расхождении с `MASTER_CONTEXT.md` / `PRODUCT_SPEC.md`
+побеждают они.
 
 ## 3. Неподвижные технические правила
 
@@ -129,9 +136,9 @@ PostgreSQL, узлы, связи, теги, поисковый индекс и �
 знания. Ключ хранится в кабинете и копируется в плагин (ТЗ 2.75); отзыв
 блокирует, новый ключ снова из кабинета. SHA-256 — только поиск Bearer.
 Код плагина в `obsidian-plugin/` — клиент, не канон склада GraphNotes.
-§6.6.3 / ТЗ 2.88: Differ (`GET /api/differ`) отдаёт отличия и просьбы
-«нет в общей»; сначала кабинет; плагин — позже, тем же маршрутом.
-Пометки в Obsidian и публикация из плагина — не этот API.
+§6.6.3 / ТЗ 2.88 / 3.04: Differ (`GET /api/differ`,
+`GET /api/differ/files/{path}`) отдаёт отличия и пару текстов; кабинет
+и `obsidian-card-merge` читают одно. Публикация из Publisher — не этот API.
 
 ### Rhizome and RBAC model
 
@@ -380,8 +387,8 @@ Observer проверяет diff на:
 - replacing wikidiff2 with `difflib` for editor review, or dropping
   the native wikidiff2 helper from the backend image without a 503
   (TZ 3.03 / ADR-018 amendment: do not keep `php-cli` /
-  `php-wikidiff2` as the install path — leftover on this test deploy,
-  they leave when the helper ships);
+  `php-wikidiff2` as the install path — PHP in the image is unfinished
+  code, not an alternate canon);
 - remounting the «Мой граф» tab or treating `#/my_graph` as a separate
   canvas (TZ 3.00: `/graph` is the rhizome by default);
 - invite map (`GET /api/graph/invites`, `#/invites`) visible to non-admin

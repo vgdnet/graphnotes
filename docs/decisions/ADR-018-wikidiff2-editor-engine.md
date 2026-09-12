@@ -50,6 +50,7 @@ Compile pinned `src/lib` as a native helper; do not keep `php-cli` /
 `php-wikidiff2` as the install path.
 
 Until that helper ships, the working tree may still call leftover
-`wikidiff2_table.php` via `php-cli` + `php-wikidiff2` so `/queue` can
-render the same table on `rhizome-test`. That leftover is not canon.
-When the helper ships, those packages leave the image.
+`wikidiff2_table.php` via `php-cli` + `php-wikidiff2`. That is
+unfinished code — a hole in the runtime, not a second spec and not
+«this deploy runs PHP». When the helper ships, those packages leave
+the image.

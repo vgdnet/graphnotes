@@ -111,3 +111,14 @@ Merge через GitHub App после accept editor’а — leftover, не UX.
 **не отдаёт** опубликованную общую файлами (нет ZIP «Скачать», нет clone
 корпуса как UX). Чтение общей — граф и карточки в приложении. Credentials
 GitHub App пользователям не выдаются.
+
+### 3.6. Канон всегда один (ТЗ 3.05)
+
+Ровно один канон. Product editor, technical editor, code writer,
+наблюдатели и агенты Codex/Cursor читают одну истину: `PRODUCT_SPEC.md`,
+`MASTER_CONTEXT.md`, принятые ADR. Нет второго Markdown-канона, чат не
+спецификация, нет личного ТЗ у агента. Если код и ТЗ расходятся —
+остановиться. Leftover в runtime — недописанный код, не второй канон.
+
+Движок editor-diff — MediaWiki **wikidiff2** C++ (ТЗ 3.03 / ADR-018).
+`php-cli` в образе — дырка в коде, не канон.

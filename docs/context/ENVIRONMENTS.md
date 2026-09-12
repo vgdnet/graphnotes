@@ -14,11 +14,12 @@ Platform and tools:
 - hostname: `nord`
 - Codex is installed locally
 - VS Code is used for review/manual edits
-- local editor-diff tests: leftover `php-cli` + `php-wikidiff2` until
-  the native wikidiff2 C++ helper ships (owner 2026-09-12 / TZ 3.03);
-  after that, `nord` and the backend image compile pinned Wikimedia
-  `src/lib` + a thin CLI (`g++`, `libthai-dev` / `libthai0`). PHP
-  packages then leave the image.
+- local editor-diff tests: `php-cli` + `php-wikidiff2` may still be
+  on the machine — unfinished code, not an alternate canon. Canon is
+  the native wikidiff2 C++ helper (owner 2026-09-12 / TZ 3.03 / 3.05);
+  `nord` and the backend image compile pinned Wikimedia `src/lib` + a
+  thin CLI (`g++`, `libthai-dev` / `libthai0`). PHP packages leave
+  when that helper ships.
 
 Role:
 - primary source-code authoring environment

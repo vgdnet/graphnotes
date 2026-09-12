@@ -2,13 +2,15 @@
 
 Updated: 2026-09-12
 Status: canonical architecture baseline
-Aligned with PRODUCT_SPEC 3.03 (editor queue text diff is MediaWiki
+Aligned with PRODUCT_SPEC 3.05 (one canon for all agents: product TZ,
+this file, accepted ADRs. Leftover runtime is unfinished code, not a
+second spec) /
+3.03 (editor queue text diff is MediaWiki
 **wikidiff2** table HTML, ADR-018; not `difflib`. Wikipedia two-column
 layout. Author Differ stays a path-checkbox list.
-Owner 2026-09-12 / ADR-018 amendment: runtime is a compiled native
-wikidiff2 C++ helper, not `php-cli` / `php-wikidiff2`. This test
-deploy still runs leftover PHP until that helper ships, then those
-packages leave the image.) /
+Owner 2026-09-12 / ADR-018 amendment: canon is a compiled native
+wikidiff2 C++ helper, not `php-cli` / `php-wikidiff2`. PHP in the image
+is unfinished code — a hole, not an alternate canon.) /
 3.02 (Wikipedia-style editor table) /
 3.01 (Differ is internal: UI on `#/offer`,
 no «Отличающиеся» tab; `#/differ` → `/offer`).
@@ -57,8 +59,9 @@ on the sidebar ItemView «Передать правки на сервер», rib
 file close, idle minutes, or interval (not every keystroke), into
 the owner's `personal_uploads` / `personal_assets` (no card picker
 required; first dump is «Отправить все правки»; matching bytes skipped). Shared
-rhizome, Differ and proposals stay unchanged. TZ 2.88: Differ API lists
-diffs and missing-from-shared offers; cabinet first, plugin later.
+rhizome write and proposals stay on the website. TZ 2.88 / 3.04: Differ
+API lists diffs and returns both sides (`GET /api/differ/files/{path}`);
+`#/offer` and Card Merge read that pair; Publisher still does not publish.
 Contribution marks/topics (§6.6.3) are not this plugin transfer API.
 TZ 2.81 ships login-by-mail on the Login
 tab (same SMTP contour as confirm/reset). TZ 2.68–2.76 shipped (2.79) / §12.1: Obsidian plugin
@@ -291,6 +294,13 @@ ADR-017. Vsepsy identity (§6.1.3) stays a separate ADR.
 
 This file is the canonical handoff context for GraphNotes across ChatGPT/Codex sessions.
 
+**One canon for all agents (TZ 3.05).** Product editor, technical editor,
+code writer, observers, and Codex/Cursor agents read the same truth:
+`docs/product/PRODUCT_SPEC.md`, this file, and accepted
+`docs/decisions/ADR-*.md`. No second Markdown canon, no chat residue as
+spec, no per-agent private TZ. If code and TZ diverge, stop. Leftover
+runtime is unfinished code, not a second spec.
+
 The canonical product requirements are maintained in
 `docs/product/PRODUCT_SPEC.md`. This file defines the accepted architecture that
 implements those requirements. Cross-cutting decisions and rationale are stored
@@ -366,8 +376,8 @@ Technologies:
   `php_wikidiff2.cpp` and is not linked. Runtime dep: `libthai0`
   (compile: `g++`, `libthai-dev`). FastAPI subprocess → same table
   HTML as `wikidiff2_do_diff`. PHP (`php-cli`, `php-wikidiff2`,
-  `wikidiff2_table.php`) is leftover until the helper ships, then
-  those packages leave the image. Editor proposal text only
+  `wikidiff2_table.php`) in the image is unfinished code (helper not
+  shipped), not an alternate canon. Editor proposal text only
   (ADR-018 / TZ 3.03; owner 2026-09-12 native path)
 - React + TypeScript
 - PostgreSQL
@@ -749,8 +759,11 @@ Personal layer (plugin write to the local store; git connector leftover):
 - `DELETE /api/personal/closed-paths/{path}`
 
 Shared publication and Differ:
-- `GET  /api/differ` (internal; UI `#/offer`; refresh connected personal public HEAD, then one-way
+- `GET  /api/differ` (internal; UI `#/offer`; cookie or Bearer `personal:read`;
+  refresh connected personal public HEAD, then one-way
   personal layer → published shared; git not required for upload-only authors)
+- `GET  /api/differ/files/{path}` (same Differ; `incoming` = published shared body,
+  `current` = personal working copy; website «Текст сверки» and Card Merge plugin)
 - `GET  /api/contributions/me` (author’s notes/links/proposals/counts; derived; git not required)
 - `GET  /api/admin/contributions` (admin: same stats for every account; TZ 2.7 / §5.4.2)
 - `GET  /api/admin/users` (search/filter; last login and session count)
@@ -828,14 +841,14 @@ a time. Rename is upsert new path + delete old when `personal:delete`
 is granted. TZ 2.91: vault and personal store are one copy; local wins.
 No conflict UI. Differing server bytes are overwritten with local using
 `expected_version` from the manifest / GET content — no `force=true`.
-Differ / offer-to-shared in the plugin is leftover, not this version.
+Publisher still does not write shared or create proposals.
 Interrupted plan + token persist in `data.json`; changed
 bytes before upload cancel the plan and rebuild it. 2.69 «send only on
-command» for vault edits is withdrawn. TZ 2.88: Differ API (`GET /api/differ`)
-lists personal → shared diffs and itself flags personal paths missing
-from published shared. Cabinet consumes that first. The plugin reads
-the same Differ in a later iteration; this prefix still does not
-publish to shared and does not implement marks/topics UI.
+command» for vault edits is withdrawn. TZ 2.88 / 3.04: Differ API
+(`GET /api/differ`, `GET /api/differ/files/{path}`) lists personal →
+shared diffs and returns both Markdown sides. `#/offer` and
+`obsidian-card-merge` consume that pair. Publisher
+`/integrations/obsidian/v1` still does not publish to shared.
 
 Browser/plugin URLs use the `/api` prefix. FastAPI routes do **not**:
 Nginx `location /api/` strips it. FastAPI sets `root_path="/api"` so
