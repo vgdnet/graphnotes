@@ -1,8 +1,22 @@
 # GraphNotes — канонический контекст Technical Observer
 
 Статус: ACTIVE
-Updated: 2026-09-12 (PRODUCT_SPEC **3.06**: Card Merge sidebar queue is
-`GET /api/differ`, not `/queue`. **3.05**: one canon for all agents —
+Updated: 2026-09-12 (PRODUCT_SPEC **3.15**: one Settings checkbox or
+toggle «Получать уведомления об изменениях в карточках, которые вы
+правили» — `notify_card_changes`; same SMTP/bot when on; event =
+inbound Differ. **3.13**: inbound Differ on `#/differ`
+for watched published paths; accept copies shared → personal store;
+ADR-009 amendment pending. **3.12**: Card Merge queue is
+metadata-only; «Принять в работу» caches both card sides;
+Save & Resolve is `POST /proposals/{id}/resolve`. **3.11**: author outbound Differ is chrome
+tab `#/differ` — compare two stores and propose, not merge; plugin
+does not list personal Differ. **3.10**: Card Merge editor/admin
+sidebar is website `#/queue` New via `GET /api/proposals`. **3.09**: do
+not merge Publisher and
+Card Merge; second package handed to editor/admin. **3.08**: `#/queue`
+accordion — one
+proposal, one card body, decide buttons under each card for the whole
+proposal. **3.06** leftover withdrawn by 3.11. **3.05**: one canon for all agents —
 this file is a working brief, not a second TZ. **3.03**: editor queue
 **wikidiff2**. Owner 2026-09-12 / ADR-018 amendment: compile the C++
 core as a native helper. `php-cli` / `php-wikidiff2` in the image is
@@ -22,8 +36,9 @@ not every keystroke. Do not deploy production `rhizome`.
 TZ 2.83: Elasticsearch iteration starts **only after
 the first approved rhizome production deploy**; SQL `/search` until then;
 do not add ES to Compose. TZ 2.82/2.90: plugin copies vault edits
-without a card picker; first dump «Отправить все правки»; TZ 2.88 / 3.04:
-Differ API lists diffs and file pairs — `#/offer` and Card Merge;
+without a card picker; first dump «Отправить все правки»; TZ 2.88 / **3.11**:
+Differ API lists path diffs for chrome tab `#/differ` (propose, not
+merge); Card Merge does not consume that list;
 §6.6.3 marks/topics are site
 UI leftover. TZ 2.81: Login tab mail-code / `#/auth/login-code`
 uses the existing SMTP contour. TZ 2.80: guest anti-scrape of published cards is
@@ -79,7 +94,8 @@ Technical Observer:
 
 Перед каждым аудитом прочитать полностью:
 
-1. `AGENTS.md`;
+1. `AGENTS.md` (leftover: gitignored — not on GitHub clones; TZ 3.05
+   canon is still `PRODUCT_SPEC` + `MASTER_CONTEXT` + ADRs);
 2. `docs/product/PRODUCT_SPEC.md`;
 3. `docs/context/MASTER_CONTEXT.md`;
 4. `docs/context/ENVIRONMENTS.md`;
@@ -137,15 +153,20 @@ PostgreSQL, узлы, связи, теги, поисковый индекс и �
 знания. Ключ хранится в кабинете и копируется в плагин (ТЗ 2.75); отзыв
 блокирует, новый ключ снова из кабинета. SHA-256 — только поиск Bearer.
 Код плагина в `obsidian-plugin/` — клиент, не канон склада GraphNotes.
-§6.6.3 / ТЗ 2.88 / 3.04 / **3.06** / **3.07**: Differ (`GET /api/differ`,
-`GET /api/differ/files/{path}`) отдаёт отличия и пару текстов; кабинет
-и `obsidian-card-merge` читают одно. Боковая «Очередь правок» — тот же
-список плюс vault ≠ `incoming`; нет файла — пишет `current`/`incoming`
-в vault. Shared-only path на `/differ/files` — 200. Не `/queue`.
-Проверить: view `graphnotes-card-merge-queue` ≠
-Publisher; нет POST proposal; нет второго URL очереди.
-`/differ` ошибки — `{detail}`, не конверт v1. Bearer на `/differ`
-не пишет `integration_token_access` (leftover; `last_used_at` обновляется).
+§6.6.3 / ТЗ 2.88 / **3.11**: Differ (`GET /api/differ`) — сверка двух
+складов для вкладки `#/differ` (предложить пути, не merge). Card Merge
+авторский Differ не читает (3.04–3.07 сняты). Токен editor/admin в
+Card Merge читает `/queue` New (`GET /api/proposals`, ТЗ 3.10 / **3.12**).
+Проверить: view `graphnotes-card-merge-queue` ≠ Publisher; очередь без
+тел; «Принять в работу» — `GET /proposals/{id}/files/{path}`; Save &
+Resolve — `POST /proposals/{id}/resolve` `{files:[{path,source}]}`;
+нет `GET /api/differ` в боковой очереди;
+approve/reject остаются cookie на сайте.
+Leftover: сайт ещё рисует сверку на `#/offer` + «Текст сверки»;
+модалка Card Merge «Сравнить карточку» ещё зовёт `GET /api/differ`.
+`/differ` и `/proposals` ошибки — `{detail}`, не конверт v1. Bearer на
+`/differ` и `/proposals` не пишет `integration_token_access` (leftover;
+`last_used_at` обновляется).
 Публикация из Publisher — не этот API.
 
 ### Rhizome and RBAC model
@@ -179,7 +200,9 @@ Publisher; нет POST proposal; нет второго URL очереди.
   `/offer` **my** proposals; `/graph`
   shared canvas; `/invites` invite map (currently admin; TZ 2.98);
   `/search` card search; no `/my_graph` (TZ 3.00; personal is a `/graph` filter);
-  `/contribution` Мой вклад; Differ UI is `/offer` (TZ 3.01); editor
+  `/contribution` Мой вклад; Differ UI is `#/differ` (TZ 3.11 / 3.13:
+  outbound propose and inbound take-into-personal; not a merge editor);
+  `/offer` is my proposals; editor
   proposal text is wikidiff2 C++ via a native helper (TZ 3.03 /
   ADR-018; PHP leftover until the helper ships); `/` → `/graph`.
   Do not invent `/accepted/differ`. TZ 2.57 `/user`=person and
@@ -223,7 +246,9 @@ not a ZIP/clone of published shared (TZ 2.5). `take-into-git` / take-from-shared
 and `GET /api/shared/archive` / `POST /api/personal/take-from-shared` are not
 the product path (HTTP 410).
 
-Differ is derived, one-way personal layer → published shared. Git input
+Differ is derived. Outbound is personal layer → published shared.
+TZ 3.13 inbound is published shared → personal store for paths in the
+caller's accepted proposals. Git input
 compares trees by Markdown blob SHA **after** GraphNotes reads the caller's
 current public HEAD (GET `/api/differ`, create proposal, GitHub `push`
 webhook, or the in-process poller `GRAPHNOTES_PERSONAL_SYNC_INTERVAL_SECONDS`;
@@ -264,8 +289,11 @@ revision, those accepted nodes/links must remain attributable/visible even
 when the current Differ becomes empty for the same personal layer.
 
 Graph Diff (Stage 8, current) is the structural view of the same Differ /
-proposal pair. Editor queue is `/queue` (TZ 2.38 / 2.58); author’s own
-proposals are `/offer`. The queue UI opens a Wikipedia-style text table
+proposal pair. Editor queue is `/queue` (TZ 2.38 / 2.58 / **3.08**); author’s own
+proposals are `/offer`. The queue opens **one** proposal and **one** card
+body; Принять / Отклонить / Доработать sit under each card and still
+decide the whole proposal (not a per-file merge). The open card shows a
+Wikipedia-style text table
 first (TZ 3.03: wikidiff2 HTML; «В ризоме» | «В предложении»; added =
 empty left), then links, then Graph Diff; tabs are New / In progress / Rejected.
 `GET /api/proposals/{id}` must include `html` from wikidiff2; do not lead
@@ -390,8 +418,16 @@ Observer проверяет diff на:
 - отсутствие связи результата с точным commit SHA.
 - accidental workspace/multiple-shared-rhizome abstraction;
 - leftover take-into-git or shared ZIP/clone UX after TZ 2.5;
-- remounting the «Отличающиеся» chrome tab (TZ 3.01: Differ is internal,
-  UI on `/offer`);
+- treating author Differ as a merge editor or putting it in Card Merge
+  (TZ 3.11 / 3.13: `#/differ` is outbound propose + inbound
+  take-into-personal; plugin lists queue, not personal Differ);
+  hiding the Сверка chrome tab again (3.01 leftover withdrawn);
+  treating leftover `#/offer` Differ UI or `OpenMergeModal` GET `/differ`
+  as the contract;
+  implementing inbound as ZIP / `take-from-shared` of the corpus, or
+  showing an inbound path also as outbound propose;
+  turning card-change notify into a social feed, per-card follow UI,
+  or Telegram login (TZ 3.15 is one checkbox/toggle + the same bot/SMTP);
 - replacing wikidiff2 with `difflib` for editor review, or dropping
   the native wikidiff2 helper from the backend image without a 503
   (TZ 3.03 / ADR-018 amendment: do not keep `php-cli` /

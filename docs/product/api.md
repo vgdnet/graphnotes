@@ -22,7 +22,8 @@ POST /api/auth/refresh
 POST /api/auth/logout
 GET  /api/users/me
 PATCH /api/users/me                 # settings: display_name, email, phone, telegram,
-                                    # notify_queue_email, notify_queue_telegram, …
+                                    # notify_queue_email, notify_queue_telegram,
+                                    # notify_card_changes (TZ 3.15: one toggle)
 GET  /api/author/contract           # public Russian copy (version, WTFPL/AGPL)
 GET  /api/users/me/author-contract  # same copy while signed in
 POST /api/users/me/author-contract  # accept current contract version
@@ -48,26 +49,20 @@ PUT  /api/personal/notes/{path}       # plugin / API / TZ 2.66 stub; not website
                                     # from a missing-link create (TZ 2.66)
 GET  /api/personal/uploads            # upload history: who / when / path / hash
 
-GET  /api/differ                      # internal Differ (TZ 3.01): not a chrome tab;
-                                      # UI is #/offer; one-way personal → published shared;
-                                      # cookie session or Bearer gnp_ (personal:read);
-                                      # connected git: refresh public HEAD first;
-                                      # ответ — отличия, в том числе личные карточки
-                                      # без пары в общей (просьба «дай, если хочешь»).
-                                      # Сайт и плагин Card Merge — один маршрут (ТЗ 3.04).
-                                      # ТЗ 3.06: этот же список = боковая «Очередь правок»
-                                      # в плагине (не /queue). Элемент: path, title, kind,
-                                      # updated_at личного склада.
-GET  /api/differ/files/{path}         # та же сверка, одно тело: incoming=общая,
-                                      # current=личное (пусто, если склада нет);
-                                      # без личного, но с общей — 200, kind=changed;
-                                      # author/updated_at; cookie или Bearer personal:read;
-                                      # не пишет; Card Merge кладёт тело в vault, если файла нет;
-                                      # ошибки как веб-API: {detail}
-                                      # (400 path is invalid, 404 not found/closed,
-                                      # 409 shared not connected, 401/403 auth);
-                                      # сайт: «Текст сверки» на /offer;
-                                      # плагин: левая панель MergeView
+GET  /api/differ                      # TZ 3.11: chrome tab #/differ (Сверка);
+                                      # shipped JSON: {differences:[{path,title,kind,updated_at}]}
+                                      # kind=added|changed; outbound only (personal → shared);
+                                      # cookie session (site). Plugin must not list this (TZ 3.11).
+                                      # connected git: refresh public HEAD first.
+                                      # TZ 3.13 inbound list — accepted, not shipped (no direction field yet)
+POST /api/differ/inbound/{path}/accept
+                                      # TZ 3.13 accepted, not shipped: copy published shared
+                                      # → caller's personal store for a watched path;
+                                      # not propose, not ZIP
+GET  /api/differ/files/{path}         # leftover pair JSON (shipped); not author merge UI (TZ 3.11);
+                                      # incoming=published shared, current=personal or empty;
+                                      # shared-only path is 200 kind=changed, not 404;
+                                      # errors {detail}
 GET  /api/contributions/me            # author's notes, links, proposals, counts; derived
                                       # editor/admin also receive own review stats
 GET  /api/users/{login}/card          # public person card (guest + signed-in, TZ 2.98):
@@ -115,12 +110,24 @@ GET  /api/graph/personal-overlay      # ваша часть ризомы: shared
 POST /api/index/rebuild               # admin, Stage 5
 GET  /api/graph/diff?proposal_id=...  # Stage 8 structural view of Differ/proposal
 
-POST /api/proposals
-GET  /api/proposals
-GET  /api/proposals/{id}              # file diffs: proposed body, shared before,
+POST /api/proposals                   # cookie + author contract
+GET  /api/proposals                   # cookie or Bearer gnp_ / personal:read
+                                      # (TZ 3.10: Card Merge editor queue);
+                                      # editor/admin — все заявки; user — свои
+GET  /api/proposals/{id}              # тот же вход, что список; file diffs:
+                                      # proposed body, shared before,
                                       # unified leftover, html from wikidiff2
                                       # (TZ 3.03 / ADR-018), rows[] parsed from it
-POST /api/proposals/{id}/approve
+GET  /api/proposals/{id}/files/{path} # TZ 3.12 shipped: {path, before, body};
+                                      # before=опубликованная общая, body=предложение;
+                                      # no html/engine/rows (те на GET /proposals/{id});
+                                      # Card Merge «Принять в работу»
+POST /api/proposals/{id}/resolve      # TZ 3.12 shipped: cookie or Bearer editor/admin;
+                                      # {files:[{path,source}], reason?};
+                                      # source = смерженный текст этой карточки;
+                                      # commit onto the proposal branch, then the same
+                                      # approve gate as POST …/approve; вся заявка (ТЗ 3.08)
+POST /api/proposals/{id}/approve      # cookie session only; website /queue
 POST /api/proposals/{id}/reject
 POST /api/proposals/{id}/request-changes
 POST /api/proposals/{id}/rollback
@@ -142,10 +149,21 @@ DELETE /api/integrations/obsidian/v1/transfers/{id}   # cancel if not applying
 `PUT /api/personal/notes/{path}` и `POST /api/personal/import-md`. Общую
 ризому, `shared_notes`, предложения и Differ эти методы не меняют.
 
-Плагин **GraphNotes Card Merge** (`obsidian-card-merge/`, ТЗ **3.04** /
-**3.06**) тот же ключ только **читает**: `GET /api/differ`,
-`GET /api/differ/files/{path}`, и `GET /capabilities` как проверку входа.
-В общую и в личный склад GraphNotes он не пишет.
+Плагин **GraphNotes Card Merge** (`obsidian-card-merge/`, ТЗ **3.09** /
+**3.10** / **3.11** / **3.12**) читает очередь: `GET /capabilities`
+(`user.role`), `GET /api/proposals` (только список, без тел). **«Принять в
+работу»** — `GET /api/proposals/{id}/files/{path}` → `{path, before, body}`
+в кэш `.obsidian/plugins/graphnotes-card-merge/work/{id}/…` (не обычные
+заметки vault). **Save & Resolve** — `POST /api/proposals/{id}/resolve`
+`{files:[{path,source}]}`. Авторский Differ в плагине **нет** (ТЗ 3.11).
+Отклонить / доработать — cookie на сайте. С Publisher **не склеивать**;
+раздача вручную `editor` / `admin`.
+
+Leftover (код, не канон): сайт ещё рисует сверку на `#/offer` (hash
+`#/differ` открывает тот же экран) и кнопку «Текст сверки» по
+`GET /api/differ/files/{path}`. Канон 3.11 — вкладка `#/differ`, `/offer`
+только заявки. В Card Merge leftover-модалка «Сравнить карточку» ещё
+зовёт `GET /api/differ` — дырка, не второй контракт.
 
 Авторизация передачи и чтения Differ: `Authorization: Bearer <token>`.
 UUID склада сервер берёт из токена; клиент **не** передаёт `user_id`,

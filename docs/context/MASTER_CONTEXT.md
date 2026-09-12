@@ -2,8 +2,26 @@
 
 Updated: 2026-09-12
 Status: canonical architecture baseline
-Aligned with PRODUCT_SPEC 3.06 (Card Merge sidebar queue = GET /api/differ;
-not website /queue) / 3.05 (one canon for all agents: product TZ,
+Aligned with PRODUCT_SPEC 3.15 (one Settings checkbox or toggle:
+«Получать уведомления об изменениях в карточках, которые вы правили»;
+`notify_card_changes`; email+Telegram when on; event = inbound Differ) /
+3.13 (inbound Differ: watched published
+paths; `#/differ` can take shared updates into personal store;
+ADR-009 amendment pending) /
+3.12 (Card Merge queue is metadata-only;
+accept-into-work caches both card sides; Save & Resolve publishes
+through POST /proposals/{id}/resolve) /
+3.11 (author outbound Differ is `#/differ` propose-only,
+not a merge; plugin does not list personal Differ; editor plugin = queue) /
+3.10 (Card Merge editor/admin sidebar =
+website `#/queue` New tab via GET /api/proposals) /
+3.09 (do not merge Obsidian plugins: Publisher
+for authors; Card Merge is a second package, handed to editor/admin) /
+3.08 (`#/queue` accordion: one proposal, one
+card body, decide buttons under each card still approve/reject/return the
+whole proposal) /
+3.06 leftover withdrawn by 3.11 (author plugin does not list Differ) /
+3.05 (one canon for all agents: product TZ,
 this file, accepted ADRs. Leftover runtime is unfinished code, not a
 second spec) /
 3.03 (editor queue text diff is MediaWiki
@@ -13,8 +31,8 @@ Owner 2026-09-12 / ADR-018 amendment: canon is a compiled native
 wikidiff2 C++ helper, not `php-cli` / `php-wikidiff2`. PHP in the image
 is unfinished code — a hole, not an alternate canon.) /
 3.02 (Wikipedia-style editor table) /
-3.01 (Differ is internal: UI on `#/offer`,
-no «Отличающиеся» tab; `#/differ` → `/offer`).
+3.01 leftover withdrawn by 3.11: Differ is chrome tab `#/differ` again
+(propose differing paths; not merge). `#/offer` is my proposals only.
 3.00 (no «Мой граф» / `/my_graph`; `/graph`
 defaults to the rhizome canvas; `#/my_graph` → `/graph`).
 2.99: product TZ → technical TZ → `rhizome-test`. Invite map page is hash `#/invites`
@@ -60,9 +78,10 @@ on the sidebar ItemView «Передать правки на сервер», rib
 file close, idle minutes, or interval (not every keystroke), into
 the owner's `personal_uploads` / `personal_assets` (no card picker
 required; first dump is «Отправить все правки»; matching bytes skipped). Shared
-rhizome write and proposals stay on the website. TZ 2.88 / 3.04: Differ
-API lists diffs and returns both sides (`GET /api/differ/files/{path}`);
-`#/offer` and Card Merge read that pair; Publisher still does not publish.
+rhizome write and proposals stay on the website. TZ 2.88 / **3.11**: Differ
+API lists paths that differ (`GET /api/differ`); the site tab `#/differ`
+proposes them. Card Merge does not consume that list. Publisher still
+does not publish.
 Contribution marks/topics (§6.6.3) are not this plugin transfer API.
 TZ 2.81 ships login-by-mail on the Login
 tab (same SMTP contour as confirm/reset). TZ 2.68–2.76 shipped (2.79) / §12.1: Obsidian plugin
@@ -134,8 +153,11 @@ not the rhizome canvas and not an admin screen); `/search` = card search (SQL `n
 `layer=visible`; Elasticsearch only after the first approved rhizome
 production deploy — ADR-015 / TZ 2.83); no `/my_graph` tab (TZ 3.00;
 personal layer is a filter on `/graph`); `/contribution` = Мой вклад.
-`/offer` hosts Differ (TZ 3.01; not a chrome tab); `#/differ` → `/offer`;
-do not invent `/accepted/differ`. Editor review of a proposal (TZ 3.03 /
+`#/differ` is the Differ tab (TZ 3.11 / **3.13**: outbound propose and
+inbound take-into-personal; not a merge editor); `#/offer` is
+my proposals. Leftover: the SPA still mounts outbound Differ on
+`#/offer` (hash `#/differ` → the same view) plus «Текст сверки»;
+inbound accept is TZ-only. Do not invent `/accepted/differ`. Editor review of a proposal (TZ 3.03 /
 ADR-018, `/queue` and the same proposal body on `/offer`) is
 **wikidiff2** table HTML from `GET /api/proposals/{id}` (`html`,
 `engine`, parsed `rows`); `difflib` is not the review engine. The
@@ -175,8 +197,10 @@ hosted Markdown (upload store / plugin) is the product default (TZ 2.61–2.63).
 ADR-008 leftover: «no hosted vault» does not forbid
 that store; «no in-app Obsidian» forbids a second Obsidian-class editor;
 TZ 2.93 also keeps the thin website editor off until reverse sync.
-Differ is an internal comparison (TZ 3.01): UI lives on `#/offer`
-(heading **Сверка**), not a chrome tab; API/entity remain Differ.
+Differ is a two-store compare (TZ 3.11 / **3.13**): UI is chrome tab
+`#/differ` (outbound propose; inbound accept into personal for watched
+published paths). It is not a merge editor and not the editor plugin
+list.
 Author-contract copy (version `2026-09-05`)
 is responsibility for notes/links offered to the shared rhizome, withdraw
 (new proposes/uploads/git-as-contribution blocked until re-accept; already
@@ -203,9 +227,10 @@ accepted (product §12.9). Card search `/search` (TZ 2.39 / 2.58 / §6.5.2) is
 role-scoped over the same `note_index`: guest = published shared hits
 (no card body); user = shared ∪ own personal; editor = that ∪ proposal
 notes they can review; admin = every card they can open (all personal
-layers + queue). Hits carry `layer`; Graph overlay stitch is unchanged. Editor queue (TZ 2.38): tabs New /
-In progress / Rejected; proposed Markdown and links open first, Graph Diff
-after; reject and return store a comment the author can read. SMTP
+layers + queue). Hits carry `layer`; Graph overlay stitch is unchanged. Editor queue (TZ 2.38 / **3.08**): tabs New /
+In progress / Rejected; one proposal expanded, one card body visible;
+Принять / Отклонить / Доработать sit under each card and still decide the
+whole proposal; Graph Diff after; reject and return store a comment the author can read. SMTP
 (ADR-017 / TZ 2.37 / 2.40 / 2.45 / 2.52): when
 `GRAPHNOTES_SMTP_HOST` and `GRAPHNOTES_SMTP_FROM` are set, registration
 does not open a session until the address is confirmed. The letter must
@@ -242,7 +267,10 @@ in host `.env`. New proposal in the queue notifies opted-in editors/admins
 by email (if SMTP on) and/or Telegram (if `GRAPHNOTES_TELEGRAM_BOT_TOKEN`
 is set) — Telegram here is a notify channel, not login/IdP. Preference
 columns default off (`notify_queue_email`, `notify_queue_telegram`);
-toggles live in Settings and Admin users. Admin
+TZ 3.15 adds one author pref `notify_card_changes` (default off) —
+same SMTP / Telegram bot when the toggle is on, sent when an inbound
+Differ row appears; link `#/differ`. Control is one checkbox or
+slider in Settings and Admin users, not two channel boxes. Admin
 UI is three screens (users / journal / operator), not a stub list.
 Graph-layer names from TZ 2.36 stay. Shared-graph UI uses Cytoscape.js **fCoSE**
 (TZ 2.27 / §6.5.1): live force layout, centered outlined labels, neighborhood
@@ -300,7 +328,9 @@ code writer, observers, and Codex/Cursor agents read the same truth:
 `docs/product/PRODUCT_SPEC.md`, this file, and accepted
 `docs/decisions/ADR-*.md`. No second Markdown canon, no chat residue as
 spec, no per-agent private TZ. If code and TZ diverge, stop. Leftover
-runtime is unfinished code, not a second spec.
+runtime is unfinished code, not a second spec. Leftover: `AGENTS.md` is
+gitignored, so GitHub clones do not carry it; do not treat that hole as
+a second brief.
 
 The canonical product requirements are maintained in
 `docs/product/PRODUCT_SPEC.md`. This file defines the accepted architecture that
@@ -315,9 +345,12 @@ user has a personal layer on the same `/graph` canvas (TZ 3.00). People author o
 that store (TZ 2.62). GitHub also copies published shared `.md` into the
 local shared store (TZ 2.63). GraphNotes shows the one shared rhizome as a graph in the app (read-only
 Markdown, cards). It does **not** offer ZIP download or a product clone of the
-published shared corpus. Differ is one-way **local personal copy** → published shared;
-editors merge selected differences. See ADR-008 amendment TZ 2.63, ADR-009,
-PRODUCT_SPEC 2.63.
+published shared corpus. Differ outbound is **local personal copy** →
+published shared (propose). TZ 3.13 adds inbound **published shared →
+personal store** only for paths this author already got accepted.
+Editors still merge selected outbound differences into shared. See
+ADR-008 amendment TZ 2.63, ADR-009 (needs inbound amendment),
+PRODUCT_SPEC 2.63 / 3.13.
 
 Core data flow:
 
@@ -422,8 +455,9 @@ GraphNotes should handle:
 - the hosted personal store (`.md` / ZIP / plugin) as the **default** personal
   rhizome; optional connected personal git remotes (copy-in)
 - binding one shared knowledge repository in the current leftover stack
-- Differ (one-way personal layer → published shared; connected git is
-  re-read at public HEAD on Differ/proposal)
+- Differ (outbound personal layer → published shared; TZ 3.13 inbound
+  published shared → personal store for watched accepted paths;
+  connected git is re-read at public HEAD on Differ/proposal)
 - graph indexing and in-app read of published Markdown
 - one derived `note_index` for graph **and** SQL search; rebuild
   (`POST /index/rebuild`, SHA drift, webhook/poller) refreshes shared plus
@@ -441,7 +475,9 @@ GraphNotes should handle:
 - shared-graph UX and personal overlay (links to shared); graph layer menu
   and personal-origin legend say «ваша ризома», not «ваш git»
 - editor proposal queue at `/queue` (tabs New / In progress /
-  Rejected); author’s own proposals at `/offer`; `/contribution` is
+  Rejected; TZ 3.08 accordion: one proposal, one card body, buttons
+  under each card decide the whole proposal);
+  author’s own proposals at `/offer`; `/contribution` is
   Мой вклад (`GET /api/contributions/me`). Proposal detail shows
   proposed card text and links first, then Graph Diff; reject and
   return require a comment the author can read
@@ -675,9 +711,10 @@ Key product invariants that the technical architecture must preserve:
   stores are always** the working copy. Upload / Obsidian plugin
   write personal (`personal_uploads`; attachments in `personal_assets`).
   GitHub (and later Dropbox / Google Drive) **copy** `.md` in. One active
-  personal connector; do not merge two remotes. Differ is one-way local
-  copy → published shared. Upload and the plugin are not a write into
-  published shared.
+  personal connector; do not merge two remotes. Differ outbound is local
+  copy → published shared. TZ 3.13 inbound copies published shared into
+  the personal store only for watched accepted paths. Upload and the
+  plugin are not a write into published shared.
   After editor accept, the published shared working copy is `shared_notes`
   (leftover stack may still push shared git, then copy-in). Git live-read
   without copy-in and in-app commit to GitHub are leftover vs 2.63.
@@ -726,7 +763,7 @@ Authentication / users:
 - `POST /api/auth/refresh`
 - `POST /api/auth/logout`
 - `GET  /api/users/me` (includes contacts, `is_author` and contract timestamps)
-- `PATCH /api/users/me` (settings: display_name, email, phone, telegram, website, public flags, queue notify prefs)
+- `PATCH /api/users/me` (settings: display_name, email, phone, telegram, website, public flags, queue notify prefs, TZ 3.15 `notify_card_changes`)
 - `GET  /api/users/me/author-contract`
 - `POST /api/users/me/author-contract`
 - `POST /api/users/me/author-contract/withdraw`
@@ -760,16 +797,22 @@ Personal layer (plugin write to the local store; git connector leftover):
 - `DELETE /api/personal/closed-paths/{path}`
 
 Shared publication and Differ:
-- `GET  /api/differ` (internal; UI `#/offer` and Card Merge sidebar «Очередь правок»
-  TZ 3.06; cookie or Bearer `personal:read`; items: path, title, kind, updated_at;
-  refresh connected personal public HEAD, then one-way
-  personal layer → published shared; git not required for upload-only authors)
-- `GET  /api/differ/files/{path}` (same Differ; `incoming` = published shared body,
-  `current` = personal working copy or empty if that path is not in the store;
-  shared-only path is 200 `kind=changed`, not 404. Website «Текст сверки»
-  and Card Merge; Card Merge writes the pair into the vault when the file
-  is missing, local wins. `{detail}` errors: 400 invalid path, 404 missing/closed,
-  409 shared not connected)
+- `GET  /api/differ` (TZ 3.11: chrome tab `#/differ`; shipped outbound
+  only: `{differences:[{path,title,kind,updated_at}]}`, `kind` =
+  `added`|`changed`; cookie session; not Card Merge. Refresh connected
+  personal public HEAD, then compare personal layer ↔ published shared.
+  TZ 3.13 inbound list is accepted, **not shipped** — do not invent a
+  live `direction` field. Leftover UI still mounts this list on `#/offer`;
+  hash `#/differ` currently opens the same screen.)
+- `POST /api/differ/inbound/{path}/accept` (TZ 3.13 accepted, **not
+  shipped**: copy published shared into the caller's personal store for
+  a watched path; cookie + author contract; not a proposal)
+- `GET  /api/differ/files/{path}` (leftover pair JSON, shipped;
+  `incoming` = published shared, `current` = personal or empty;
+  shared-only path is 200 `kind=changed`, not 404. Author `#/differ` is
+  path checkboxes + propose, not a merge pane. Card Merge sidebar does
+  not consume this (TZ 3.11). `{detail}` errors: 400 invalid path, 404
+  missing/closed, 409 shared not connected)
 - `GET  /api/contributions/me` (author’s notes/links/proposals/counts; derived; git not required)
 - `GET  /api/admin/contributions` (admin: same stats for every account; TZ 2.7 / §5.4.2)
 - `GET  /api/admin/users` (search/filter; last login and session count)
@@ -816,12 +859,19 @@ Graph visualization and Graph Diff (Stage-owned):
 - `GET  /api/graph/diff?proposal_id=...` (Stage 8 structural view of Differ/proposal; same derived index)
 
 Proposals and editor workflow (Stage-owned):
-- `POST /api/proposals`
-- `GET  /api/proposals`
-- `GET  /api/proposals/{id}` (TZ 3.03: each file has `html` from
-  wikidiff2, `engine` / `engine_version`, `body`, `before`, leftover
-  unified `diff`, and `rows` parsed from the table)
-- `POST /api/proposals/{id}/approve`
+- `POST /api/proposals` (cookie + author contract)
+- `GET  /api/proposals` (cookie or Bearer `personal:read`; TZ 3.10
+  Card Merge editor queue; role still filters: editor/admin see all,
+  user sees own)
+- `GET  /api/proposals/{id}` (same auth as the list; TZ 3.03: each file
+  has `html` from wikidiff2, `engine` / `engine_version`, `body`,
+  `before`, leftover unified `diff`, and `rows` parsed from the table)
+- `GET  /api/proposals/{id}/files/{path}` (TZ 3.12 shipped:
+  `{path, before, body}` only, no wikidiff2; Card Merge accept-into-work)
+- `POST /api/proposals/{id}/resolve` (cookie or Bearer `editor`/`admin`;
+  `{files:[{path,source}], reason?}`; `source` is the merged card text;
+  commit onto the proposal branch, then the same approve gate; TZ 3.12)
+- `POST /api/proposals/{id}/approve` (cookie session only)
 - `POST /api/proposals/{id}/reject`
 - `POST /api/proposals/{id}/request-changes`
 - `POST /api/proposals/{id}/rollback`
@@ -850,13 +900,23 @@ No conflict UI. Differing server bytes are overwritten with local using
 Publisher still does not write shared or create proposals.
 Interrupted plan + token persist in `data.json`; changed
 bytes before upload cancel the plan and rebuild it. 2.69 «send only on
-command» for vault edits is withdrawn. TZ 2.88 / 3.04 / **3.06**: Differ API
-(`GET /api/differ`, `GET /api/differ/files/{path}`) lists personal →
-shared diffs and returns both Markdown sides. `#/offer` and
-`obsidian-card-merge` consume that pair (sidebar «Очередь правок» =
-the list, not `/queue`). Card Merge also pings
-`GET /integrations/obsidian/v1/capabilities`. It does not POST
-proposals or write the personal store. Publisher
+command» for vault edits is withdrawn. TZ 2.88 / **3.11**: Differ API
+(`GET /api/differ`) lists personal → shared path diffs for the site
+tab `#/differ` (propose only). Card Merge does not list personal Differ
+(TZ 3.11). TZ 3.10: an `editor` / `admin` token lists the website
+`#/queue` New tab (`GET /api/proposals`). TZ 3.12: the sidebar lists
+metadata only; «Принять в работу» fetches
+`GET /api/proposals/{id}/files/{path}` (`{path,before,body}`) into
+`.obsidian/plugins/graphnotes-card-merge/work/{id}/…` (not ordinary
+vault notes); Save & Resolve is
+`POST /api/proposals/{id}/resolve` `{files:[{path,source}]}`. TZ 3.09:
+do not merge the two plugin packages; hand Card Merge to `editor` /
+`admin`, not every author. Capabilities includes `user.role` so the
+plugin shows the queue or «этот плагин для editor’а». Leftover:
+`OpenMergeModal` still calls `GET /api/differ` — unfinished code, not
+a second contract. Card Merge also pings
+`GET /integrations/obsidian/v1/capabilities`. Reject / request-changes /
+rollback stay cookie-only on the website. Publisher
 `/integrations/obsidian/v1` still does not publish to shared.
 
 Browser/plugin URLs use the `/api` prefix. FastAPI routes do **not**:
@@ -879,9 +939,11 @@ it into the plugin.
 Successful Bearer calls on `/integrations/obsidian/v1` append
 `integration_token_access` (username,
 token name/prefix, IP from `X-Forwarded-For` / `X-Real-IP` / peer,
-User-Agent, route). Leftover: `GET /differ` and
-`GET /differ/files/{path}` authenticate the same token but do not
-insert an access row (`last_used_at` still updates). Same token+IP
+User-Agent, route). Leftover: `GET /differ`,
+`GET /differ/files/{path}`, `GET /proposals`,
+`GET /proposals/{id}/files/{path}` and `POST /proposals/{id}/resolve`
+authenticate the same token but do not insert an access row
+(`last_used_at` still updates). Same token+IP
 within
 `GRAPHNOTES_INTEGRATION_ACCESS_DEBOUNCE_SECONDS` (default 3600) is one
 row; a new IP always inserts. Retention

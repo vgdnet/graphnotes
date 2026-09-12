@@ -36,7 +36,7 @@ promoted. Do not point the plugin at production while testing.
 5. Copy it from Settings into GraphNotes Publisher and/or GraphNotes
    Card Merge. Each plugin keeps the same key in its own `data.json`.
 6. Compromise: revoke the key on the same tab (Publisher stops writing;
-   Card Merge stops reading Differ). When access is restored, mint a new
+   Card Merge stops reading the queue). When access is restored, mint a new
    key in the cabinet and paste it into the plugin(s). Default TTL 30
    days, max 90.
 
@@ -71,43 +71,62 @@ empty. Quit does not start a transfer. First dump of an existing vault is
 time. TZ 2.91: one personal copy; local wins; no conflict UI. Other
 server bytes are overwritten with local (`expected_version` from
 manifest / GET content). No `force=true`. Shared / Differ / proposals
-are not written. Differ read is a **separate** desktop plugin
-(`obsidian-card-merge`, TZ 3.04 / **3.06** / **3.07**): `GET /api/differ` and
-`GET /api/differ/files/{path}` with the same `gnp_` token
-(`personal:read`). Same JSON as `#/offer`. Sidebar «Очередь правок»
-is that list plus vault files whose text ≠ `incoming` (not website `/queue`).
-Missing vault files are created from `current` or `incoming`; existing
-local files are not overwritten. It does not POST proposals
-and does not write shared.
+are not written. The second desktop plugin
+(`obsidian-card-merge`, TZ **3.09** / **3.10** / **3.12**) is the
+editor queue, not author Differ:
+do not merge with Publisher; hand the second package to `editor` /
+`admin`, not every author. Same `gnp_` token (`personal:read`).
+Author token: no Differ sidebar (TZ 3.11; 3.04–3.07 withdrawn).
+Editor/admin token: website `#/queue` New tab via `GET /api/proposals`
+(metadata only). «Принять в работу» fetches
+`GET /api/proposals/{id}/files/{path}` (`before` + `body`, no wikidiff2)
+into `.obsidian/plugins/graphnotes-card-merge/work/…`. Merge opens from
+that cache. Save & Resolve is `POST /api/proposals/{id}/resolve`.
+Ordinary vault notes are not used for the pair (Publisher must not
+upload them). Reject / request-changes / rollback stay on the website.
 
-### Technical editor check (TZ 3.06)
+### Technical editor check (TZ 3.10 / 3.12)
 
 - View type `graphnotes-card-merge-queue` ≠ Publisher `graphnotes-publisher-sync`.
-- Sidebar fetches only `GET /api/differ` (Bearer). No `/api/differ/queue`.
-- Click opens merge via `GET /api/differ/files/{path}`.
-- Does not call approve/reject/POST `/proposals`.
-- Website `/queue` (wikidiff2) is unchanged.
+- Author token: sidebar does **not** fetch `GET /api/differ`.
+- Editor/admin token: sidebar fetches `GET /api/proposals` (Bearer);
+  no file bodies on refresh. Same New-tab statuses as `#/queue`.
+- «Принять в работу» uses `GET /api/proposals/{id}/files/{path}`
+  (`{path, before, body}`); merge then reads the plugin cache only.
+- Save & Resolve calls `POST /api/proposals/{id}/resolve`
+  `{files:[{path,source}]}` (Bearer `editor`/`admin`); not
+  last-write-wins on `shared_notes`.
+- Does not call approve/reject/request-changes/rollback.
+- Website `/queue` reject / request-changes / rollback stay cookie-only.
+- Leftover: command «Сравнить и слить карточку» / `OpenMergeModal`
+  still lists `GET /api/differ` — unfinished code, not the contract.
 
-## Card Merge / Differ read (TZ 3.04 / 3.06)
+## Author Differ (website `#/differ`, TZ 3.11) / Card Merge queue
 
-Not a second prefix. Card Merge (`obsidian-card-merge/`,
-`graphnotes-card-merge`) uses the **same** Differ the website `#/offer`
-uses. FastAPI paths have no `/api`; Nginx strips it.
+Not a second prefix. Author Differ is the website chrome tab `#/differ`
+(`GET /api/differ`: outbound path list + propose). Card Merge sidebar
+does not consume that list. FastAPI paths have no `/api`; Nginx strips it.
 
 | Browser / plugin | FastAPI |
 | --- | --- |
-| `GET /api/differ` | `GET /differ` |
-| `GET /api/differ/files/{path}` | `GET /differ/files/{path}` |
-| `GET /api/integrations/obsidian/v1/capabilities` | ping / whoami only |
+| `GET /api/differ` | `GET /differ` (site Сверка; leftover Bearer) |
+| `GET /api/differ/files/{path}` | `GET /differ/files/{path}` (leftover pair; not plugin UI) |
+| `GET /api/proposals` | `GET /proposals` (TZ 3.10 editor queue) |
+| `GET /api/proposals/{id}` | `GET /proposals/{id}` (website `/queue` wikidiff2) |
+| `GET /api/proposals/{id}/files/{path}` | `GET /proposals/{id}/files/{path}` (TZ 3.12 pair) |
+| `POST /api/proposals/{id}/resolve` | `POST /proposals/{id}/resolve` (TZ 3.12 publish) |
+| `GET /api/integrations/obsidian/v1/capabilities` | ping / whoami; `user.role` |
 
-Auth: `Authorization: Bearer gnp_…` with `personal:read`, **or** the
-website cookie session. Differ also requires an accepted author
-contract (403 `{detail}` like the rest of `/differ`). The client must
-not send `user_id`. Card Merge does not POST `/proposals`, does not
-write shared, and does not call the transfer methods above.
+Auth: website `#/differ` uses the cookie session. Bearer `gnp_…` with
+`personal:read` still authenticates `/differ` (leftover; Card Merge
+sidebar must not call it, TZ 3.11). Differ also requires an accepted
+author contract (403 `{detail}`). The client must not send `user_id`.
+Resolve is the only shared write from the plugin; it still goes through
+the proposal branch + approve gate.
 
-Errors on `/differ` keep the ordinary web envelope `{ "detail": "…" }`,
-not the v1 `{error:{code,…}}` wrapper. Typical:
+Errors on `/differ` and `/proposals` keep the ordinary web envelope
+`{ "detail": "…" }`, not the v1 `{error:{code,…}}` wrapper. Typical
+`/differ` details:
 
 | Status | `detail` | When |
 | --- | --- | --- |
@@ -117,13 +136,16 @@ not the v1 `{error:{code,…}}` wrapper. Typical:
 | 404 | `personal card not found` / `path is closed` | no personal row, or closed path |
 | 409 | `the shared rhizome is not connected` | no published shared SHA |
 
-Leftover: successful `/differ` Bearer calls do **not** append
-`integration_token_access`. Only `/integrations/obsidian/v1` records
-the access log. Token `last_used_at` still updates on authenticate.
+Leftover: successful Bearer calls on `/differ` and `/proposals` do
+**not** append `integration_token_access`. Only
+`/integrations/obsidian/v1` records the access log. Token
+`last_used_at` still updates on authenticate.
+
+Shipped outbound list (site `#/differ`; not Card Merge):
 
 ```http
 GET /api/differ
-Authorization: Bearer gnp_…
+Cookie: graphnotes_session=…
 Accept: application/json
 ```
 
@@ -141,13 +163,13 @@ Accept: application/json
 ```
 
 List `kind` is `added` (personal card missing from published shared) or
-`changed`. Identical paths are omitted. `updated_at` is the personal
-store stamp. Closed paths are omitted.
+`changed`. Identical and closed paths are omitted. TZ 3.13 inbound is
+accepted, not in this JSON (no `direction` field).
+
+Leftover pair (site «Текст сверки»; not the Card Merge sidebar):
 
 ```http
 GET /api/differ/files/fresh.md
-Authorization: Bearer gnp_…
-Accept: application/json
 ```
 
 ```json
@@ -172,10 +194,35 @@ Accept: application/json
 }
 ```
 
-File `kind` is `added` | `changed` | `same` (manual path that already
-matches). `incoming` is published shared (empty body when `added`);
-`current` is the personal working copy. Card Merge puts `incoming` on
-the left and the vault file on the right. Save writes only the vault.
+Card Merge accept-into-work (TZ 3.12):
+
+```http
+GET /api/proposals/{id}/files/fresh.md
+Authorization: Bearer gnp_…
+```
+
+```json
+{
+  "path": "fresh.md",
+  "before": "# Shared\n",
+  "body": "# Proposed\n"
+}
+```
+
+`before` is published shared; `body` is the proposal text. Cache both
+under `.obsidian/plugins/graphnotes-card-merge/work/{id}/…`. Save &
+Resolve:
+
+```http
+POST /api/proposals/{id}/resolve
+Authorization: Bearer gnp_…
+Content-Type: application/json
+
+{"files":[{"path":"fresh.md","source":"# Merged\n"}],"reason":""}
+```
+
+200 is the same proposal JSON as website «Принять». Remaining files in
+the proposal go through as the author sent them (TZ 3.08).
 
 Capabilities (same as Publisher) is only «Проверить подключение»:
 
@@ -185,7 +232,8 @@ Authorization: Bearer gnp_…
 ```
 
 `personal:read` is enough. `write_allowed` is for Publisher; Card Merge
-ignores a write block.
+ignores a write block. `user.role` is `user` / `editor` / `admin`
+(TZ 3.10: editor/admin → `#/queue` list; `user` → empty panel).
 
 ## Ready methods (Publisher v1)
 
@@ -247,7 +295,7 @@ Authorization: Bearer gnp_…
 {
   "protocol_version": "1.0",
   "api_prefix": "/api/integrations/obsidian/v1",
-  "user": {"id": "uuid", "username": "alice", "display_name": "Alice"},
+  "user": {"id": "uuid", "username": "alice", "display_name": "Alice", "role": "user"},
   "write_allowed": true,
   "write_block_reason": null,
   "scopes": ["personal:read", "personal:write"],
@@ -268,7 +316,7 @@ Authorization: Bearer gnp_…
   },
   "links": {
     "personal_graph": "http://172.16.13.14:8080/#/graph",
-    "differ": "http://172.16.13.14:8080/#/offer"
+    "differ": "http://172.16.13.14:8080/#/differ"
   }
 }
 ```

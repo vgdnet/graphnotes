@@ -1,7 +1,7 @@
 # Product requirements to Stage traceability
 
 Статус: DERIVED / MAINTAINED
-Источник: `docs/product/PRODUCT_SPEC.md` version 2.91
+Источник: `docs/product/PRODUCT_SPEC.md` version 3.15
 
 Матрица маршрутизирует канонические требования в Stage-файлы и не изменяет
 `PRODUCT_SPEC.md`.
@@ -23,7 +23,7 @@
 | No note bodies in PostgreSQL for author history | every Stage | Git/store remains canonical text; provenance is derived |
 | 5.4 Author status; legal contract; commenter tier; closed-segment visibility model | next wave (owner Stage file; requires ADR if security/permission boundary changes) | contract checkbox enables author status; author profile; commenter tier; visibility rules for closed segments |
 | 5.4.1 Closed/paid access level in personal store only (mark paths; no second repo); shared shows lock stub not body | next wave + ADR-016 | not in Differ; no product ZIP/clone of shared; author card sees closed; shared graph lock |
-| 5.4.2 Per-user contribution stats: self only on `/contribution`; public `#/users/{uuid}` achievements; editor review stats; admin sees all | 6, next wave | user: cards/added/accepted/links; public: proposals/created/edits; editor: which proposals/links decided; admin: all users |
+| 5.4.2 Per-user contribution stats: self only on `/contribution`; public `#/users/{login}` achievements; editor review stats; admin sees all | 6, next wave | user: cards/added/accepted/links; public: proposals/created/edits; editor: which proposals/links decided; admin: all users |
 | 5.6 Start = shared graph always; guest reads published shared cards; author=user login; closed slice not editor queue; access-level entitlement; admin sees closed | 6 + next wave + ADR-016 | guest graph + published card; session opens own/closed in filter |
 | 5.6.4 «Два графа» = shared + own overlay on one graph; «ризома автора» = closed-slice view after entitlement; «загрузить» = open in-app | next wave + ADR-016 amendment 2026-09-05 | same `closed_paths`; no second repo/index/ZIP; open-personal-as-public not accepted |
 
@@ -44,24 +44,25 @@
 | 17.5 | Invite map page `#/invites` (`http://172.16.13.14:8080/#/invites`); Code Writer deploys to rhizome-test; `invited_count`; currently admin (TZ 2.98) | 2 |
 | 13.4 | Product TZ → technical TZ → rhizome-test (TZ 2.99); do not deploy first | process |
 | 5.3.1 | Admin sets a new password for any account; plaintext never stored/logged; sessions of target end | 2 |
-| 5.4.2 | User sees own contribution stats; public person card `#/users/{uuid}` with achievement counters | 6 |
+| 5.4.2 | User sees own contribution stats; public person card `#/users/{login}` with achievement counters | 6 |
 | 6.2 | local personal + shared stores; GitHub copy-in (TZ 2.63); leftover merge-out; no product clone/ZIP of shared | 3 |
 | 6.3 | no download of published shared; personal working copy is GraphNotes store; git/Dropbox/Drive = copy-in, not a second canon | 4 (upload copies in), 7 (Differ vs local copy) |
 | 6.3.4 / 5.5.7 | GraphNotes Publisher + API: **free** copy of the local graph into the same personal store (TZ 2.90: queue locally; write on sidebar ItemView «Передать правки на сервер» / ribbon paper-plane / file close / idle minutes / interval, not every keystroke; first dump = send all); personal API key stored and shown again in Settings, copied into plugin `data.json` (TZ 2.76); access log / revoke; not shared, not Differ | plugin write triggers 2.90; token/API shipped 2.79 |
 | 6.3.2 | Graph personal overlay: from git if connected else server store; layer menu/legend «ваша ризома», never «ваш git» | 6 |
 | 6.3.1 | Upload history in GraphNotes (who/when/hash), not user git log | next wave |
 | 6.4 | revisioned shared/personal/proposal derived index and rebuild | 5 |
-| 6.4.1 | Card «История правок» on demand (TZ 2.94): last 30 revisions + text diff; actor name opens `#/users/{uuid}`; `rhizome_events` stay body-less for contribution | 6 |
+| 6.4.1 | Card «История правок» on demand (TZ 2.94): last 30 revisions + text diff; actor name opens `#/users/{login}`; `rhizome_events` stay body-less for contribution | 6 |
 | 6.5 | bounded shared Graph API, personal overlay, local ego-graph view (весь / локальный, depth 1–4, «Показать всё»), Cytoscape UI, **fCoSE** live layout | 5, 6 |
-| 6.5.2 | `#/search` role-scoped search; `#/card/{path}` **read-only** (TZ 2.93: no website editor until reverse sync); `#/users/{uuid}` person card | 6, 7, 8 |
+| 6.5.2 | `#/search` role-scoped search; `#/card/{path}` **read-only** (TZ 2.93: no website editor until reverse sync); `#/users/{login}` person card | 6, 7, 8 |
 | 6.5.3 | Elasticsearch next search (ADR-015); SQL until then; questions 1–9 unanswered (TZ 2.83) | **only after the first approved rhizome production deploy**; not this branch |
 | 16 | Guest anti-scrape of published cards (1 IP → many unique paths); after `rhizome` prod only; not `rhizome-test` (TZ 2.80) | after first production deploy; ADR before code |
 | 17 | Invite email link; no Register tab; person card «Приглашен %date% по приглашению от @user»; same on vsepsy.ru (TZ 2.85–2.87) | shipped on rhizome-test (TZ 2.89); Alembic 0020 attributes existing accounts except efimov to @efimov |
-| 6.6 | Differ entity; one-way personal → published shared; merge-into-shared rules | 7 |
+| 6.6 | Differ entity; outbound personal → shared (TZ 3.11) and inbound shared → personal for previously published paths (TZ 3.13); `#/differ`; not merge | 7 |
 | 6.6 | Connected git: Differ/proposal read **current public HEAD** (Obsidian push); poller/webhook backup; no second clone | 7 |
 | 6.6.2 | Author contribution; Differ extended, not replaced; three states personal/proposed/accepted | next wave |
-| 6.6.3 | Differ API lists personal → shared diffs and itself offers personal cards missing from shared; `#/offer` and Card Merge read `GET /api/differ` + `GET /api/differ/files/{path}` (TZ 3.04); plugin does not publish to shared (TZ 2.82 / 2.88) | shipped read pair |
-| 6.6.4 | Card Merge sidebar «Очередь правок» = same `GET /api/differ` (TZ 3.06); not website `/queue` | view `graphnotes-card-merge-queue` |
+| 6.6.3 | Differ lists personal → shared diffs and itself offers personal cards missing from shared; chrome tab `#/differ` proposes (TZ 3.11); inbound watch of already-published paths (TZ 3.13 / §6.6.5); plugin does not read author Differ (3.04–3.07 withdrawn); Publisher does not publish to shared (TZ 2.82 / 2.88) | shipped outbound list + propose; leftover UI still on `#/offer` + «Текст сверки»; inbound TZ only |
+| 6.6.4 | Card Merge sidebar: editor/admin token = website `/queue` New tab via `GET /api/proposals` (TZ 3.10 / 3.12); `GET /proposals/{id}/files/{path}` → `{path,before,body}`; Save & Resolve `POST /proposals/{id}/resolve` `{files:[{path,source}]}`; author token has no Differ panel | view `graphnotes-card-merge-queue`; leftover OpenMergeModal still GETs `/differ` |
+| 6.6.5 | Inbound Differ: watched accepted-proposal paths; `#/differ` «Из ризомы»; accept copies published shared → personal store; hide same path from outbound (TZ 3.13); one Settings toggle «Получать уведомления об изменениях в карточках, которые вы правили» (TZ 3.15, `notify_card_changes`) | TZ only; ADR-009 amendment pending |
 | 6.5 | Author focus «мой вклад» and provenance on shared graph | next wave (after 6 overlay) |
 | 6.7 | proposal queue tabs New / In progress / Rejected; text and links first, then Graph Diff; reject/return with author comment | 7, 8 |
 | 6.7 | textual and graph impact before publication | 7, 8 |
@@ -76,7 +77,7 @@
 | account settings: email (required), phone/telegram optional, author contract | next wave (2 if register already collects email) |
 | repository status/connect/webhook; personal git connect from settings | 3 |
 | take-from-shared (historical); ZIP/MD fallback into personal git | 4 |
-| Differ; proposals; connected git HEAD refresh on GET /differ; no shared ZIP archive UX | 7 |
+| Differ outbound; leftover pair `GET /differ/files/{path}`; proposals + `{id}/files/{path}` + `resolve`; inbound TZ-only | 7 |
 | author contribution / provenance | next wave |
 | personal/shared Graph API and rebuild | 5 |
 | search cards; card page payload; on-demand revisions (`GET /api/cards/{path}/revisions`) | 6 |
@@ -148,6 +149,8 @@
 | Open personal repo as a public catalog (search/find/comment by everyone, bypassing editor queue) | Not accepted. PRODUCT_SPEC 2.41 §5.6.4 / §12.9; needs owner decision + ADR vs ADR-007 / §3.3 |
 | Editor accept line compare (Wikipedia two-column / one-column) | Closed TZ 3.02 for `/queue` (and the same proposal body). Author Differ line UX still open (§12.10) |
 | Editor accept engine is MediaWiki wikidiff2 | Closed TZ 3.03 / ADR-018 amendment. Not `difflib`. Canon runtime: pinned wikidiff2 C++ as a native helper (owner 2026-09-12), not PHP. `php-cli` in the image is unfinished code, not an alternate canon (TZ 3.05). |
+| Queue accordion + buttons under each card | Closed TZ 3.08. One proposal, one card body. Buttons still decide the whole proposal |
+| Merge Publisher + Card Merge into one plugin | Rejected TZ 3.09. Two packages; Card Merge handed to editor/admin |
 
 ## Final completeness rule
 

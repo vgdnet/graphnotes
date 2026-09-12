@@ -2,17 +2,31 @@
 
 Updated: 2026-09-12
 
-Product model TZ 3.07 (Card Merge queue downloads Differ pair into vault;
-lists vault files ≠ incoming; `/differ/files` shared-only is 200) /
-3.06 (Card Merge sidebar «Очередь правок» = GET /api/differ;
-not website /queue) /
+Product model TZ 3.15 (one Settings checkbox/toggle: «Получать
+уведомления об изменениях в карточках, которые вы правили») /
+3.13 (inbound Differ: watched published paths;
+`#/differ` take shared updates into personal store) /
+3.12 (Card Merge queue is metadata-only;
+accept-into-work caches both card sides; Save & Resolve publishes
+via POST /proposals/{id}/resolve) /
+3.11 (author Differ is `#/differ` propose-only,
+not a merge; plugin does not list personal Differ) /
+3.10 (Card Merge editor/admin queue = website
+`#/queue` New tab) /
+3.09 (two Obsidian plugins stay separate; Card Merge
+handed to editor/admin) /
+3.08 (`#/queue` one open proposal, one open card,
+decide buttons under each card) /
+3.07 leftover withdrawn by 3.11 for authors (no vault pair download
+from personal Differ) /
+3.06 leftover withdrawn by 3.11 (author plugin does not list Differ) /
 3.05 (one canon for all agents; leftover runtime is
 unfinished code, not a second spec) /
 3.03 (editor accept engine is wikidiff2; ADR-018
 amendment: native C++ helper; `php-cli` in the image is unfinished
 code, not an alternate canon) /
 3.02 (Wikipedia-style two-column table; Differ author list stays path checkboxes) /
-3.01 (Differ lives on `/offer`; no «Отличающиеся» tab) /
+3.01 leftover withdrawn by 3.11 (Differ is chrome tab `#/differ` again) /
 3.00 (no «Мой граф» / `/my_graph`; `/graph` defaults to
 the rhizome) /
 2.99 (product TZ → technical TZ → rhizome-test) /
@@ -80,15 +94,18 @@ Website in-app edit is **off** until reverse download / reverse sync
 (`#/card/personal:{path}` remains preview; hash may be `personal%3A`).
 TZ 2.54: `[[wikilink]]` inherits the open card layer (personal stays personal).
 Published shared working copies live in `shared_notes` after copy-in (TZ 2.63).
-Current implementation stage is Stage 8. ADR-009: Differ is one-way personal
-→ published shared.
+Current implementation stage is Stage 8. ADR-009: Differ outbound is
+personal → published shared; TZ 3.13 inbound is TZ-only until the ADR
+amendment.
 TZ 2.59 shipped the 2.58 sitemap in the hash UI: `/card` start card
 (Admin → Установка); `/card/{path}` card + stack 2.56; `/queue` editor
 queue; `/user` settings; `/offer` my proposals; `/graph` shared canvas;
 `#/invites` invite map (`http://172.16.13.14:8080/#/invites`; Code Writer
 deploys; currently admin, TZ 2.98); `/search` SQL card
 search; no `/my_graph` (TZ 3.00); `/contribution`
-Мой вклад; Differ on `/offer` (TZ 3.01); editor accept Wikipedia table
+Мой вклад; Differ on `#/differ` (TZ 3.11 / 3.13: propose outbound and
+take inbound into personal; not a merge editor);
+`/offer` is my proposals; editor accept Wikipedia table
 via wikidiff2 (TZ 3.03); `/` → `/graph`. Unified auth:
 login / forgot; reset by login or email; letter to stored
 inbox only. Elasticsearch (ADR-015 / TZ 2.83) starts **only after the
@@ -461,9 +478,17 @@ TZ 2.5–2.7 on this branch (not merged to main; production
   `#/auth/login-code?token=` still opens a session. Plugin manifest
   credits Юрий Ефимов. Cabinet hint: token default 30 days, max 90.
   Production `rhizome` not deployed.
-- leftover: TZ 2.88 / §6.6.3 Differ offers in the Obsidian plugin —
-  cabinet first; plugin later, same Differ, not a second compare;
-  rhizome marks / topic suggestions remain site leftover;
+- leftover: website Сверка still mounts on `#/offer` (hash `#/differ`
+  opens the same view) plus «Текст сверки» from `GET /differ/files/{path}`;
+  canon is chrome tab `#/differ`, `/offer` = my proposals only (TZ 3.11);
+- leftover: Card Merge `OpenMergeModal` / command «Сравнить и слить
+  карточку» still calls `GET /api/differ`; sidebar already uses
+  `GET /api/proposals` (TZ 3.10 / 3.12);
+- leftover: TZ 3.13 inbound Differ + `POST /differ/inbound/{path}/accept`
+  + TZ 3.15 `notify_card_changes` — accepted TZ, not in code; ADR-009
+  amendment pending;
+- leftover: TZ 2.88 / §6.6.3 rhizome marks / topic suggestions remain
+  site leftover (plugin later was withdrawn by 3.11 for authors);
 - leftover: rollback from card history (TZ 2.96) — store last 30
   versions; restore-from-history is not this wave;
 - leftover: open the invite map (`#/invites`) wider than admin;
@@ -471,6 +496,16 @@ TZ 2.5–2.7 on this branch (not merged to main; production
   the first approved rhizome production deploy**; not this branch; SQL
   `/search` until then; §6.5.3 questions 1–9 unanswered; do not add ES
   to Compose;
+- leftover: native wikidiff2 C++ helper not built; `php-cli` /
+  `php-wikidiff2` in the image is unfinished code, not an alternate
+  canon (TZ 3.03 / 3.05 / ADR-018);
+- leftover: Bearer calls on `/differ` and `/proposals` do not append
+  `integration_token_access` (only `/integrations/obsidian/v1` does);
+  `/differ` and `/proposals` errors stay `{detail}`, not the v1
+  `{error:{code,…}}` envelope;
+- leftover: `AGENTS.md` is gitignored — clones from GitHub do not have
+  it; one canon is still `PRODUCT_SPEC` + `MASTER_CONTEXT` + ADRs
+  (TZ 3.05);
 - leftover: promote invite wave (TZ 2.85–2.87 / 2.89) to production
   `rhizome` only after a separate owner decision;
   TZ 2.80 / §16 guest anti-scrape (one IP → many unique
