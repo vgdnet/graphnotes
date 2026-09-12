@@ -4,6 +4,13 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1
 
+# Leftover until the native wikidiff2 C++ helper ships (ADR-018 / TZ 3.03).
+# Canon runtime is compiled src/lib + CLI, not PHP. These packages leave then.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends php-cli php-wikidiff2 \
+    && rm -rf /var/lib/apt/lists/* \
+    && php -r 'if (!function_exists("wikidiff2_do_diff")) { fwrite(STDERR, "wikidiff2 missing\n"); exit(1); }'
+
 WORKDIR /app
 
 COPY pyproject.toml ./

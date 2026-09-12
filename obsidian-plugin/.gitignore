@@ -1,0 +1,4 @@
+node_modules/
+dist/
+.test-build/
+test-vault/.obsidian/plugins/graphnotes-publisher/main.js
