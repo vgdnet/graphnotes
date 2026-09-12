@@ -12,9 +12,9 @@ The user selects those rows and creates a proposal. GraphNotes copies only
 those files onto a hidden branch of the shared repository. Connected personal
 git is not rewritten. Upload-without-git is not a write into published shared
 until an editor accepts. After accept and index catch-up, those paths leave
-Differ. The chrome tab and heading are **Отличающиеся**; `/api/differ` is
-unchanged. The git XOR upload copy is next to connect/disconnect in Settings,
-not on the Differ tab. While git is connected, Settings hides the bind
+Differ. TZ 3.01: no chrome tab «Отличающиеся»; the UI is **Предложения**
+(`#/offer`). `/api/differ` is unchanged. The git XOR upload copy is next to connect/disconnect in Settings,
+not a top-level Differ tab. While git is connected, Settings hides the bind
 field and shows a GitHub link; disconnect drops the personal `note_index`.
 
 Opening Differ reads the caller's connected public git HEAD through the GitHub
@@ -31,9 +31,18 @@ Editors accept, reject, return or roll back in product language. The queue
 UI has three tabs: New (`open`, plus `conflicted`/`failed` still needing a
 decision), In progress (`changes_requested` — editor comment sent back to
 the author), Rejected (`rejected`). Accepted/published items leave these
-tabs. Opening a proposal shows proposed card Markdown and links first;
-Graph Diff is the following rhizome block. `GET /api/proposals/{id}` file
-diffs include the proposed `body`. Reject, return and rollback require a
+tabs. Opening a proposal shows a Wikipedia-style line table first (TZ 3.03 /
+ADR-018): **wikidiff2** table HTML from the C++ `TableFormatter`
+(same fragment as `wikidiff2_do_diff`; «В ризоме» |
+«В предложении»; added cards have an empty left). Graph Diff is the
+following rhizome block. Target runtime is a compiled native helper
+from pinned Wikimedia `src/lib` (owner 2026-09-12). `php-cli` /
+`php-wikidiff2` are leftover until that helper ships, then they leave
+the backend image. `GET /api/proposals/{id}` file diffs include `html`,
+`engine`, proposed `body`, shared `before`, leftover unified `diff`, and
+`rows` parsed from the table. Missing engine is HTTP 503, not `difflib`.
+There is no inline/unified toggle. Author Differ stays a path-checkbox list.
+Reject, return and rollback require a
 reason the author can read. GitHub pull-request URLs, branch names and SHAs
 stay out of public JSON.
 

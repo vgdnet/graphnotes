@@ -2,7 +2,15 @@
 
 Updated: 2026-09-12
 
-Product model TZ 2.98 (invite map `#/invites` for creators: who has how many invite links) /
+Product model TZ 3.03 (editor accept engine is wikidiff2; ADR-018;
+owner 2026-09-12: native C++ helper, PHP leftover until it ships) /
+3.02 (Wikipedia-style two-column table; Differ author list stays path checkboxes) /
+3.01 (Differ lives on `/offer`; no «Отличающиеся» tab) /
+3.00 (no «Мой граф» / `/my_graph`; `/graph` defaults to
+the rhizome) /
+2.99 (product TZ → technical TZ → rhizome-test) /
+2.98 (invite map page `http://172.16.13.14:8080/#/invites`;
+Code Writer deploys to rhizome-test) /
 2.97 / **2.98** (person card `#/users/{login}` only; public UUID is 404
 and is omitted from card JSON) /
 2.96 (no website `.md`/ZIP upload, including Differ;
@@ -70,9 +78,11 @@ Current implementation stage is Stage 8. ADR-009: Differ is one-way personal
 TZ 2.59 shipped the 2.58 sitemap in the hash UI: `/card` start card
 (Admin → Установка); `/card/{path}` card + stack 2.56; `/queue` editor
 queue; `/user` settings; `/offer` my proposals; `/graph` shared canvas;
-`/invites` invite map (currently admin, TZ 2.98); `/search` SQL card
-search; `/my_graph` personal graph; `/contribution`
-Мой вклад; `/differ` Отличающиеся; `/` → `/graph`. Unified auth:
+`#/invites` invite map (`http://172.16.13.14:8080/#/invites`; Code Writer
+deploys; currently admin, TZ 2.98); `/search` SQL card
+search; no `/my_graph` (TZ 3.00); `/contribution`
+Мой вклад; Differ on `/offer` (TZ 3.01); editor accept Wikipedia table
+via wikidiff2 (TZ 3.03); `/` → `/graph`. Unified auth:
 login / forgot; reset by login or email; letter to stored
 inbox only. Elasticsearch (ADR-015 / TZ 2.83) starts **only after the
 first approved rhizome production deploy**; not this branch; SQL search
@@ -359,7 +369,11 @@ TZ 2.5–2.7 on this branch (not merged to main; production
 - TZ 2.56: same path in shared + personal → stacked cards on
   `/card/{path}` (rhizome top, personal bottom, even if identical);
   Differ is an offer under the stack, not the landing. Semantic compare
-  later + ADR; line-by-line compare is an open question.
+  later + ADR; author Differ line-by-line UX is still open. TZ 3.02–3.03
+  closed Wikipedia-style line compare for **editor accept** only; the
+  engine is wikidiff2 C++ (ADR-018), not `difflib`. Owner 2026-09-12:
+  compile pinned `src/lib` as a native helper; drop `php-cli` /
+  `php-wikidiff2` when that helper ships. ADR-018 §3 still names PHP.
 - TZ 2.55: one `/card/{path}` router; no layer folders. Own note is
   editable, published is not. Hash `personal:` is transitional.
 - TZ 2.54: `[[wikilink]]` inherits the open card layer (personal stays
@@ -390,11 +404,11 @@ TZ 2.5–2.7 on this branch (not merged to main; production
   «Показать всё»). Overlay local center for overlay-only notes is
   `personal:{path}`; unknown `center` does not fall back to the first
   shared page. «К графу» from a card focuses that node on the whole graph
-  (own personal switches the layer to «ваша личная ризома»). Named in
+  (TZ 3.00: «К графу» stays on the rhizome canvas). Named in
   PRODUCT_SPEC 2.51 / MASTER_CONTEXT
 - TZ 2.58: owner sitemap (spec only, no app code). `/user` = settings;
-  `/offer` = my proposals; `/queue` = editor queue; `/my_graph` =
-  personal canvas; `/contribution` = Мой вклад. 2.57 person-card /
+  `/offer` = my proposals; `/queue` = editor queue; `/contribution` = Мой вклад.
+  TZ 3.00 removed `/my_graph`. 2.57 person-card /
   combined-queue inferences withdrawn.
 - TZ 2.61–2.63 shipped on this branch: git/shared GitHub copy `.md` into
   `personal_uploads` / `shared_notes`; Differ and cards read the copies;

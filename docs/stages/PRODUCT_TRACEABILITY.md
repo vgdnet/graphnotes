@@ -35,13 +35,14 @@
 | 6.1.2 | SMTP: register sends `#/auth/confirm?token=` + 6-digit code; no session until confirm; Login tab «Войти письмом» (TZ 2.81) | 2 |
 | 5.5 | Account settings: required email; optional phone/Telegram; git; author contract; Obsidian plugin token; chrome: name in header opens settings, logout at bottom | next wave; email at register; token TZ 2.68–2.76 |
 | 5.5.4 | Light/dark Theme Switcher (sliding sun/moon pill, not text buttons); localStorage | 6 (graph UX) |
-| 5.6 | Start graph always; guest reads published shared cards + side local graph; closed slice not editor queue; access-level entitlement (ADR-016) | 6 |
+| 5.6 | Start graph always (`/graph` = rhizome by default; no «Мой граф» / `/my_graph`, TZ 3.00); guest reads published shared cards + side local graph; closed slice not editor queue; access-level entitlement (ADR-016) | 6 |
 | 5.6.4 | Two graphs = overlay filter; author view of closed slice; load = open in app; not a second repo | next wave |
 | 6.1.1 | Author legal contract in Settings only (§5.5.3); About `#/about` is credits, not contract (§5.5.8 / TZ 2.78) | shipped copy on feature/08-graph-diff |
 | 6.1.3 | vsepsy.ru email+password opens rhizome.vsepsy.ru; no second register; no catalog merge; no /ops roles | next wave + ADR (identity) |
 | 6.1.4 | Opt-in rhizome achievement (graph and/or counts) for vsepsy.ru and own site; card fields for the public internet TBD | next wave + ADR |
 | 5.3 | Admin-only tab «Администрирование»: «Пользователи» (roles, block, set password) and action log | 2 |
-| 17.5 | Invite map `#/invites` for creators: who invited how many (`invited_count`); currently admin (TZ 2.98) | 2 |
+| 17.5 | Invite map page `#/invites` (`http://172.16.13.14:8080/#/invites`); Code Writer deploys to rhizome-test; `invited_count`; currently admin (TZ 2.98) | 2 |
+| 13.4 | Product TZ → technical TZ → rhizome-test (TZ 2.99); do not deploy first | process |
 | 5.3.1 | Admin sets a new password for any account; plaintext never stored/logged; sessions of target end | 2 |
 | 5.4.2 | User sees own contribution stats; public person card `#/users/{uuid}` with achievement counters | 6 |
 | 6.2 | local personal + shared stores; GitHub copy-in (TZ 2.63); leftover merge-out; no product clone/ZIP of shared | 3 |
@@ -144,6 +145,8 @@
 | Which author/psychologist card fields are world-visible (achievement/embed) | PRODUCT_SPEC 2.21 §6.1.4: skeleton accepted, field list open |
 | Elasticsearch next-search questions 1–9 (§6.5.3) | When is closed (TZ 2.83): **only after the first approved rhizome production deploy**. Answers 1–9 stay open; do not invent. SQL until then |
 | Open personal repo as a public catalog (search/find/comment by everyone, bypassing editor queue) | Not accepted. PRODUCT_SPEC 2.41 §5.6.4 / §12.9; needs owner decision + ADR vs ADR-007 / §3.3 |
+| Editor accept line compare (Wikipedia two-column / one-column) | Closed TZ 3.02 for `/queue` (and the same proposal body). Author Differ line UX still open (§12.10) |
+| Editor accept engine is MediaWiki wikidiff2 | Closed TZ 3.03 / ADR-018. Not `difflib`. Runtime: pinned wikidiff2 C++ as a native helper (owner 2026-09-12), not PHP. `php-cli` / `php-wikidiff2` leftover until the helper ships. |
 
 ## Final completeness rule
 

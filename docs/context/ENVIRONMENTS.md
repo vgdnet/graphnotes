@@ -1,6 +1,6 @@
 # GraphNotes - Environments
 
-Updated: 2026-08-23
+Updated: 2026-09-12
 
 Current implementation stage is Stage 8 (Graph Diff) on `feature/08-graph-diff`.
 Stages 0–7 are DONE and were validated on `rhizome-test`. Stage 9 production
@@ -14,6 +14,11 @@ Platform and tools:
 - hostname: `nord`
 - Codex is installed locally
 - VS Code is used for review/manual edits
+- local editor-diff tests: leftover `php-cli` + `php-wikidiff2` until
+  the native wikidiff2 C++ helper ships (owner 2026-09-12 / TZ 3.03);
+  after that, `nord` and the backend image compile pinned Wikimedia
+  `src/lib` + a thin CLI (`g++`, `libthai-dev` / `libthai0`). PHP
+  packages then leave the image.
 
 Role:
 - primary source-code authoring environment
@@ -105,9 +110,10 @@ Current deployment decision:
   `rhizome` until a separate owner decision. Alembic `0020` attributes
   existing accounts (except `efimov`) to `@efimov`.
 - TZ 2.94 card revisions (Alembic `0021`) and the TZ 2.98 invite map
-  (`#/invites`, `GET /api/graph/invites`, currently admin) are the same
-  `rhizome-test` wave. Do not apply `0021` on production `rhizome`
-  until an approved revision.
+  are the same `rhizome-test` wave. Code Writer deploys the page to
+  `http://172.16.13.14:8080/#/invites` (admin). JSON is
+  `GET /api/graph/invites`, not a hash. Do not apply `0021` on
+  production `rhizome` until an approved revision.
 
 Rules:
 - deploy only a revision already validated on `rhizome-test`

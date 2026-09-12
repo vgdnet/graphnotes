@@ -2,10 +2,24 @@
 
 Updated: 2026-09-12
 Status: canonical architecture baseline
-Aligned with PRODUCT_SPEC 2.98. Invite map `#/invites`
-(`GET /api/graph/invites`) is a separate cytoscape graph of
-`users.invited_by_id` for creators: node shows `invited_count`.
-Not the rhizome canvas and not an admin screen. Currently admin-only.
+Aligned with PRODUCT_SPEC 3.03 (editor queue text diff is MediaWiki
+**wikidiff2** table HTML, ADR-018; not `difflib`. Wikipedia two-column
+layout. Author Differ stays a path-checkbox list.
+Owner 2026-09-12: runtime is a compiled native wikidiff2 C++ helper,
+not `php-cli` / `php-wikidiff2`. PHP in the current backend image is
+leftover and is removed when that helper ships. ADR-018 §3 still
+names the PHP packages — architecture here wins; amend the ADR.) /
+3.02 (Wikipedia-style editor table) /
+3.01 (Differ is internal: UI on `#/offer`,
+no «Отличающиеся» tab; `#/differ` → `/offer`).
+3.00 (no «Мой граф» / `/my_graph`; `/graph`
+defaults to the rhizome canvas; `#/my_graph` → `/graph`).
+2.99: product TZ → technical TZ → `rhizome-test`. Invite map page is hash `#/invites`
+(rhizome-test: `http://172.16.13.14:8080/#/invites`). JSON is
+`GET /api/graph/invites` — not in the hash. Code Writer deploys that
+URL to `rhizome-test`. Separate cytoscape graph of `users.invited_by_id`
+for creators: node shows `invited_count`. Not the rhizome canvas and
+not an admin screen. Currently admin-only.
 Person card URL is `#/users/{login}`
 (`#/users/efimov`). A UUID in the hash or in
 `GET /api/users/{…}/card` is **404** and is not canonicalized to login.
@@ -107,14 +121,26 @@ accepted notes/links, proposal count, shared created/edited events; feed
 names and proposal author open it; `GET /api/users/{login}/card` (UUID key is 404; no public UUID);
 TZ 2.87: «Приглашен %date% по приглашению от @user»
 from stored inviter login — omit if none); `/offer` = **my** proposals into the rhizome; `/graph` = shared
-rhizome canvas (fCoSE); `/invites` = invite map for creators (TZ 2.98):
-`@login · N` + node size from `invited_count`; click → `#/users/{login}`;
-diamond if no inviter; currently admin; non-admin hash redirects to `/graph`;
+rhizome canvas (fCoSE); `/invites` = invite map page `#/invites` for creators (TZ 2.98;
+rhizome-test `http://172.16.13.14:8080/#/invites`; Code Writer deploys);
+JSON `GET /api/graph/invites` is not a hash; `@login · N` + node size from
+`invited_count`; click → `#/users/{login}`; diamond if no inviter;
+currently admin; non-admin hash redirects to `/graph`;
 not the rhizome canvas and not an admin screen); `/search` = card search (SQL `note_index`,
 `layer=visible`; Elasticsearch only after the first approved rhizome
-production deploy — ADR-015 / TZ 2.83); `/my_graph` = personal graph layer only;
-`/contribution` = Мой вклад. `/differ` stays Отличающиеся (compare /
-stack-offer target); do not invent `/accepted/differ`. `/` → `/graph`.
+production deploy — ADR-015 / TZ 2.83); no `/my_graph` tab (TZ 3.00;
+personal layer is a filter on `/graph`); `/contribution` = Мой вклад.
+`/offer` hosts Differ (TZ 3.01; not a chrome tab); `#/differ` → `/offer`;
+do not invent `/accepted/differ`. Editor review of a proposal (TZ 3.03 /
+ADR-018, `/queue` and the same proposal body on `/offer`) is
+**wikidiff2** table HTML from `GET /api/proposals/{id}` (`html`,
+`engine`, parsed `rows`); `difflib` is not the review engine. The
+engine is Wikimedia C++ (`Wikidiff2::execute` + `TableFormatter` in
+`src/lib`). FastAPI calls a GraphNotes-compiled native helper (same
+JSON contract as today’s PHP stdin helper: `before` / `after` →
+`table_html`), then allow-lists HTML. Missing helper → 503. No
+inline/unified toggle. Do not rewrite the algorithm in JS or run C++
+in the browser. Author Differ remains path checkboxes. `/` → `/graph`.
 TZ 2.57 wrongly inferred `/user` = person card and `/offer` = combined
 editor queue — withdrawn. Website in-app edit is **off** (TZ 2.93). The
 transitional own-personal class `#/card/personal:{path}` (hash encodes
@@ -145,8 +171,9 @@ hosted Markdown (upload store / plugin) is the product default (TZ 2.61–2.63).
 ADR-008 leftover: «no hosted vault» does not forbid
 that store; «no in-app Obsidian» forbids a second Obsidian-class editor;
 TZ 2.93 also keeps the thin website editor off until reverse sync.
-The Differ comparison screen chrome is
-**Отличающиеся** (tab and heading); API/entity remain Differ. Author-contract copy (version `2026-09-05`)
+Differ is an internal comparison (TZ 3.01): UI lives on `#/offer`
+(heading **Сверка**), not a chrome tab; API/entity remain Differ.
+Author-contract copy (version `2026-09-05`)
 is responsibility for notes/links offered to the shared rhizome, withdraw
 (new proposes/uploads/git-as-contribution blocked until re-accept; already
 published notes stay in shared git), **WTFPL for card/note content** offered
@@ -231,8 +258,8 @@ comments. Graph layers (TZ 2.36): `GET /api/graph/personal-overlay` is
 **ваша часть ризомы** (bounded shared page plus personal notes that
 wikilink into it — automatic stitch from `note_links`, not a curated
 catalog); `GET /api/graph/personal` is **ваша личная ризома** (full
-indexed personal tree, or uploads if git is off). `/my_graph` is that
-personal canvas. Default `/search` / `GET /api/search` is `layer=visible` (the
+indexed personal tree, or uploads if git is off). That layer is a filter
+on `/graph`, not a `/my_graph` route (TZ 3.00). Default `/search` / `GET /api/search` is `layer=visible` (the
 role-scoped corpus above, including guest published hits without
 bodies). `layer=overlay` is the graph stitch for canvas highlight;
 `layer=personal` is the full personal tree. Cards and Graph Diff /
@@ -245,8 +272,8 @@ personal Markdown. Light and dark UI themes (TZ 2.19 / 2.22 /
 `prefers-color-scheme`. The control is a Theme Switcher toggle (sliding
 sun/moon pill, `role="switch"`), not generic text buttons. Cytoscape labels
 use CSS theme tokens, not hardcoded washed-out fills. Landing `/` is `/graph`
-(shared canvas) for guests and signed-in users (TZ 2.14 / 2.58). `/my_graph`
-is the personal layer only. Guests see published nodes/edges and may
+(rhizome canvas by default) for guests and signed-in users (TZ 2.14 / 2.58 /
+3.00). There is no «Мой граф» tab; `#/my_graph` opens `/graph`. Guests see published nodes/edges and may
 open published shared card bodies (TZ 2.64); feed, comments, personal
 and queue still require a session. Account settings
 (§5.5 / TZ 2.13 / 2.58 / 2.77) live at **`/user`** (name in header opens it; `.topbar` `padding-inline: 1.25rem` keeps that control and the brand off the window edge):
@@ -272,7 +299,7 @@ in `docs/decisions/ADR-*.md`.
 ## 1. Product
 GraphNotes is a Markdown publisher with access rights and exactly one shared
 rhizome — analog of Obsidian Publish, not «knowledge lives on GitHub». Each
-user has their own graph (`/my_graph`). People author on the GraphNotes store
+user has a personal layer on the same `/graph` canvas (TZ 3.00). People author on the GraphNotes store
 (upload / plugin; website editor off until reverse sync, TZ 2.93). External disks **copy** `.md` into
 that store (TZ 2.62). GitHub also copies published shared `.md` into the
 local shared store (TZ 2.63). GraphNotes shows the one shared rhizome as a graph in the app (read-only
@@ -331,6 +358,17 @@ Internet
 
 Technologies:
 - FastAPI / Python
+- MediaWiki **wikidiff2** C++ (`src/lib`: `Wikidiff2` + `TableFormatter`)
+  compiled in the backend image from a pinned Wikimedia tarball/git
+  (https://releases.wikimedia.org/wikidiff2/, currently 1.14.2) plus a
+  thin GraphNotes CLI `main`. Build without `HAVE_CONFIG_H` so
+  `WD2_ALLOCATOR` is `std::allocator`; Zend lives only in
+  `php_wikidiff2.cpp` and is not linked. Runtime dep: `libthai0`
+  (compile: `g++`, `libthai-dev`). FastAPI subprocess → same table
+  HTML as `wikidiff2_do_diff`. PHP (`php-cli`, `php-wikidiff2`,
+  `wikidiff2_table.php`) is leftover until the helper ships, then
+  those packages leave the image. Editor proposal text only
+  (ADR-018 / TZ 3.03; owner 2026-09-12 native path)
 - React + TypeScript
 - PostgreSQL
 - SQLAlchemy 2.x async
@@ -711,7 +749,7 @@ Personal layer (plugin write to the local store; git connector leftover):
 - `DELETE /api/personal/closed-paths/{path}`
 
 Shared publication and Differ:
-- `GET  /api/differ` (refresh connected personal public HEAD, then one-way
+- `GET  /api/differ` (internal; UI `#/offer`; refresh connected personal public HEAD, then one-way
   personal layer → published shared; git not required for upload-only authors)
 - `GET  /api/contributions/me` (author’s notes/links/proposals/counts; derived; git not required)
 - `GET  /api/admin/contributions` (admin: same stats for every account; TZ 2.7 / §5.4.2)
@@ -747,9 +785,11 @@ Removed from product surface (TZ 2.5 / 2.6):
 
 Graph visualization and Graph Diff (Stage-owned):
 - `GET  /api/graph/shared` (`/graph` canvas; no login; public published layer only)
-- `GET  /api/graph/invites` (`#/invites` who-invited-whom + `invited_count`;
+- `GET  /api/graph/invites` (JSON; page is `#/invites` /
+  `http://172.16.13.14:8080/#/invites`; Code Writer deploys to rhizome-test;
+  who-invited-whom + `invited_count`;
   node size / `@login · N`; currently admin; TZ 2.98)
-- `GET  /api/graph/personal` (`/my_graph`; ваша личная ризома; caller’s full indexed tree or uploads)
+- `GET  /api/graph/personal` (layer filter on `/graph`; ваша личная ризома; caller’s full indexed tree or uploads)
 - `GET  /api/graph/personal-overlay` (ваша часть ризомы; shared page + automatic wikilink stitch)
 - `GET  /api/search` (`layer=visible|overlay|personal|shared`; visible is
   the `/search` default; guest = public hits, no snippets in the list;
@@ -759,7 +799,9 @@ Graph visualization and Graph Diff (Stage-owned):
 Proposals and editor workflow (Stage-owned):
 - `POST /api/proposals`
 - `GET  /api/proposals`
-- `GET  /api/proposals/{id}`
+- `GET  /api/proposals/{id}` (TZ 3.03: each file has `html` from
+  wikidiff2, `engine` / `engine_version`, `body`, `before`, leftover
+  unified `diff`, and `rows` parsed from the table)
 - `POST /api/proposals/{id}/approve`
 - `POST /api/proposals/{id}/reject`
 - `POST /api/proposals/{id}/request-changes`
@@ -796,7 +838,9 @@ the same Differ in a later iteration; this prefix still does not
 publish to shared and does not implement marks/topics UI.
 
 Browser/plugin URLs use the `/api` prefix. FastAPI routes do **not**:
-Nginx `location /api/` strips it. Incompatible protocol → new prefix
+Nginx `location /api/` strips it. FastAPI sets `root_path="/api"` so
+Swagger at `/api/docs` loads `/api/openapi.json` (not the SPA at
+`/docs` or `/openapi.json`). Incompatible protocol → new prefix
 (`/integrations/obsidian/v2`), do not silently reshape v1 fields.
 
 **Auth.** Transfer APIs: `Authorization: Bearer`. Mint is

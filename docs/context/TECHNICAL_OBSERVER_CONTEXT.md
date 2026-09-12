@@ -1,11 +1,18 @@
 # GraphNotes — канонический контекст Technical Observer
 
 Статус: ACTIVE
-Updated: 2026-09-12 (PRODUCT_SPEC **2.98**. TZ 2.89 / §17 shipped on
+Updated: 2026-09-12 (PRODUCT_SPEC **3.03**: editor queue **wikidiff2**.
+Owner 2026-09-12: compile the C++ core as a native helper; `php-cli` /
+`php-wikidiff2` is leftover until that helper ships, then those
+packages leave the backend image. ADR-018 §3 still names PHP — amend
+the ADR; do not keep PHP as the runtime story.
+**2.99**: product TZ → technical TZ →
+`rhizome-test`. TZ 2.89 / §17 shipped on
 `rhizome-test`: invite email link; no Register tab; any account may invite;
 person card «Приглашен … от @user»; existing accounts except `efimov`
-attributed to `@efimov`. TZ 2.98 invite map `#/invites` /
-`GET /api/graph/invites` is admin-only for now: `@login · N` +
+attributed to `@efimov`. TZ 2.98 invite map page is `http://172.16.13.14:8080/#/invites`
+(`#/invites`; JSON `GET /api/graph/invites` is not a hash). Code Writer
+deploys that URL to `rhizome-test`. Admin-only for now: `@login · N` +
 `invited_count` node size; click → `#/users/{login}`; not the rhizome
 canvas. TZ 2.93 website editor off; TZ 2.94 `card_revisions` last 30
 on demand; TZ 2.96 no website `.md`/ZIP upload UI; TZ 2.90 plugin writes
@@ -156,14 +163,18 @@ PostgreSQL, узлы, связи, теги, поисковый индекс и �
   UUID key is 404; TZ 2.87: invited_at + inviter login as @user, omit if none);
   `/offer` **my** proposals; `/graph`
   shared canvas; `/invites` invite map (currently admin; TZ 2.98);
-  `/search` card search; `/my_graph` personal graph;
-  `/contribution` Мой вклад; `/differ` stays Отличающиеся; `/` → `/graph`.
+  `/search` card search; no `/my_graph` (TZ 3.00; personal is a `/graph` filter);
+  `/contribution` Мой вклад; Differ UI is `/offer` (TZ 3.01); editor
+  proposal text is wikidiff2 C++ via a native helper (TZ 3.03 /
+  ADR-018; PHP leftover until the helper ships); `/` → `/graph`.
   Do not invent `/accepted/differ`. TZ 2.57 `/user`=person and
   `/offer`=combined queue — withdrawn;
 - card page rules (TZ 2.56): editability derived (own personal vs
   published shared); same path in both layers is a **stack** (shared top,
   personal bottom), even if texts match; do not auto-open Differ; do not
-  invent line-diff UX; semantic/neural compare needs an ADR; paid is not
+  invent Differ line-diff UX for authors; semantic/neural compare needs
+  an ADR; editor proposal review is wikidiff2 table HTML (TZ 3.03 /
+  ADR-018), not `difflib` and not an inline toggle; paid is not
   a third folder; hash `#/card/personal:` is transitional;
 - global hierarchical roles `user < editor < admin`;
 - rhizome **access levels** (ADR-016 / TZ 2.41) are not a fourth role:
@@ -212,8 +223,8 @@ canonical clone of personal Markdown.
 Shared-graph UI uses **fCoSE** (`cytoscape-fcose`), not core `cose`. Layout
 coordinates remain UI-only.
 
-Landing `/` is `/graph` (TZ 2.14 / 2.58). `/my_graph` is the personal
-layer only. Guests may read published shared card bodies (TZ 2.64);
+Landing `/` is `/graph` (TZ 2.14 / 2.58 / 3.00): rhizome by default; no
+«Мой граф» tab. Guests may read published shared card bodies (TZ 2.64);
 they must not receive personal, queue, feed or comments.
 Settings (TZ 2.13 / 2.58) live at **`/user`** (email/contacts, git bind,
 author contract); not the public person card and not the graph home.
@@ -239,8 +250,15 @@ when the current Differ becomes empty for the same personal layer.
 
 Graph Diff (Stage 8, current) is the structural view of the same Differ /
 proposal pair. Editor queue is `/queue` (TZ 2.38 / 2.58); author’s own
-proposals are `/offer`. The queue UI opens proposed card Markdown and
-links first, then Graph Diff; tabs are New / In progress / Rejected.
+proposals are `/offer`. The queue UI opens a Wikipedia-style text table
+first (TZ 3.03: wikidiff2 HTML; «В ризоме» | «В предложении»; added =
+empty left), then links, then Graph Diff; tabs are New / In progress / Rejected.
+`GET /api/proposals/{id}` must include `html` from wikidiff2; do not lead
+the review with only the proposed Markdown body. Do not fall back to
+`difflib` when the engine is missing. Do not rewrite the engine in JS
+or put C++ in the browser. The FastAPI contract stays: allow-listed
+table HTML + `engine` + `rows`. The helper is a compiled binary (or
+later the same `src/lib` in-process); not `php-cli`.
 Card search `/search` (TZ 2.39 / 2.58) is role-scoped over `note_index`
 (`layer=visible` default): guest = published shared hits; card page is
 openable for those shared paths (TZ 2.64)
@@ -357,6 +375,15 @@ Observer проверяет diff на:
 - отсутствие связи результата с точным commit SHA.
 - accidental workspace/multiple-shared-rhizome abstraction;
 - leftover take-into-git or shared ZIP/clone UX after TZ 2.5;
+- remounting the «Отличающиеся» chrome tab (TZ 3.01: Differ is internal,
+  UI on `/offer`);
+- replacing wikidiff2 with `difflib` for editor review, or dropping
+  the native wikidiff2 helper from the backend image without a 503
+  (TZ 3.03 / ADR-018; owner 2026-09-12: do not keep `php-cli` /
+  `php-wikidiff2` as the runtime story — they leave when the helper
+  ships);
+- remounting the «Мой граф» tab or treating `#/my_graph` as a separate
+  canvas (TZ 3.00: `/graph` is the rhizome by default);
 - invite map (`GET /api/graph/invites`, `#/invites`) visible to non-admin
   before an explicit leftover to open it; mixing it into `/graph` or the
   admin cabinet;
