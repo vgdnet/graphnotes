@@ -2,9 +2,13 @@ import { App, FuzzySuggestModal, Modal, Notice, Plugin, PluginSettingTab, Settin
 import {
   CardApiService,
   DEFAULT_SETTINGS,
+  bodyToMaterialize,
   normalizeSettings,
   normalizeToken,
   serverOrigin,
+  shouldQueueVaultFile,
+  type DifferItem,
+  type DifferFile,
   type MergePluginSettings,
   type SessionUser,
 } from './apiService';
@@ -49,6 +53,7 @@ export default class GraphNotesCardMergePlugin extends Plugin implements MergeHo
     const { workspace } = this.app;
     const existing = workspace.getLeavesOfType(QUEUE_VIEW_TYPE)[0];
     if (existing) {
+      if (existing.view instanceof CardQueueView) await existing.view.reload();
       if (reveal) workspace.revealLeaf(existing);
       return;
     }
@@ -56,7 +61,47 @@ export default class GraphNotesCardMergePlugin extends Plugin implements MergeHo
     if (reveal) workspace.revealLeaf(leaf);
   }
 
+  async loadQueue(): Promise<DifferItem[]> {
+    const { api } = this.connect();
+    const signal = this.beginWork();
+    const listed = await api.listDifferences(signal);
+    const items: DifferItem[] = [];
+    const seen = new Set<string>();
+    for (const item of listed) {
+      seen.add(item.path);
+      try {
+        const pair = await api.getDifferFile(item.path, signal);
+        await writeVaultIfMissing(this.app, item.path, bodyToMaterialize(pair));
+      } catch {
+        /* listed row still belongs in the queue */
+      }
+      items.push(item);
+    }
+    for (const file of this.app.vault.getMarkdownFiles()) {
+      if (seen.has(file.path)) continue;
+      let pair: DifferFile;
+      try {
+        pair = await api.getDifferFile(file.path, signal);
+      } catch {
+        continue;
+      }
+      const local = await this.app.vault.read(file);
+      if (!shouldQueueVaultFile(pair, local)) continue;
+      items.push({
+        path: pair.path,
+        title: pair.title,
+        kind: pair.kind === 'same' ? 'changed' : pair.kind,
+        updatedAt: pair.current.timestamp || pair.incoming.timestamp,
+      });
+      seen.add(file.path);
+    }
+    return items;
+  }
+
   async openQueuedCard(path: string): Promise<void> {
+    const { api } = this.connect();
+    const pair = await api.getDifferFile(path, this.beginWork());
+    await writeVaultIfMissing(this.app, path, bodyToMaterialize(pair));
     const local = this.app.vault.getAbstractFileByPath(path);
     const localPath = local?.path ?? path;
     this.settings.lastDifferPath = path;
@@ -99,6 +144,21 @@ export default class GraphNotesCardMergePlugin extends Plugin implements MergeHo
       return false;
     }
   }
+}
+
+export async function writeVaultIfMissing(app: App, path: string, body: string): Promise<void> {
+  if (!body || app.vault.getAbstractFileByPath(path)) return;
+  const parts = path.split('/');
+  if (parts.length > 1) {
+    let folder = '';
+    for (const part of parts.slice(0, -1)) {
+      folder = folder ? `${folder}/${part}` : part;
+      if (!app.vault.getAbstractFileByPath(folder)) {
+        await app.vault.createFolder(folder);
+      }
+    }
+  }
+  await app.vault.create(path, body);
 }
 
 async function obsidianFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {

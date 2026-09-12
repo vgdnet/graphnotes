@@ -1,11 +1,10 @@
 import { ItemView, Notice, type WorkspaceLeaf } from 'obsidian';
-import { CardApiError, QUEUE_VIEW_TYPE, type CardApiService, type DifferItem } from './apiService';
+import { CardApiError, QUEUE_VIEW_TYPE, type DifferItem } from './apiService';
 
 export { QUEUE_VIEW_TYPE };
 
 export interface QueueHost {
-  connect(): { origin: string; api: CardApiService };
-  beginWork(): AbortSignal;
+  loadQueue(): Promise<DifferItem[]>;
   openQueuedCard(path: string): Promise<void>;
 }
 
@@ -48,8 +47,7 @@ export class CardQueueView extends ItemView {
     this.isError = false;
     this.render();
     try {
-      const { api } = this.plugin.connect();
-      this.items = await api.listDifferences(this.plugin.beginWork());
+      this.items = await this.plugin.loadQueue();
       this.message = this.items.length ? '' : 'Отличий нет — править нечего.';
     } catch (error) {
       this.items = [];

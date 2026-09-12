@@ -72,10 +72,12 @@ time. TZ 2.91: one personal copy; local wins; no conflict UI. Other
 server bytes are overwritten with local (`expected_version` from
 manifest / GET content). No `force=true`. Shared / Differ / proposals
 are not written. Differ read is a **separate** desktop plugin
-(`obsidian-card-merge`, TZ 3.04 / **3.06**): `GET /api/differ` and
+(`obsidian-card-merge`, TZ 3.04 / **3.06** / **3.07**): `GET /api/differ` and
 `GET /api/differ/files/{path}` with the same `gnp_` token
 (`personal:read`). Same JSON as `#/offer`. Sidebar «Очередь правок»
-is that list (not website `/queue`). It does not POST proposals
+is that list plus vault files whose text ≠ `incoming` (not website `/queue`).
+Missing vault files are created from `current` or `incoming`; existing
+local files are not overwritten. It does not POST proposals
 and does not write shared.
 
 ### Technical editor check (TZ 3.06)

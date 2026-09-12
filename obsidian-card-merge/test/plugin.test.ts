@@ -1,6 +1,7 @@
 import {
   CardApiError,
   CardApiService,
+  bodyToMaterialize,
   differFileUrl,
   differUrl,
   MERGE_VIEW_TYPE,
@@ -12,6 +13,7 @@ import {
   parseMergeSession,
   PLUGIN_ID,
   serverOrigin,
+  shouldQueueVaultFile,
 } from '../src/apiService';
 
 function assert(cond: unknown, message: string): asserts cond {
@@ -73,6 +75,17 @@ export async function run(): Promise<void> {
   assertEqual(pair.incoming.body, '', 'incoming empty when added');
   assertEqual(pair.current.body, '# Fresh\n', 'personal body');
   assertEqual(pair.current.author, 'Alice', 'author display_name');
+  assertEqual(bodyToMaterialize(pair), '# Fresh\n', 'download personal when vault empty');
+  assertEqual(shouldQueueVaultFile(pair, '# Fresh\n'), true, 'vault ≠ empty shared');
+  assertEqual(
+    shouldQueueVaultFile({
+      ...pair,
+      kind: 'same',
+      incoming: { ...pair.incoming, body: '# Fresh\n' },
+    }, '# Fresh\n'),
+    false,
+    'same as shared stays out',
+  );
 
   const session = parseMergeSession({
     localPath: ' Inbox/Hello.md ',

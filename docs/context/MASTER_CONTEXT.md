@@ -765,8 +765,11 @@ Shared publication and Differ:
   refresh connected personal public HEAD, then one-way
   personal layer → published shared; git not required for upload-only authors)
 - `GET  /api/differ/files/{path}` (same Differ; `incoming` = published shared body,
-  `current` = personal working copy; website «Текст сверки» and Card Merge plugin;
-  `{detail}` errors: 400 invalid path, 404 missing/closed, 409 shared not connected)
+  `current` = personal working copy or empty if that path is not in the store;
+  shared-only path is 200 `kind=changed`, not 404. Website «Текст сверки»
+  and Card Merge; Card Merge writes the pair into the vault when the file
+  is missing, local wins. `{detail}` errors: 400 invalid path, 404 missing/closed,
+  409 shared not connected)
 - `GET  /api/contributions/me` (author’s notes/links/proposals/counts; derived; git not required)
 - `GET  /api/admin/contributions` (admin: same stats for every account; TZ 2.7 / §5.4.2)
 - `GET  /api/admin/users` (search/filter; last login and session count)

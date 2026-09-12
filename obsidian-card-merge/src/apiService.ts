@@ -231,6 +231,17 @@ export function parseDifferSide(value: unknown, fallbackPath: string): DifferSid
   };
 }
 
+/** Right-pane seed when the vault has no file yet: personal copy, else shared. */
+export function bodyToMaterialize(file: DifferFile): string {
+  return file.current.body || file.incoming.body;
+}
+
+/** Vault file belongs in the queue if it is not the published shared text. */
+export function shouldQueueVaultFile(file: DifferFile, localBody: string): boolean {
+  if (localBody !== file.incoming.body) return true;
+  return file.kind === 'added' || file.kind === 'changed';
+}
+
 export function parseDifferFile(value: unknown, fallbackPath: string): DifferFile {
   const rec = asRecord(value);
   const path = textField(rec.path)?.trim() || fallbackPath;
@@ -312,7 +323,10 @@ function parseApiFailure(body: string, status: number): { code: string; message:
   if (!body) return { code: 'http_error', message: `Сервер ответил ${status}.` };
   try {
     const parsed = JSON.parse(body) as { detail?: unknown; error?: { message?: unknown; code?: unknown }; message?: unknown };
-    const code = typeof parsed.error?.code === 'string' ? parsed.error.code : status === 401 ? 'invalid_token' : 'http_error';
+    let code = typeof parsed.error?.code === 'string' ? parsed.error.code : status === 401 ? 'invalid_token' : 'http_error';
+    if (typeof parsed.detail === 'string' && parsed.detail.includes('author contract')) {
+      code = 'author_contract_required';
+    }
     if (typeof parsed.detail === 'string') return { code, message: parsed.detail };
     if (typeof parsed.error?.message === 'string') return { code, message: parsed.error.message };
     if (typeof parsed.message === 'string') return { code, message: parsed.message };

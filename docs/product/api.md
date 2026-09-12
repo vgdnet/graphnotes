@@ -59,8 +59,10 @@ GET  /api/differ                      # internal Differ (TZ 3.01): not a chrome 
                                       # в плагине (не /queue). Элемент: path, title, kind,
                                       # updated_at личного склада.
 GET  /api/differ/files/{path}         # та же сверка, одно тело: incoming=общая,
-                                      # current=личное; author/updated_at;
-                                      # cookie или Bearer personal:read; не пишет;
+                                      # current=личное (пусто, если склада нет);
+                                      # без личного, но с общей — 200, kind=changed;
+                                      # author/updated_at; cookie или Bearer personal:read;
+                                      # не пишет; Card Merge кладёт тело в vault, если файла нет;
                                       # ошибки как веб-API: {detail}
                                       # (400 path is invalid, 404 not found/closed,
                                       # 409 shared not connected, 401/403 auth);

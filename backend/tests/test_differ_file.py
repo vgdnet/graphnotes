@@ -52,6 +52,12 @@ async def test_differ_file_is_the_same_pair_for_cookie_and_plugin_token(
     assert bearer_file.json()["current"]["body"] == pair["current"]["body"]
     assert bearer_file.json()["incoming"]["body"] == pair["incoming"]["body"]
 
+    shared_only = await plugin.get("/differ/files/card.md", headers=_auth(created["token"]))
+    assert shared_only.status_code == 200
+    assert shared_only.json()["kind"] == "changed"
+    assert "See [[missing]]" in shared_only.json()["incoming"]["body"]
+    assert shared_only.json()["current"]["body"] == ""
+
     missing = await plugin.get("/differ/files/nope.md", headers=_auth(created["token"]))
     assert missing.status_code == 404
     hidden = await plugin.get("/differ/files/.hidden.md", headers=_auth(created["token"]))

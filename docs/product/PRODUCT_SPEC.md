@@ -125,7 +125,7 @@ ADR-018); `php-cli` в образе — дырка в коде, не канон.
 - **Уведомления о новых правках в очереди (почта / Telegram-канал)** → [user-settings.md](user-settings.md) §5.5.6, [functional.md](functional.md) §6.7
 - **Вход с vsepsy.ru (та же почта и пароль)** → [vsepsy-identity.md](vsepsy-identity.md) §6.1.3
 - **Ачивка / данные для сайта и vsepsy.ru** → [vsepsy-identity.md](vsepsy-identity.md) §6.1.4
-- **Очередь правок в плагине Card Merge (ТЗ 3.06)** → боковая панель = `GET /api/differ`, не сайт `/queue` → [functional.md](functional.md) §6.6.4
+- **Очередь правок в плагине Card Merge (ТЗ 3.06 / 3.07)** → боковая панель = `GET /api/differ` + скачивание пары в vault для слияния, не сайт `/queue` → [functional.md](functional.md) §6.6.4
 - **Differ, очередь и мои предложения** → [functional.md](functional.md) §6.6–6.7
   (`/offer` — предложения и сверка Differ внутри, ТЗ 3.01; `/queue` — очередь
   editor’а. **ТЗ 3.02 / 3.03:** принятие правок — таблица как у Википедии,

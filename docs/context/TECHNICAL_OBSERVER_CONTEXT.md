@@ -137,10 +137,12 @@ PostgreSQL, узлы, связи, теги, поисковый индекс и �
 знания. Ключ хранится в кабинете и копируется в плагин (ТЗ 2.75); отзыв
 блокирует, новый ключ снова из кабинета. SHA-256 — только поиск Bearer.
 Код плагина в `obsidian-plugin/` — клиент, не канон склада GraphNotes.
-§6.6.3 / ТЗ 2.88 / 3.04 / **3.06**: Differ (`GET /api/differ`,
+§6.6.3 / ТЗ 2.88 / 3.04 / **3.06** / **3.07**: Differ (`GET /api/differ`,
 `GET /api/differ/files/{path}`) отдаёт отличия и пару текстов; кабинет
 и `obsidian-card-merge` читают одно. Боковая «Очередь правок» — тот же
-список, не `/queue`. Проверить: view `graphnotes-card-merge-queue` ≠
+список плюс vault ≠ `incoming`; нет файла — пишет `current`/`incoming`
+в vault. Shared-only path на `/differ/files` — 200. Не `/queue`.
+Проверить: view `graphnotes-card-merge-queue` ≠
 Publisher; нет POST proposal; нет второго URL очереди.
 `/differ` ошибки — `{detail}`, не конверт v1. Bearer на `/differ`
 не пишет `integration_token_access` (leftover; `last_used_at` обновляется).

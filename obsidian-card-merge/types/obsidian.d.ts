@@ -49,6 +49,7 @@ declare module 'obsidian' {
     read(file: TFile): Promise<string>;
     modify(file: TFile, data: string): Promise<void>;
     create(path: string, data: string): Promise<TFile>;
+    createFolder(path: string): Promise<TFolder>;
   }
   export class WorkspaceLeaf {
     view: View;

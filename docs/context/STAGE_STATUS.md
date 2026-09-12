@@ -2,7 +2,9 @@
 
 Updated: 2026-09-12
 
-Product model TZ 3.06 (Card Merge sidebar «Очередь правок» = GET /api/differ;
+Product model TZ 3.07 (Card Merge queue downloads Differ pair into vault;
+lists vault files ≠ incoming; `/differ/files` shared-only is 200) /
+3.06 (Card Merge sidebar «Очередь правок» = GET /api/differ;
 not website /queue) /
 3.05 (one canon for all agents; leftover runtime is
 unfinished code, not a second spec) /

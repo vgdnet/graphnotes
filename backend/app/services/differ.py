@@ -84,43 +84,59 @@ async def get_difference_file(
             PersonalUpload.path == note_path,
         )
     )
-    if upload is None:
-        raise ProposalError(404, "personal card not found")
     shared_note = await database.scalar(select(SharedNote).where(SharedNote.path == note_path))
-    if shared_note is None:
+    if upload is None and shared_note is None:
+        raise ProposalError(404, "personal card not found")
+    if upload is None:
+        kind = "changed"
+        incoming_body = shared_note.body
+        incoming_updated = shared_note.updated_at
+        current_body = ""
+        current_updated = None
+        path = shared_note.path
+    elif shared_note is None:
         kind = "added"
         incoming_body = ""
         incoming_updated = None
+        current_body = upload.body
+        current_updated = upload.updated_at
+        path = upload.path
     elif shared_note.body != upload.body:
         kind = "changed"
         incoming_body = shared_note.body
         incoming_updated = shared_note.updated_at
+        current_body = upload.body
+        current_updated = upload.updated_at
+        path = upload.path
     else:
         kind = "same"
         incoming_body = shared_note.body
         incoming_updated = shared_note.updated_at
+        current_body = upload.body
+        current_updated = upload.updated_at
+        path = upload.path
     author = {
         "id": str(user.id),
         "username": user.username,
         "display_name": user.display_name or user.username,
     }
     return {
-        "path": upload.path,
-        "title": _title_from_path(upload.path),
+        "path": path,
+        "title": _title_from_path(path),
         "kind": kind,
         "incoming": {
             "layer": "shared",
-            "path": upload.path,
+            "path": path,
             "body": incoming_body,
             "author": None,
             "updated_at": incoming_updated,
         },
         "current": {
             "layer": "personal",
-            "path": upload.path,
-            "body": upload.body,
+            "path": path,
+            "body": current_body,
             "author": author,
-            "updated_at": upload.updated_at,
+            "updated_at": current_updated,
         },
     }
 
