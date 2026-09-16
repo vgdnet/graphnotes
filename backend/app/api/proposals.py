@@ -1,19 +1,36 @@
 from typing import NoReturn
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 
-from app.api.dependencies import CurrentAuthor, CurrentAuthorReader, CurrentUser, DatabaseSession
+from app.api.dependencies import (
+    CurrentAuthor,
+    CurrentAuthorReader,
+    CurrentEditorReader,
+    CurrentRequestUser,
+    CurrentUser,
+    DatabaseSession,
+)
 from app.schemas.differ import DifferFileResponse, DifferResponse
 from app.schemas.proposal import (
     ProposalCreateRequest,
     ProposalDecisionRequest,
     ProposalListResponse,
+    ProposalResolveRequest,
     ProposalResponse,
+    ProposalWorkFileResponse,
 )
-from app.services.differ import get_difference_file, list_differences
+from app.services.differ import accept_inbound_file, get_difference_file, list_differences
 from app.services.github import GitHubAppClient
-from app.services.proposal import ProposalError, create_proposal, decide, get_proposal, list_proposals
+from app.services.proposal import (
+    ProposalError,
+    create_proposal,
+    decide,
+    get_proposal,
+    get_proposal_work_file,
+    list_proposals,
+    resolve_proposal,
+)
 
 router = APIRouter(tags=["proposals"])
 
@@ -30,9 +47,10 @@ def _raise(error: ProposalError) -> NoReturn:
 async def differ_endpoint(
     user: CurrentAuthorReader,
     database: DatabaseSession,
+    include_inbound: bool = Query(True),
 ) -> DifferResponse:
     try:
-        body = await list_differences(database, user, _client())
+        body = await list_differences(database, user, include_inbound=include_inbound)
     except ProposalError as exc:
         _raise(exc)
     return DifferResponse.model_validate(body)
@@ -45,10 +63,23 @@ async def differ_file_endpoint(
     database: DatabaseSession,
 ) -> DifferFileResponse:
     try:
-        body = await get_difference_file(database, user, note_path, _client())
+        body = await get_difference_file(database, user, note_path)
     except ProposalError as exc:
         _raise(exc)
     return DifferFileResponse.model_validate(body)
+
+
+@router.post("/differ/inbound/{note_path:path}/accept", response_model=DifferResponse)
+async def accept_inbound_endpoint(
+    note_path: str,
+    user: CurrentAuthor,
+    database: DatabaseSession,
+) -> DifferResponse:
+    try:
+        body = await accept_inbound_file(database, user, note_path)
+    except ProposalError as exc:
+        _raise(exc)
+    return DifferResponse.model_validate(body)
 
 
 @router.get("/shared/archive", response_model=None)
@@ -62,7 +93,7 @@ async def shared_archive_endpoint() -> None:
 @router.post("/proposals", response_model=ProposalResponse)
 async def create_proposal_endpoint(
     payload: ProposalCreateRequest,
-    user: CurrentAuthor,
+    user: CurrentAuthorReader,
     database: DatabaseSession,
 ) -> ProposalResponse:
     try:
@@ -81,11 +112,11 @@ async def create_proposal_endpoint(
 
 @router.get("/proposals", response_model=ProposalListResponse)
 async def list_proposals_endpoint(
-    user: CurrentUser,
+    user: CurrentRequestUser,
     database: DatabaseSession,
 ) -> ProposalListResponse:
     try:
-        body = await list_proposals(database, user, _client())
+        body = await list_proposals(database, user)
     except ProposalError as exc:
         _raise(exc)
     return ProposalListResponse.model_validate(body)
@@ -94,11 +125,46 @@ async def list_proposals_endpoint(
 @router.get("/proposals/{proposal_id}", response_model=ProposalResponse)
 async def get_proposal_endpoint(
     proposal_id: UUID,
-    user: CurrentUser,
+    user: CurrentRequestUser,
     database: DatabaseSession,
 ) -> ProposalResponse:
     try:
         body = await get_proposal(database, user, proposal_id, _client())
+    except ProposalError as exc:
+        _raise(exc)
+    return ProposalResponse.model_validate(body)
+
+
+@router.get("/proposals/{proposal_id}/files/{note_path:path}", response_model=ProposalWorkFileResponse)
+async def get_proposal_work_file_endpoint(
+    proposal_id: UUID,
+    note_path: str,
+    user: CurrentRequestUser,
+    database: DatabaseSession,
+) -> ProposalWorkFileResponse:
+    try:
+        body = await get_proposal_work_file(database, user, proposal_id, note_path, _client())
+    except ProposalError as exc:
+        _raise(exc)
+    return ProposalWorkFileResponse.model_validate(body)
+
+
+@router.post("/proposals/{proposal_id}/resolve", response_model=ProposalResponse)
+async def resolve_proposal_endpoint(
+    proposal_id: UUID,
+    payload: ProposalResolveRequest,
+    user: CurrentEditorReader,
+    database: DatabaseSession,
+) -> ProposalResponse:
+    try:
+        body = await resolve_proposal(
+            database,
+            user=user,
+            proposal_id=proposal_id,
+            files=[(item.path, item.source) for item in payload.files],
+            reason=payload.reason,
+            client=_client(),
+        )
     except ProposalError as exc:
         _raise(exc)
     return ProposalResponse.model_validate(body)

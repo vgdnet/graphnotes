@@ -25,7 +25,7 @@ from app.services.closed_corpus import (
 )
 from app.services.git_paths import PathError, normalize_git_path
 from app.services.github import GitHubAppClient, GitHubAppError
-from app.services.index import IndexerError, ensure_personal_current, ensure_shared_current
+from app.services.index import IndexerError, ensure_personal_current
 from app.services.markdown import parse_markdown, unresolved_links
 from app.services.provenance import record_card_revision, record_personal_edit_events
 from app.services.noise import (
@@ -33,11 +33,7 @@ from app.services.noise import (
     inspect_markdown_text,
 )
 from app.services.notify import notify_admins_white_noise
-from app.services.repository import (
-    SHARED_SINGLETON_ID,
-    refresh_personal,
-    refresh_shared,
-)
+from app.services.repository import SHARED_SINGLETON_ID, refresh_personal
 
 
 class IngestError(Exception):
@@ -240,6 +236,7 @@ async def _upsert_personal_upload(
     if current.body != text:
         current.body = text
         current.content_hash = content_hash
+        current.updated_at = datetime.now(UTC)
         await record_card_revision(
             database,
             path=path,
@@ -286,6 +283,7 @@ async def _upsert_shared_note(
     if current.body != text:
         current.body = text
         current.content_hash = content_hash
+        current.updated_at = datetime.now(UTC)
         await record_card_revision(
             database,
             path=path,
@@ -458,13 +456,12 @@ def _github_to_ingest(error: GitHubAppError) -> IngestError:
 
 async def list_shared_notes(
     database: AsyncSession,
-    client: GitHubAppClient,
+    client: GitHubAppClient | None = None,
 ) -> dict[str, object]:
+    del client
     row = await database.get(SharedRepository, SHARED_SINGLETON_ID)
     if row is None:
         return {"notes": [], "revision": None, "updated_at": None}
-    await refresh_shared(database, client)
-    row = await database.get(SharedRepository, SHARED_SINGLETON_ID)
     notes_rows = list((await database.scalars(select(SharedNote).order_by(SharedNote.path))).all())
     available = {item.path for item in notes_rows}
     return {
@@ -477,12 +474,10 @@ async def list_shared_notes(
 async def list_personal_notes(
     database: AsyncSession,
     user: User,
-    client: GitHubAppClient,
+    client: GitHubAppClient | None = None,
 ) -> dict[str, object]:
+    del client
     row = await _personal_or_none(database, user.id)
-    if row is not None:
-        await refresh_personal(database, user.id, client)
-        row = await _personal_or_none(database, user.id)
     uploads = await _uploads_for(database, user.id)
     if uploads:
         available = {item.path for item in uploads}
@@ -510,10 +505,11 @@ async def get_personal_note(
     database: AsyncSession,
     user: User,
     path: str,
-    client: GitHubAppClient,
+    client: GitHubAppClient | None = None,
     *,
     owner_id=None,
 ) -> dict[str, object]:
+    del client
     try:
         normalized = normalize_git_path(path)
     except PathError as exc:
@@ -523,14 +519,6 @@ async def get_personal_note(
         if user.role != UserRole.ADMIN.value:
             raise IngestError(404, "note was not found")
         target_id = owner_id
-    row = await _personal_or_none(database, target_id)
-    if row is not None:
-        await refresh_personal(database, target_id, client)
-        try:
-            await ensure_personal_current(database, target_id, client)
-        except IndexerError:
-            pass
-        row = await _personal_or_none(database, target_id)
     upload = await database.scalar(
         select(PersonalUpload).where(
             PersonalUpload.user_id == target_id,
@@ -746,17 +734,13 @@ async def _save_personal_upload(
 async def get_shared_note(
     database: AsyncSession,
     path: str,
-    client: GitHubAppClient,
+    client: GitHubAppClient | None = None,
 ) -> dict[str, object]:
+    del client
     try:
         normalized = normalize_git_path(path)
     except PathError as exc:
         raise IngestError(400, str(exc)) from exc
-    await refresh_shared(database, client)
-    try:
-        await ensure_shared_current(database, client)
-    except IndexerError:
-        pass
     stored = await database.scalar(select(SharedNote).where(SharedNote.path == normalized))
     if stored is None:
         if await is_globally_closed(database, normalized):

@@ -15,6 +15,7 @@ from app.core.config import settings
 from app.main import app
 from app.services.admin import bootstrap_admin
 from app.services.github import GitHubAppError, GitHubRepoSnapshot
+from app.services.repository import refresh_shared
 
 
 @dataclass
@@ -238,8 +239,10 @@ def _install(
     monkeypatch.setattr(notes_api, "_client", lambda: github)
     monkeypatch.setattr(repository_api, "_client", lambda: github)
     monkeypatch.setattr(proposals_api, "_client", lambda: github)
-    monkeypatch.setattr(contributions_api, "_client", lambda: github)
-    monkeypatch.setattr(graph_api, "_client", lambda: github)
+    if hasattr(contributions_api, "_client"):
+        monkeypatch.setattr(contributions_api, "_client", lambda: github)
+    if hasattr(graph_api, "_client"):
+        monkeypatch.setattr(graph_api, "_client", lambda: github)
     monkeypatch.setattr(webhooks_api, "GitHubAppClient", lambda *args, **kwargs: github)
     monkeypatch.setattr(settings, "github_shared_owner", "vgdnet")
     monkeypatch.setattr(settings, "github_shared_name", "rhizome")
@@ -979,6 +982,10 @@ async def test_shared_github_copies_into_local_store(
 
     github.repos["vgdnet/rhizome"].files["card.md"] = "# Card\nupdated from source\n"
     github.repos["vgdnet/rhizome"].sha = "shared-copy-2"
+    async with session_factory() as database:
+        from app.services.repository import refresh_shared
+
+        await refresh_shared(database, github)
     body = await client.get("/shared/notes/card.md")
     assert body.status_code == 200
     assert "updated from source" in body.json()["body"]
@@ -990,6 +997,10 @@ async def test_shared_github_copies_into_local_store(
 
     del github.repos["vgdnet/rhizome"].files["source.md"]
     github.repos["vgdnet/rhizome"].sha = "shared-copy-3"
+    async with session_factory() as database:
+        from app.services.repository import refresh_shared
+
+        await refresh_shared(database, github)
     listed = await client.get("/shared/notes")
     assert listed.status_code == 200
     assert "source.md" not in {item["path"] for item in listed.json()["notes"]}
@@ -1022,44 +1033,3 @@ async def test_git_copy_stays_after_disconnect(
     assert differ.status_code == 200
     kinds = {item["path"]: item["kind"] for item in differ.json()["differences"]}
     assert kinds.get("already.md") == "added"
-
-
-async def test_shared_github_copies_into_local_store(
-    auth_test_context: tuple[AsyncClient, async_sessionmaker[AsyncSession]],
-    monkeypatch: MonkeyPatch,
-) -> None:
-    from sqlalchemy import select
-
-    from app.models.shared_note import SharedNote
-
-    client, session_factory = auth_test_context
-    github = _install(monkeypatch, _github())
-    await _register(client, "admin-user")
-    await _bind_shared(client, session_factory, "admin-user")
-
-    async with session_factory() as database:
-        stored = {
-            row.path: row.body
-            for row in (await database.scalars(select(SharedNote))).all()
-        }
-    assert "card.md" in stored
-    assert "source.md" in stored
-
-    github.repos["vgdnet/rhizome"].files["card.md"] = "# Card\nupdated from source\n"
-    github.repos["vgdnet/rhizome"].sha = "shared-copy-2"
-    body = await client.get("/shared/notes/card.md")
-    assert body.status_code == 200
-    assert "updated from source" in body.json()["body"]
-
-    github.file_reads = 0
-    again = await client.get("/shared/notes/card.md")
-    assert again.status_code == 200
-    assert github.file_reads == 0
-
-    del github.repos["vgdnet/rhizome"].files["source.md"]
-    github.repos["vgdnet/rhizome"].sha = "shared-copy-3"
-    listed = await client.get("/shared/notes")
-    assert listed.status_code == 200
-    assert "source.md" not in {item["path"] for item in listed.json()["notes"]}
-    missing = await client.get("/shared/notes/source.md")
-    assert missing.status_code == 404

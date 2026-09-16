@@ -2,7 +2,20 @@
 
 Updated: 2026-09-16
 
-**Shipped this session (nord → rhizome-test):** TZ **3.30** grant
+**Shipped this session (nord):** TZ **3.31** — offer list / `GET /api/differ`
+is path+hash metadata from `personal_uploads` ↔ `shared_notes` (no bodies,
+no wikidiff2, **no GitHub API**, no git copy-in on sidebar open or `#/differ`
+list). Plugin `user` calls `GET /api/differ?include_inbound=false`.
+`GET /api/proposals` queued mark does not reconcile GitHub. Leftover
+GitHub branch on `POST /proposals` does not block the offer on rate limit.
+30s Notice stays as fallback.
+Same `dist/graphnotes-card-merge` build, do not overwrite `data.json`:
+`/home/efimov/obsidian/rhizome/.obsidian/plugins/graphnotes-card-merge/`
+and `/home/efimov/obsidian/guide_psy/.obsidian/plugins/graphnotes-card-merge/`
+— Reload app without saving in **both** vaults. In `guide_psy` leftover
+Publisher is still enabled; enable Card Merge and disable Publisher.
+
+**Also on rhizome-test:** TZ **3.30** grant
 canon: shared rhizome lives **apart** from every account; endpoints
 are per card; authorization is a DB grant `(user, path)` **or**
 `(user, tag)` **or** `(user, path_prefix)` (folder, e.g. `психология/`).
@@ -23,7 +36,9 @@ and `/home/efimov/obsidian/guide_psy/.obsidian/plugins/graphnotes-card-merge/`
 — Reload app without saving in **both** vaults.
 `obsidian-plugin/` leftover catalog hides the same panel.
 
-Product model TZ **3.30** (prefix grant; shared apart from every
+Product model TZ **3.31** (offer list = store hashes, no git/bodies on
+open) /
+**3.30** (prefix grant; shared apart from every
 account; 3.24 narrowed; **empty grant ≠ whole queue**; one server file
 NOW; personal = ungranted drafts) /
 **3.27** (today's coarse offer flag) /
@@ -501,6 +516,9 @@ TZ 2.5–2.7 on this branch (not merged to main; production
   `personal_uploads` / `shared_notes`; Differ and cards read the copies;
   disconnect keeps the personal store; search/graph still use `note_index`.
   Leftover: GitHub App merge/rollback live-read of proposal branches.
+  Closed this wave: GET Differ / repository status / graph / search /
+  cards / comments / contributions no longer live-pull GitHub (copy-in
+  is webhook / poller / connect / `POST /index/rebuild`).
   Live on `rhizome-test` 2026-09-11: SHA `10586d6fd178cbbcba58d8306225eb238e80e9b0`,
   Alembic `0016_shared_notes`. Production `rhizome` not deployed.
 - TZ 2.65: personal ZIP file-count cap is **10 000** (was 100). A ~120-file

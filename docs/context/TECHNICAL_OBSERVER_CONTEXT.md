@@ -205,8 +205,9 @@ PostgreSQL, узлы, связи, теги, поисковый индекс и �
 знания. Ключ хранится в кабинете и копируется в плагин (ТЗ 2.75); отзыв
 блокирует, новый ключ снова из кабинета. SHA-256 — только поиск Bearer.
 Код плагина в `obsidian-plugin/` — клиент, не канон склада GraphNotes.
-§6.6.3 / ТЗ 2.88 / **3.11**: Differ (`GET /api/differ`) — сверка двух
-складов для вкладки `#/differ` (предложить пути, не merge). Card Merge
+§6.6.3 / ТЗ 2.88 / **3.11** / **3.31**: Differ (`GET /api/differ`) — пути и
+хеши складов для вкладки `#/differ` и офера `user` (предложить пути, не merge;
+без git copy-in и без тел на список). Card Merge
 авторский Differ не читает (3.04–3.07 сняты). Токен editor/admin в
 Card Merge читает `/queue` New (`GET /api/proposals`, ТЗ 3.10 / **3.12**).
 Проверить: view `graphnotes-card-merge-queue` ≠ Publisher; очередь без
@@ -324,11 +325,12 @@ the product path (HTTP 410).
 
 Differ is derived. Outbound is personal layer → published shared.
 TZ 3.13 inbound is published shared → personal store for paths in the
-caller's accepted proposals. Git input
-compares trees by Markdown blob SHA **after** GraphNotes reads the caller's
-current public HEAD (GET `/api/differ`, create proposal, GitHub `push`
-webhook, or the in-process poller `GRAPHNOTES_PERSONAL_SYNC_INTERVAL_SECONDS`;
-CLI `python -m app.cli.sync_personal`). Upload-without-git input compares the
+caller's accepted proposals. Differ/status/graph/search/card GET compare
+or serve local stores (`personal_uploads` / `shared_notes` / `note_index`).
+Copy-in is GitHub `push` webhook, the in-process poller
+`GRAPHNOTES_PERSONAL_SYNC_INTERVAL_SECONDS`, CLI `python -m app.cli.sync_personal`,
+connect, or `POST /index/rebuild` — not sidebar / `#/differ` / propose list.
+Upload-without-git input compares the
 owner's staged Markdown with published shared by the same path/content rule.
 It is not `graph.json` and must not store **published** shared bodies in
 PostgreSQL. Files that exist only in shared are not Differ results.

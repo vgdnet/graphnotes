@@ -143,6 +143,13 @@ async def connect_shared_repository(
     from app.services.ingest import copy_shared_git_into_store
 
     await copy_shared_git_into_store(database, client, row, previous_sha=None)
+    from app.services.index import IndexerError, ensure_shared_current
+
+    try:
+        await ensure_shared_current(database, client)
+        await database.refresh(row)
+    except IndexerError:
+        pass
     return row
 
 
@@ -198,6 +205,13 @@ async def connect_personal_repository(
     from app.services.ingest import copy_git_into_personal_store
 
     await copy_git_into_personal_store(database, user.id, client, row, previous_sha=None)
+    from app.services.index import IndexerError, ensure_personal_current
+
+    try:
+        await ensure_personal_current(database, user.id, client)
+        await database.refresh(row)
+    except IndexerError:
+        pass
     return row
 
 
@@ -242,6 +256,14 @@ async def refresh_shared(database: AsyncSession, client: GitHubAppClient) -> Sha
     except GitHubAppError as exc:
         apply_error(row, exc)
         await database.commit()
+        return row
+    from app.services.index import IndexerError, ensure_shared_current
+
+    try:
+        await ensure_shared_current(database, client)
+    except IndexerError:
+        pass
+    await database.refresh(row)
     return row
 
 
@@ -272,4 +294,12 @@ async def refresh_personal(
     except GitHubAppError as exc:
         apply_error(row, exc)
         await database.commit()
+        return row
+    from app.services.index import IndexerError, ensure_personal_current
+
+    try:
+        await ensure_personal_current(database, user_id, client)
+    except IndexerError:
+        pass
+    await database.refresh(row)
     return row

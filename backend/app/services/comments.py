@@ -2,13 +2,11 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.comment import NoteComment
-from app.models.github import PersonalRepository
 from app.models.personal_upload import PersonalUpload
 from app.models.shared_note import SharedNote
 from app.models.user import User, UserRole
 from app.services.git_paths import PathError, normalize_git_path
-from app.services.github import GitHubAppClient, GitHubAppError
-from app.services.repository import SHARED_SINGLETON_ID, refresh_personal, refresh_shared
+from app.services.github import GitHubAppClient
 
 
 class CommentError(Exception):
@@ -33,32 +31,18 @@ def _public(row: NoteComment, author: User) -> dict[str, object]:
     }
 
 
-async def _published_paths(database: AsyncSession, client: GitHubAppClient) -> set[str]:
-    await refresh_shared(database, client)
+async def _published_paths(database: AsyncSession) -> set[str]:
     rows = (await database.scalars(select(SharedNote.path))).all()
     return set(rows)
 
 
-async def _viewer_personal_paths(
-    database: AsyncSession, user: User, client: GitHubAppClient
-) -> set[str]:
-    await refresh_personal(database, user.id, client)
+async def _viewer_personal_paths(database: AsyncSession, user: User) -> set[str]:
     uploads = (
         await database.scalars(
             select(PersonalUpload.path).where(PersonalUpload.user_id == user.id)
         )
     ).all()
-    if uploads:
-        return set(uploads)
-    row = await database.scalar(
-        select(PersonalRepository).where(PersonalRepository.user_id == user.id)
-    )
-    if row is None or not row.observed_sha:
-        return set()
-    try:
-        return set(await client.list_markdown_files(row.owner, row.name, row.observed_sha))
-    except GitHubAppError as exc:
-        raise CommentError(502, exc.message) from exc
+    return set(uploads)
 
 
 async def list_comments(
@@ -113,10 +97,9 @@ async def create_comment(
         normalized = normalize_git_path(file_path)
     except PathError as exc:
         raise CommentError(400, str(exc)) from exc
-    await refresh_shared(database, client)
-    await refresh_personal(database, user.id, client)
-    published = await _published_paths(database, client)
-    personal = await _viewer_personal_paths(database, user, client)
+    del client
+    published = await _published_paths(database)
+    personal = await _viewer_personal_paths(database, user)
     if normalized not in published and normalized not in personal:
         raise CommentError(404, "note was not found")
     text = body.strip()

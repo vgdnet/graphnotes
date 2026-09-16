@@ -7,15 +7,9 @@ from app.models.personal_upload import PersonalUpload
 from app.models.proposal import Proposal, ProposalStatus
 from app.models.user import User, UserRole
 from app.services.card_paths import personal_card_path, proposal_card_path
-from app.services.github import GitHubAppClient
-from app.services.index import (
-    IndexerError,
-    ensure_personal_current,
-    ensure_shared_current,
-    overlay_personal_paths,
-)
+from app.services.index import overlay_personal_paths
 from app.services.markdown import parse_markdown
-from app.services.repository import SHARED_SINGLETON_ID, refresh_personal, refresh_shared
+from app.services.repository import SHARED_SINGLETON_ID
 
 _SLICE_LAYERS = {"overlay", "personal", "shared", "visible"}
 _ACTIVE_PROPOSALS = {
@@ -37,7 +31,6 @@ async def search_visible_cards(
     tag: str = "",
     limit: int = 40,
     layer: str = "visible",
-    client: GitHubAppClient | None = None,
 ) -> dict[str, object]:
     trimmed = query.strip()
     tag_name = tag.strip()
@@ -45,19 +38,6 @@ async def search_visible_cards(
     scope = layer if layer in _SLICE_LAYERS else "visible"
     if user is None:
         scope = "shared"
-
-    if client is not None:
-        await refresh_shared(database, client)
-        try:
-            await ensure_shared_current(database, client)
-        except IndexerError:
-            pass
-        if user is not None:
-            await refresh_personal(database, user.id, client)
-            try:
-                await ensure_personal_current(database, user.id, client)
-            except IndexerError:
-                pass
 
     slices: list[list[dict[str, object]]] = []
     include_shared = scope != "personal"

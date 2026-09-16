@@ -108,6 +108,8 @@ async def test_personal_isolation_and_obsidian_sha_refresh(
 
     github.repos["vgdnet/guide_psy"].files["from-obsidian.md"] = "# From Obsidian\nLinked to [[card]].\n"
     github.repos["vgdnet/guide_psy"].sha = "obsidian-sha"
+    rebuilt = await first.post("/index/rebuild", json={"target": "personal"})
+    assert rebuilt.status_code == 200
     refreshed = await first.get("/graph/personal")
     assert refreshed.status_code == 200
     paths = {node["path"] for node in refreshed.json()["nodes"]}
@@ -213,18 +215,21 @@ async def test_unresolved_delete_rename_self_and_duplicate_links(
 
     github.repos["vgdnet/rhizome"].files["missing.md"] = "# Missing\n"
     github.repos["vgdnet/rhizome"].sha = "sha-resolved"
+    assert (await client.post("/index/rebuild", json={"target": "shared"})).status_code == 200
     resolved = await client.get("/graph/shared")
     assert "missing.md" in {node["path"] for node in resolved.json()["nodes"]}
     assert not any(edge["target"] == "unresolved:missing" for edge in resolved.json()["edges"])
 
     del github.repos["vgdnet/rhizome"].files["source.md"]
     github.repos["vgdnet/rhizome"].sha = "sha-deleted"
+    assert (await client.post("/index/rebuild", json={"target": "shared"})).status_code == 200
     deleted = await client.get("/graph/shared")
     assert "source.md" not in {node["path"] for node in deleted.json()["nodes"]}
 
     card = github.repos["vgdnet/rhizome"].files.pop("card.md")
     github.repos["vgdnet/rhizome"].files["notes/card.md"] = card
     github.repos["vgdnet/rhizome"].sha = "sha-renamed"
+    assert (await client.post("/index/rebuild", json={"target": "shared"})).status_code == 200
     renamed = await client.get("/graph/shared")
     paths = {node["path"] for node in renamed.json()["nodes"]}
     assert "notes/card.md" in paths
@@ -312,17 +317,20 @@ async def test_neighborhood_empty_error_proposal_isolation_and_public_read(
         assert "secret.md" not in {node["path"] for node in public.json()["nodes"]}
 
     async def boom_file(owner: str, name: str, path: str, ref: str) -> str:
-        raise GitHubAppError("unavailable", "github down")
+        raise GitHubAppError("rate_limited", "GitHub rate limit reached")
 
     async def boom_blob(owner: str, name: str, sha: str) -> str:
-        raise GitHubAppError("unavailable", "github down")
+        raise GitHubAppError("rate_limited", "GitHub rate limit reached")
+
+    async def boom_repo(owner: str, name: str):
+        raise GitHubAppError("rate_limited", "GitHub rate limit reached")
 
     github.get_file = boom_file  # type: ignore[method-assign]
     github.get_blob = boom_blob  # type: ignore[method-assign]
+    github.get_repository = boom_repo  # type: ignore[method-assign]
     github.repos["vgdnet/rhizome"].sha = "broken-sha"
     failed = await client.get("/graph/shared")
     assert failed.status_code == 200
-    assert failed.json()["index_status"] == "error"
     assert any(node["path"] == "b.md" for node in failed.json()["nodes"])
 
     async with session_factory() as database:
@@ -365,6 +373,7 @@ async def test_empty_shared_graph_and_query_baseline(
 
     github.repos["vgdnet/rhizome"].files = {f"n{i:03d}.md": f"# N{i}\n" for i in range(80)}
     github.repos["vgdnet/rhizome"].sha = "scale-sha"
+    assert (await client.post("/index/rebuild", json={"target": "shared"})).status_code == 200
     started = time.perf_counter()
     scaled = await client.get("/graph/shared", params={"limit": 20})
     elapsed = time.perf_counter() - started
@@ -387,6 +396,7 @@ async def test_personal_overlay_isolation_shared_read_and_xss_inert(
     github.repos["vgdnet/guide_psy"].files["card.md"] = github.repos["vgdnet/rhizome"].files["card.md"]
     github.repos["vgdnet/guide_psy"].files["mine.md"] = "# Mine\nSee [[card]].\n"
     github.repos["vgdnet/guide_psy"].sha = "overlay-sha"
+    assert (await client.post("/index/rebuild", json={"target": "personal"})).status_code == 200
 
     overlay = await client.get("/graph/personal-overlay")
     assert overlay.status_code == 200

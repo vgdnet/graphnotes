@@ -18,8 +18,6 @@ from app.services.graph_diff import proposal_graph_diff
 from app.services.index import (
     IndexerError,
     bound_graph_payload,
-    ensure_personal_current,
-    ensure_shared_current,
     index_status_label,
     load_graph,
     load_overlay,
@@ -29,7 +27,7 @@ from app.services.index import (
     rebuild_derived_indexes,
 )
 from app.services.proposal import ProposalError
-from app.services.repository import SHARED_SINGLETON_ID, refresh_personal, refresh_shared
+from app.services.repository import SHARED_SINGLETON_ID
 from app.services.search import search_visible_cards
 
 router = APIRouter(tags=["graph"])
@@ -65,7 +63,7 @@ async def search_cards(
     layer: Annotated[str, Query(pattern="^(overlay|personal|shared|visible)$")] = "visible",
 ) -> SearchResponse:
     payload = await search_visible_cards(
-        database, q, user=viewer, tag=tag, limit=limit, layer=layer, client=_client()
+        database, q, user=viewer, tag=tag, limit=limit, layer=layer
     )
     return SearchResponse.model_validate(payload)
 
@@ -77,12 +75,6 @@ async def shared_graph(
     center: str | None = None,
     depth: Annotated[int, Query(ge=0, le=4)] = 1,
 ) -> GraphResponse:
-    client = _client()
-    await refresh_shared(database, client)
-    try:
-        await ensure_shared_current(database, client)
-    except IndexerError:
-        pass
     shared = await database.get(SharedRepository, SHARED_SINGLETON_ID)
     if shared is None or not shared.indexed_sha:
         return GraphResponse(layer="shared", index_status="empty", nodes=[], edges=[])
@@ -115,12 +107,6 @@ async def personal_graph(
     center: str | None = None,
     depth: Annotated[int, Query(ge=0, le=4)] = 1,
 ) -> GraphResponse:
-    client = _client()
-    await refresh_personal(database, user.id, client)
-    try:
-        await ensure_personal_current(database, user.id, client)
-    except IndexerError:
-        pass
     personal = await database.scalar(
         select(PersonalRepository).where(PersonalRepository.user_id == user.id)
     )
@@ -157,14 +143,6 @@ async def personal_overlay(
     center: str | None = None,
     depth: Annotated[int, Query(ge=0, le=4)] = 1,
 ) -> GraphResponse:
-    client = _client()
-    await refresh_shared(database, client)
-    await refresh_personal(database, user.id, client)
-    try:
-        await ensure_shared_current(database, client)
-        await ensure_personal_current(database, user.id, client)
-    except IndexerError:
-        pass
     shared = await database.get(SharedRepository, SHARED_SINGLETON_ID)
     if shared is None or not shared.indexed_sha:
         return GraphResponse(layer="overlay", index_status="empty", nodes=[], edges=[])

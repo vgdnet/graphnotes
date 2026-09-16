@@ -2,7 +2,7 @@
 
 Updated: 2026-09-16
 Status: canonical architecture baseline
-Aligned with PRODUCT_SPEC **3.30** (3.29 one-file grant kept): one
+Aligned with PRODUCT_SPEC **3.31** (3.30 grant kept): one
 shared rhizome per install, **apart from every account** (including
 editor). «Editor account is the rhizome» is rejected. Endpoints are per
 card; authorization is a DB grant `(user_id, card_path)` **or**
@@ -95,6 +95,8 @@ first is runtime debt) /
 not a merge; Card Merge does not list personal Differ; editor plugin = queue) /
 3.20 (Publisher lists GET /api/differ added/changed and
 creates POST /api/proposals with the same gnp_ token) /
+3.31 (GET /api/differ is store path/hash metadata; no GitHub API,
+no git copy-in, no bodies, no wikidiff2 on list; plugin `?include_inbound=false`) /
 3.10 (editor-access sidebar =
 website `#/queue` New tab via GET /api/proposals) /
 3.09 leftover withdrawn by 3.26 (two plugin
@@ -153,7 +155,8 @@ cards. Do not restore historical `take-from-shared` without a new decision.
 create. TZ 2.85–2.87 / §17 **shipped on
 `rhizome-test`**: any active account may invite by email link; no
 Register tab; person card shows «Приглашен … по приглашению от @user»
-(inviter login). TZ 2.92: the same line is on `/user`, «Мой вклад»,
+(inviter login). Send form is Settings `#/user` tab **«Пригласить пользователя»**,
+not personal data. TZ 2.92: the same attribution line is on `/user`, «Мой вклад»,
 and the admin user row. Cutover: existing rows except `efimov` point at the
 real `@efimov` account (`invited_by_id`, Alembic `0020`). Same rule on
 vsepsy.ru. Do not deploy this wave to production `rhizome`. TZ 2.83: the Elasticsearch iteration
@@ -211,8 +214,11 @@ article. Guests may read published shared cards (not personal, queue, or
 comments). Knowledge Markdown **always** lives in GraphNotes
 local stores (personal `personal_uploads`, published shared `shared_notes`).
 GitHub is a **source**: connectors copy `.md` in. Cards and Differ read copies.
-Git live-read of blobs for cards is leftover. Editor merge may still push GitHub
-then copy-in. Disconnect personal git does not wipe copied files. Do not rip the
+Live-read of GitHub blobs on GET Differ / `#/differ` / plugin sidebar /
+`GET /repository/status` / graph / search / card / comments / contributions
+is **closed** (local stores). Leftover: editor merge-out and live-read of
+proposal branches (`GET /proposals/{id}`, `/files`, Graph Diff, approve /
+rollback). Disconnect personal git does not wipe copied files. Do not rip the
 GitHub App this wave. Dropbox/Drive are not this wave.
 TZ 2.63: GitHub is copy-in only. `/search` and the graph read `note_index`
 (no bodies there «so search is faster»). Working copies live in
@@ -384,9 +390,11 @@ role-scoped corpus above, including guest published hits without
 bodies). `layer=overlay` is the graph stitch for canvas highlight;
 `layer=personal` is the full personal tree. Cards and Graph Diff /
 the interaction feed read that same derived visibility — no second
-manual catalog of which personal notes are «the part». Differ with connected git reads the
-caller's **current public HEAD** before compare (open Differ, create proposal,
-webhook, or in-process poller; TZ 2.27 / §6.6). No second canonical clone of
+manual catalog of which personal notes are «the part». Differ offer list
+(`GET /differ`, plugin «Предложить в ризому») compares `personal_uploads`
+with `shared_notes` and does **not** call GitHub (TZ 3.31 / 2.62–2.63).
+Leftover git HEAD refresh is copy-in / poller / webhook, not the offer
+path. No second canonical clone of
 personal Markdown. Light and dark UI themes (TZ 2.19 / 2.22 /
 §5.5.4) are client-side: `localStorage` key `graphnotes-theme`, else
 `prefers-color-scheme`. The control is a Theme Switcher toggle (sliding
@@ -397,7 +405,11 @@ use CSS theme tokens, not hardcoded washed-out fills. Landing `/` is `/graph`
 open published shared card bodies (TZ 2.64); feed, comments, personal
 and queue still require a session. Account settings
 (§5.5 / TZ 2.13 / 2.58 / 2.77) live at **`/user`** (name in header opens it; `.topbar` `padding-inline: 1.25rem` keeps that control and the brand off the window edge):
-required unique email, optional phone/Telegram contacts (not login), git
+five chrome tabs — personal data, git, author contract, Obsidian tokens,
+**«Пригласить пользователя»**. Send-invite UI (email field, submit button,
+pending unused invites) lives **only** on that fifth tab (`POST /api/invites`,
+`GET /api/invites`); personal-data has the «who invited you» line, not the
+send form. Required unique email, optional phone/Telegram contacts (not login), git
 connect/disconnect and author contract — not the public person card.
 ZIP download of published shared is removed (TZ 2.5; ADR-009 amendment
 2026-09-11). **Rhizome access
@@ -546,13 +558,13 @@ GraphNotes should handle:
 - binding one shared knowledge repository in the current leftover stack
 - Differ (outbound personal layer → published shared; TZ 3.13 inbound
   published shared → personal store for watched accepted paths;
-  connected git is re-read at public HEAD on Differ/proposal)
+  list/open reads local stores, not a live GitHub HEAD)
 - graph indexing and in-app read of published Markdown
 - one derived `note_index` for graph **and** SQL search; rebuild
-  (`POST /index/rebuild`, SHA drift, webhook/poller) refreshes shared plus
-  every personal git tree and drops comments whose paths left those trees
-- card GET and comment create refresh the relevant git HEAD before read;
-  a path missing from the current tree is 404, not a ghost body
+  (`POST /index/rebuild`, webhook/poller/connect) copies git in then
+  refreshes shared plus every personal git tree and drops comments whose paths left those trees
+- card GET and comment create read `shared_notes` / `personal_uploads`;
+  a path missing from the local store is 404, not a ghost body
 - admin sets any account password (`POST /admin/users/{id}/password`),
   creates accounts (`POST /admin/users`), searches/filters users, revokes
   sessions (`POST /admin/users/{id}/sessions/revoke`), reads the filterable
@@ -762,7 +774,9 @@ Not needed for the initial MVP unless actual load/features justify them:
 - invite-only registration (TZ 2.85–2.87 / product §17): **shipped on
   `rhizome-test`** (TZ 2.89). Invite is an **email link**; no Register
   tab (Login / forgot password stay). Any active account may invite;
-  store inviter UUID (one chain with vsepsy.ru). Person card and
+  store inviter UUID (one chain with vsepsy.ru). Website send UI is the
+  fifth Settings tab **«Пригласить пользователя»** (`#/user`; same
+  `POST /api/invites`); not on personal data. Person card and
   `GET /api/users/{login}/card` show «Приглашен %date% по приглашению от
   @user» (omit if no inviter). Cutover attributes existing accounts
   except `efimov` to that real row. No street register. No workspace.
@@ -946,11 +960,13 @@ Personal layer (plugin write to the local store; git connector leftover):
 - `DELETE /api/personal/closed-paths/{path}`
 
 Shared publication and Differ:
-- `GET  /api/differ` (TZ 3.11 / **3.13**: chrome tab `#/differ`;
-  `{differences, inbound}` path lists, `kind` = `added`|`changed`;
-  cookie session; not Card Merge. Refresh connected personal public
-  HEAD, then compare personal layer ↔ published shared. Inbound paths
-  are omitted from outbound. Do not invent a live `direction` field.)
+- `GET  /api/differ` (TZ 3.11 / **3.13** / **3.31**: chrome tab `#/differ`
+  and plugin offer list; `{differences, inbound}` path lists, **no bodies**;
+  `kind` = `added`|`changed` from `content_hash`, not wikidiff2.
+  Cookie or Bearer `gnp_` / `personal:read`. Store hashes only — **no
+  GitHub API, no git copy-in on list**. `?include_inbound=false` for the user offer
+  panel (skip inbound + notices). Inbound paths are omitted from
+  outbound when inbound is computed. Do not invent a live `direction` field.)
 - `POST /api/differ/inbound/{path}/accept` (TZ 3.13 shipped: copy
   published shared into the caller's personal store for a watched
   inbound path; cookie + author contract; not a proposal)
@@ -1073,9 +1089,13 @@ No conflict UI. Differing server bytes are overwritten with local using
 Publisher still does not write shared or create proposals.
 Interrupted plan + token persist in `data.json`; changed
 bytes before upload cancel the plan and rebuild it. 2.69 «send only on
-command» for vault edits is withdrawn. TZ 2.88 / **3.11**: Differ API
-(`GET /api/differ`) lists personal → shared path diffs for the site
-tab `#/differ` (propose only). Card Merge does not list personal Differ
+command» for vault edits is withdrawn. TZ 2.88 / **3.11** / **3.31**: Differ API
+(`GET /api/differ`) lists personal → shared **path/hash** diffs for the site
+tab `#/differ` (propose only) and the user offer panel. No git refresh,
+no note bodies, no wikidiff2 on the list. Bodies load for selected
+paths (`POST /proposals`) or leftover `GET /differ/files/{path}`.
+Plugin offer uses `GET /api/differ?include_inbound=false`. Card Merge
+does not list personal Differ in the editor queue
 (TZ 3.11). TZ 3.10: an `editor` / `admin` token lists the website
 `#/queue` New tab (`GET /api/proposals`). TZ 3.12: the sidebar lists
 metadata only; «Принять в работу» fetches
