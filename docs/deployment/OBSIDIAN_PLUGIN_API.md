@@ -73,12 +73,14 @@ time. TZ 2.91: one personal copy; local wins; no conflict UI. Other
 server bytes are overwritten with local (`expected_version` from
 manifest / GET content). No `force=true`. Shared notes are not written.
 TZ **3.20**: after personal copy, Publisher lists outbound Differ and
-creates a proposal. TZ **3.26**: one Obsidian plugin is canon (3.09
+creates a proposal when `can_propose_to_rhizome` is true (role `user`).
+TZ **3.27**: `editor` / `admin` → flag false; hide that panel.
+TZ **3.26**: one Obsidian plugin is canon (3.09
 withdrawn). Queue from API is an editor capability in the same client;
 without editor access the queue UI is off. Manual editor edit uses the
 same sync as a participant. Catalogs `obsidian-plugin/` +
 `obsidian-card-merge/` are leftover runtime until one package ships;
-this session did not merge code. The leftover Card Merge view
+runtime is `obsidian-card-merge/`. The Card Merge view
 (TZ **3.10** / **3.12** / **3.22** / **3.25**) is still the queue of
 **others’** edits. Acceptance goes through the editor.
 After **each accepted file** there are **two operations**, not
@@ -89,13 +91,25 @@ rhizome store **from the editor’s account** (Differ/queue stays the write
 gate; skip if equal). Do not invert. It is not a second canonical
 rhizome. Do not
 describe the queue as cache-only. Same `gnp_` token (`personal:read`).
-TZ **3.24** (canon, not this API): per-card display API + rights on
-the card. Later the same plugin shows/hides capabilities from that API
-when access is not all cards, only specific cards. Do not add
-card-ACL routes here or treat `GET /api/cards/{path}` as that model.
+TZ **3.30** (narrows 3.24): endpoints are per card; authorization is
+grant(user, path) via tags, explicit cards, **or folder prefix**.
+Missing grant → 404/403 on queue file GET. **Empty editor-tags = full
+queue (3.21) is withdrawn** — empty grant = no extra shared write.
+TZ **3.30:** one server file NOW; grant is a right on `shared_notes`,
+not a second personal blob; plugin downloads granted cards into the
+vault (client) then 3.25 local-first and syncs to that same file if
+different (`GET/PUT /granted*`, not Differ-offer).
+The same plugin shows/hides capabilities from that grant
+when access is not all cards, only granted cards. Do not add
+ACL-in-markdown or treat `GET /api/cards/{path}` as that grant.
+Do not collapse the vault with the rhizome. Do not collapse ungranted
+drafts with shared. TZ **3.30:** one server file **now** (grant = right
+on `shared_notes`); two-table copies of the same granted path are
+runtime debt, not a later collapse plan.
 No editor access: no queue sidebar (TZ 3.11 / **3.26**; 3.04–3.07
-withdrawn). Publisher (TZ **3.20**) lists outbound Differ after personal
-copy and creates a proposal; it still does not write `shared_notes`.
+withdrawn). Publisher (TZ **3.20** / **3.27**) lists outbound Differ
+after personal copy and creates a proposal only when
+`can_propose_to_rhizome` is true; it still does not write `shared_notes`.
 Editor/admin token: website `#/queue` New tab via `GET /api/proposals`
 (metadata only). «Принять в работу» fetches
 `GET /api/proposals/{id}/files/{path}` (`before` + `body`, no wikidiff2)
@@ -103,7 +117,7 @@ into `.obsidian/plugins/graphnotes-card-merge/work/…`. Merge opens from
 that cache (compare scratchpad). TZ **3.25** canon: two operations —
 always write the vault note first; then update the rhizome store from
 the editor account only if local ≠ store. Ordinary vault notes are not used for the compare pair.
-**Runtime debt:** current Card Merge still POSTs
+**Shipped:** Card Merge writes the vault first; POST
 `POST /api/proposals/{id}/resolve` **before** the vault write —
 unfinished code vs this canon, not a second spec. Reject /
 request-changes / rollback stay on the website.
@@ -146,11 +160,10 @@ request-changes / rollback stay on the website.
   Notice «Карточка открыта: путь» on success (15s). Every
   failure is a 20s Notice with the actual reason (write: path; open:
   leaf type + API; sync: HTTP status + body).
-  **Runtime debt vs 3.25:** current Card Merge still POSTs
-  `/api/proposals/{id}/resolve` `{files:[{path,source}]}` **before**
-  the vault write. While that POST hangs: WAIT lines every 10s, abort
-  after 75s (vault is not written, open does not run). That POST-first
-  order is unfinished code, not the product persist.
+  **Shipped 2026-09-16:** Card Merge writes the vault first, then POSTs
+  `/api/proposals/{id}/resolve` `{files:[{path,source}]}` only if
+  local ≠ shared. While that POST hangs: WAIT lines every 10s, abort
+  after 75s (vault is already written and open).
   Clear the work slot and reload the existing right-sidebar queue in
   place (do not `openQueue(true)`). Repeat resolve
   on an already fully accepted proposal is 200, not 409.
@@ -175,7 +188,7 @@ list. FastAPI paths have no `/api`; Nginx strips it.
 | `GET /api/proposals/{id}` | `GET /proposals/{id}` (website `/queue` wikidiff2) |
 | `GET /api/proposals/{id}/files/{path}` | `GET /proposals/{id}/files/{path}` (TZ 3.12 pair) |
 | `POST /api/proposals/{id}/resolve` | `POST /proposals/{id}/resolve` (TZ 3.12 publish) |
-| `GET /api/integrations/obsidian/v1/capabilities` | ping / whoami; `user.role` |
+| `GET /api/integrations/obsidian/v1/capabilities` | ping / whoami; `user.role`; `can_see_queue`; `can_propose_to_rhizome` |
 
 Auth: website `#/differ` uses the cookie session. Bearer `gnp_…` with
 `personal:read` authenticates `GET /differ` and `POST /proposals` for
@@ -275,8 +288,7 @@ Authorization: Bearer gnp_…
 under `.obsidian/plugins/graphnotes-card-merge/work/{id}/…` (compare
 scratchpad). TZ **3.25**: always write a normal vault note at that
 path first; then sync to the GraphNotes account only if local ≠ store;
-the editor opens the **local** note. **Runtime debt:** current plugin still
-POSTs `/resolve` first. Save & Resolve account-side API:
+the editor opens the **local** note. Save & Resolve account-side API:
 
 ```http
 POST /api/proposals/{id}/resolve
@@ -296,9 +308,13 @@ GET /api/integrations/obsidian/v1/capabilities
 Authorization: Bearer gnp_…
 ```
 
-`personal:read` is enough. `write_allowed` is for Publisher; Card Merge
-ignores a write block. `user.role` is `user` / `editor` / `admin`
-(TZ 3.10: editor/admin → `#/queue` list; `user` → empty panel).
+`personal:read` is enough. `write_allowed` is for personal sync.
+`can_see_queue` is `true` for `editor` / `admin` (TZ 3.26: queue UI on;
+`user` → queue off). `can_propose_to_rhizome` is `true` today for role
+`user` (TZ 3.27 coarse gate, not a forever ACL); `false` for `editor` / `admin` — hide the whole
+Differ-offer panel («Обновить список» / «Предложить выбранные» /
+«Предложить в ризому») and do not call the offer refresh. Queue UI
+does not depend on this flag. `user.role` is `user` / `editor` / `admin`.
 
 ## Ready methods (Publisher v1)
 
@@ -322,6 +338,9 @@ Personal data responses: `Cache-Control: no-store`. Errors:
 | `GET /capabilities` | ready | `protocol_version` is `"1.0"` |
 | `GET /manifest?cursor&limit` | ready | snapshot + `next_cursor`; 410 `snapshot_expired` |
 | `GET /files/content?path=` | ready | **raw bytes**, not JSON |
+| `GET /granted` | ready | TZ 3.30: `{items:[{path,kind,sha256,version,size}]}`; write-grant only; empty grant → `[]` even for admin |
+| `GET /granted/files/content?path=` | ready | **raw bytes** of one granted shared file; 403/404 without grant |
+| `PUT /granted/files?path=` | ready | local vault → same `shared_notes` file; `personal:write`; 403 without grant |
 | `POST /transfers` | ready | optional `Idempotency-Key`; 201 plan |
 | `PUT /transfers/{id}/blobs/{sha256}` | ready | `application/octet-stream`; 204 |
 | `POST /transfers/{id}/commit` | ready | 202 on run/replay; 409 on conflict |
@@ -363,6 +382,8 @@ Authorization: Bearer gnp_…
   "user": {"id": "uuid", "username": "alice", "display_name": "Alice", "role": "user"},
   "write_allowed": true,
   "write_block_reason": null,
+  "can_see_queue": false,
+  "can_propose_to_rhizome": true,
   "scopes": ["personal:read", "personal:write"],
   "formats": ["md", "png", "jpeg", "gif", "webp", "pdf"],
   "limits": {

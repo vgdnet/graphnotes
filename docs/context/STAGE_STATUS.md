@@ -2,12 +2,38 @@
 
 Updated: 2026-09-16
 
-Product model TZ **3.26** (one Obsidian plugin is canon; TZ 3.09
+**Shipped this session (nord → rhizome-test):** TZ **3.30** grant
+canon: shared rhizome lives **apart** from every account; endpoints
+are per card; authorization is a DB grant `(user, path)` **or**
+`(user, tag)` **or** `(user, path_prefix)` (folder, e.g. `психология/`).
+**Empty grant = no extra shared write** (3.21 empty=whole-queue
+withdrawn); empty is not a corpus dump. Runtime this wave:
+`access_grants` table; admin-only CRUD
+`GET/POST /api/admin/grants`, `DELETE /api/admin/grants/{id}`,
+`GET /api/admin/grants/catalog`; website **Доступы** (by user / card /
+tag / folder); queue/file/resolve filtered to the grant; plugin
+`GET/PUT /integrations/obsidian/v1/granted*`. Write-grant = right on
+**one** `shared_notes` file + vault client copy. Personal store =
+ungranted drafts only. Coarse `can_propose_to_rhizome` remains TZ
+**3.27** — `true` for role `user`, `false` for `editor`/`admin`.
+Plugin copy (same `dist/graphnotes-card-merge` build, do not overwrite
+`data.json`):
+`/home/efimov/obsidian/rhizome/.obsidian/plugins/graphnotes-card-merge/`
+and `/home/efimov/obsidian/guide_psy/.obsidian/plugins/graphnotes-card-merge/`
+— Reload app without saving in **both** vaults.
+`obsidian-plugin/` leftover catalog hides the same panel.
+
+Product model TZ **3.30** (prefix grant; shared apart from every
+account; 3.24 narrowed; **empty grant ≠ whole queue**; one server file
+NOW; personal = ungranted drafts) /
+**3.27** (today's coarse offer flag) /
+**3.26** (one Obsidian plugin is canon; TZ 3.09
 withdrawn. Queue from API is an editor capability in the same client;
 without editor access the queue UI is off. Manual editor edit = same
 sync as a participant. Catalogs `obsidian-plugin/` +
-`obsidian-card-merge/` leftover until one package ships; this session
-did not merge code. Later the same plugin shows/hides capabilities
+`obsidian-card-merge/` leftover catalog `obsidian-plugin/` until
+Publisher is retired; runtime is `obsidian-card-merge/` (sync + offer +
+queue). Later the same plugin shows/hides capabilities
 from the API when access is not all cards, only specific cards —
 fits TZ 3.24. Needs ADR: one plugin supersedes 3.09; per-card API
 grants) /
@@ -17,17 +43,18 @@ note; accept unfinished if write fails; (2) update rhizome store from
 editor account only if local ≠ store; skip if same. Queue = others’
 edits through editor. GraphNotes stays the canonical shared store;
 Differ stays the shared write gate; editor vault is not a second
-rhizome. **Runtime debt:** POSTs
-`/resolve` first then may write vault) /
-3.24 (canon, not shipped: per-card display API +
-rights on the card; four access classes incl. paid content maker;
+rhizome. **Shipped:** vault write and open first; POST
+`/resolve` second if local ≠ store) /
+3.24 (narrowed 3.30: card API + grant, not rights-on-the-card;
+four access classes incl. paid content maker;
 global RBAC stays coarse gate; Differ stays shared write gate;
 one plugin is canon TZ 3.26, two catalogs leftover; needs ADR) /
 3.22 (editor two stores: personal Publisher +
 shared via queue/Card Merge; 2+ editors parallel; 3.25: two ops —
 always local vault; store update from editor account only if local ≠
 store) /
-3.21 (editor rights by card tags, §5.6.5) /
+3.21 (editor rights by card tags, §5.6.5; **empty = whole queue
+withdrawn by 3.28 / 3.30**; prefix is a third grant kind) /
 3.19 (after accept write the merged card
 into the local vault and open it as a normal note; TZ 3.25: that
 write is operation 1 and mandatory; store update is operation 2 only

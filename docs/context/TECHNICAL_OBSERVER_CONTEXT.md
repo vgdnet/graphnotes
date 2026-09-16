@@ -1,40 +1,66 @@
 # GraphNotes — канонический контекст Technical Observer
 
 Статус: ACTIVE
-Updated: 2026-09-16 (PRODUCT_SPEC **3.26**: one Obsidian plugin is
+Updated: 2026-09-16 (PRODUCT_SPEC **3.30**, 3.29 one-file kept: one shared rhizome per
+install, apart from every account including editor; endpoints are
+per-card; authorization is a DB grant `(user_id, card_path)` **or**
+`(user_id, tag)` **or** `(user_id, path_prefix)`, per GET/PUT/queue/sync — write if direct path or any
+card tag matches or path is under a prefix grant. Not ACL-in-markdown and not 3.24 «rights on the card»
+as primary. Editor-slice = user-with-N-cards.
+**3.21 empty-list withdrawn:** empty grant = no extra shared write, not
+the whole queue. Differ = ungranted publish gate. **TZ 3.29 one server
+file NOW:** grant = right on the shared object; personal store holds
+ungranted drafts only; vault is always a client copy. Plugin downloads
+granted cards; 3.25 local-first then sync to the **same** `shared_notes`
+file if different. Queue of others’ edits if editor on that card.
+`can_propose_to_rhizome` stays user-only for ungranted cards. Revoke:
+stop write/sync/load-update from API; vault copy may remain. Later
+vault=rhizome same file is not canon. **Runtime debt:**
+`personal_uploads` + `shared_notes` copies of the same granted path.
+Today leftover: POST `/resolve`.
+OPEN: read-without-write for queue review. 3.25 local-first after accept
+holds. Today's coarse
+`can_propose_to_rhizome` true for role `user`, false for `editor`/`admin`.
+Plugin hides the Differ-offer panel; POST `/proposals` 403 when false;
+`can_see_queue` stays on for editor. Do not sync whole vault to shared.
+OPEN: editor-of-a-slice vs editor who also authors other cards.
+**3.26**: one Obsidian plugin is
 canon; TZ 3.09 withdrawn. Queue from API is an editor capability in
 the same client; without editor access the queue UI is off. Manual
 editor edit = same sync as a participant. Catalogs `obsidian-plugin/`
-+ `obsidian-card-merge/` leftover until one package ships; this
-session did not merge code. Later the same plugin shows/hides
++ `obsidian-card-merge/` leftover catalog `obsidian-plugin/` until
+Publisher is retired; runtime is `obsidian-card-merge/` (sync + offer gated by `can_propose_to_rhizome` +
+queue). Later the same plugin shows/hides
 capabilities from the API when access is not all cards, only
-specific cards — fits TZ 3.24. Needs ADR: one plugin supersedes 3.09;
+specific cards — fits TZ 3.24 / 3.28 / 3.29 / **3.30**. Needs ADR: one plugin supersedes 3.09;
 per-card API grants. **3.25**: queue of **others’** edits; editorial
 gate; after each accepted file **two operations** — always local
 vault first; update the rhizome store from the editor’s account only
 if local ≠ store; open the **local** note. Not «Save & Resolve = POST
 to shared». GraphNotes stays the canonical shared store; Differ/queue
 stays the shared write gate; editor vault is not a second rhizome.
-**Runtime debt:** Card Merge still POSTs `/proposals/{id}/resolve`
-first, then writes the vault — unfinished code vs this canon, not a
-second spec. **3.24**: canon, not runtime — per-card display API +
-rights on the card; four access classes incl. paid content maker;
-global RBAC stays coarse gate; Differ stays shared write gate;
-one plugin is canon TZ 3.26, two catalogs leftover; needs ADR. **3.22**: editor two stores —
+**Shipped 2026-09-16:** Card Merge writes the vault and opens the note
+first; POST `/proposals/{id}/resolve` is the second op if local ≠ store;
+504 does not undo the vault. **3.29** one server file NOW (supersedes
+three-copy-later and 3.28 load-into-personal); **3.30** narrows **3.24**: endpoints per
+card; grant `(user_id, card_path)` or `(user_id, tag)` or `(user_id, path_prefix)`; four access classes incl. paid content maker;
+global RBAC stays coarse gate; Differ stays ungranted shared write
+gate; one plugin is canon TZ 3.26, two catalogs leftover; needs ADR. **3.22**: editor two stores —
 personal via Publisher, shared via proposal gate / Card Merge; 2+
 editors in parallel on different cards; do not dump the whole `shared_notes`
 tree into the vault (3.25 persist: two operations — always local
 vault; rhizome store update from editor account only if local ≠
-store; open local note). **3.21**: editor rights scoped by
-card tags — not a fourth role, not a paid level; empty grant = full
-published queue. **3.15**: one Settings checkbox or
+store; open local note). **3.21 / 3.28 / 3.29 / 3.30**: write grants in the shared
+DB — `(user, path)` or `(user, tag)` or `(user, path_prefix)`; not a fourth role, not a paid
+level; **empty grant = no extra shared write** (3.21 empty = whole
+queue withdrawn). **3.15**: one Settings checkbox or
 toggle «Получать уведомления об изменениях в карточках, которые вы
 правили» — `notify_card_changes`; same SMTP/bot when on; event =
 inbound Differ. **3.13**: inbound Differ on `#/differ`
 for watched published paths; accept copies shared → personal store;
 ADR-009 amendment pending. **3.12**: Card Merge queue is
 metadata-only; one card in work (TZ 3.16); «Принять в работу» caches both card sides;
-do not equate Save & Resolve with `POST /proposals/{id}/resolve` (TZ 3.25). **3.18**: one accepted card; remaining files stay on the open proposal. **3.25** two operations: (1) always write the local vault first (open that note; accept unfinished if write fails); (2) update the rhizome store from the editor account only if local ≠ store (Differ write gate; skip if equal). Open the local note with `createLeafBySplit` / `getLeaf(true)` + `openFile` + `revealLeaf` only if the leaf is not MergeView (fallback `openLinkText(basename, path, true)`; never `getLeaf(false)` / `openFile` on MergeView), close MergeView only after the note is the active view — required UX; append each step to plugin `debug.log` (`time | STEP | OK/FAIL | detail`; command «Показать debug.log»); reload queue in place without stealing the markdown leaf; repeat resolve on a fully accepted proposal is success. **Runtime debt vs 3.25:** current Card Merge still POSTs `/resolve` first, then may write the vault — unfinished code, not a second spec. **3.11**: author outbound Differ is chrome
+do not equate Save & Resolve with `POST /proposals/{id}/resolve` (TZ 3.25). **3.18**: one accepted card; remaining files stay on the open proposal. **3.25** two operations: (1) always write the local vault first (open that note; accept unfinished if write fails); (2) update the rhizome store from the editor account only if local ≠ store (Differ write gate; skip if equal). Open the local note with `createLeafBySplit` / `getLeaf(true)` + `openFile` + `revealLeaf` only if the leaf is not MergeView (fallback `openLinkText(basename, path, true)`; never `getLeaf(false)` / `openFile` on MergeView), close MergeView only after the note is the active view — required UX; append each step to plugin `debug.log` (`time | STEP | OK/FAIL | detail`; command «Показать debug.log»); reload queue in place without stealing the markdown leaf; repeat resolve on a fully accepted proposal is success. **Shipped vs 3.25:** Card Merge writes the vault first, then may POST `/resolve` if local ≠ store — not a second spec. **3.11**: author outbound Differ is chrome
 tab `#/differ` — compare two stores and propose, not merge; plugin
 does not list personal Differ. **3.10**: editor-access
 sidebar is website `#/queue` New via `GET /api/proposals`. **3.09**
@@ -247,17 +273,20 @@ Card Merge leftover-модалка / `GET /api/differ` — у агентов п�
   ADR-018), not `difflib` and not an inline toggle; paid is not
   a third folder; hash `#/card/personal:` is transitional;
 - global hierarchical roles `user < editor < admin` remain the
-  **coarse gate** (admin tools / queue / user management) until
-  per-card checks exist; TZ 3.21 tag grants narrow an editor's queue,
-  they do not add a RBAC role;
-- **TZ 3.24 (canon, not shipped):** card display and card actions go
-  through rights on the card; product surface is a per-card display API
-  plus those rights; four access classes (user, editor, admin, paid
-  content maker — content/rights class, not a workspace). Do not treat
-  `GET /api/cards/{path}` as that model. **Needs ADR: one plugin
-  supersedes 3.09; per-card rights + display API.** Open: verbs; paid
-  maker vs user/editor; tag vs card override; ADR-016 slice vs
-  per-card ACL; amend vs supersede ADR-007. TZ **3.26**: one plugin is
+  **coarse gate** (admin tools / queue UI / user management);
+  TZ **3.30** grants (`(user, path)` or `(user, tag)` or `(user, prefix)`) are the shared-write
+  check; empty grant is not the whole queue; leftover empty=whole-queue
+  is a hole;
+- **TZ 3.30 (narrows 3.24):** endpoints are per card; authorization is
+  `(user_id, card_path)` or `(user_id, tag)` or `(user_id, path_prefix)` in the shared DB, evaluated
+  per request (write if direct path or any matching tag or path under prefix). Missing grant
+  → 404/403. Empty grant = no extra shared write. TZ **3.30** one shared
+  file for a granted card; personal = ungranted drafts; vault = client.
+  Two-table copies leftover. Do not treat
+  `GET /api/cards/{path}` of published shared as that grant. **Needs ADR: one plugin
+  supersedes 3.09; grant API.** Open: read-without-write for queue;
+  paid maker vs user/editor; editor-slice vs editor-author of card B;
+  ADR-016 slice vs grant; amend vs supersede ADR-007. TZ **3.26**: one plugin is
   canon; queue from API is an editor capability in the same client;
   two catalogs leftover until one package ships. Editor vault may hold
   a local copy of accepted cards; GraphNotes stays the canonical shared

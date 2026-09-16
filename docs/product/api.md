@@ -77,8 +77,19 @@ GET  /api/admin/users                 # list/search/filter; last login, sessions
                                       # TZ 3.21: editor tag grants when present
 POST /api/admin/users                 # admin creates an account
 PATCH /api/admin/users/{id}/editor-tags
-                                      # TZ 3.21: set editorial tag grants; admin;
-                                      # empty list = whole published queue
+                                      # TZ 3.21 / 3.30: replace tag grants; admin;
+                                      # empty list = no extra shared write
+                                      # (NOT whole published queue — 3.21 change)
+GET  /api/admin/grants                # admin; filter user_id / kind / value
+POST /api/admin/grants                # admin; kind=path|tag|prefix
+DELETE /api/admin/grants/{id}         # admin
+GET  /api/admin/grants/catalog        # admin; shared paths, tags, folder prefixes
+GET  /api/integrations/obsidian/v1/granted
+                                      # plugin: list granted shared cards
+GET  /api/integrations/obsidian/v1/granted/files/content
+                                      # plugin: download one granted shared file
+PUT  /api/integrations/obsidian/v1/granted/files
+                                      # plugin: sync local → same shared_notes file
 GET  /api/admin/audit                 # admin only: filterable action log
 POST /api/admin/users/{id}/password   # admin sets a new password; never echoed
 POST /api/admin/users/{id}/sessions/revoke
@@ -102,10 +113,21 @@ GET  /api/cards/{path}                # shipped display today: published shared 
                                       # personal:{uuid}:{path} (admin),
                                       # proposal:{id}:{path} (author/editor/admin)
                                       # need a session;
-                                      # TZ 3.24 canon is a per-card display API +
-                                      # rights on the card — not this route yet;
-                                      # do not treat this GET as that model;
-                                      # write is PUT /personal/notes/{path}, not this route
+                                      # TZ 3.30: endpoints are per-card;
+                                      # authorization is (user_id, card_path)
+                                      # OR (user_id, tag) OR (user_id, path_prefix)
+                                      # on each request, not an
+                                      # ACL document in the markdown and not
+                                      # «rights live on the card» (3.24 narrowed);
+                                      # write if direct path grant OR any card
+                                      # tag matches a tag-grant OR path is under
+                                      # a prefix grant; list/queue/file/sync
+                                      # share one grant function; missing grant → 404/403;
+                                      # this public GET of published shared is
+                                      # the guest vitrine, not that grant;
+                                      # granted write is the same shared file, not a
+                                      # personal blob; PUT /personal/notes/{path} stays
+                                      # for ungranted drafts / plugin leftover
 GET  /api/cards/{path}/revisions      # TZ 2.94: last 30 content revisions + unified diff;
                                       # not loaded with the card; shared = guest OK;
                                       # personal = session; admin personal:{uuid}:;
@@ -142,7 +164,7 @@ POST /api/proposals/{id}/resolve      # TZ 3.12 / 3.18 shipped runtime:
                                       # remaining files stay on the open proposal (ТЗ 3.18);
                                       # last file closes the proposal like approve;
                                       # ТЗ 3.25: не равен принятию / Save & Resolve;
-                                      # runtime POST first then maybe vault = долг
+                                      # runtime: vault first, then POST if local ≠ store
 POST /api/proposals/{id}/approve      # cookie session only; website /queue
 POST /api/proposals/{id}/reject
 POST /api/proposals/{id}/request-changes
@@ -165,10 +187,10 @@ DELETE /api/integrations/obsidian/v1/transfers/{id}   # cancel if not applying
 `PUT /api/personal/notes/{path}` и `POST /api/personal/import-md`. Общую
 ризому, `shared_notes`, предложения и Differ эти методы не меняют.
 
-Плагин **GraphNotes Card Merge** (`obsidian-card-merge/`) — leftover
-имя очереди editor’а до поставки одного пакета (ТЗ **3.26** снимает
-3.09). Канон — **один** плагин. Очередь читает: `GET /capabilities`
-(`user.role`), `GET /api/proposals` (только список, без тел). **«Принять в
+Плагин **GraphNotes** (`obsidian-card-merge/`) — поставленный один
+клиент (ТЗ **3.26**): sync личного склада, офер у `user`, очередь editor’а.
+`obsidian-plugin/` leftover. Очередь читает: `GET /capabilities`
+(`user.role`, `can_see_queue`, `can_propose_to_rhizome`), `GET /api/proposals` (только список, без тел). **«Принять в
 работу»** — `GET /api/proposals/{id}/files/{path}` → `{path, before, body}`
 в кэш `.obsidian/plugins/graphnotes-card-merge/work/{id}/…` (черновик
 сравнения). **Save & Resolve** в UX — принятие **этой одной** карточки
@@ -179,9 +201,10 @@ DELETE /api/integrations/obsidian/v1/transfers/{id}   # cancel if not applying
 (2) только если локальный файл ≠ файл в хранилище ризомы — обновить
 хранилище **от аккаунта editor’а** (Differ — write gate); если
 совпадают — пропуск. Ручная правка editor’а — тот же sync, что у
-участника. Новый HTTP-глагол не выдумывать. Runtime сейчас
-POST `/api/proposals/{id}/resolve` `{files:[{path,source}]}` **сначала**,
-потом может записать vault — **долг** относительно 3.25. Очередь справа
+участника. Новый HTTP-глагол не выдумывать. Runtime: сначала vault и
+открытие; POST `/api/proposals/{id}/resolve` `{files:[{path,source}]}`
+— вторая операция, если локальный ≠ общая; 504 не откатывает vault.
+Очередь справа
 не перехватывает фокус (ТЗ **3.19** / **3.25**). Повторный resolve на
 уже **полностью** принятой заявке — успех. Авторский Differ в плагине
 **нет** (ТЗ 3.11). Отклонить / доработать — cookie на сайте. Два
@@ -216,20 +239,39 @@ capabilities), `personal:write` (пакет Publisher), опционально
 `rate_limited`.
 
 `GET /capabilities` сообщает, можно ли писать (`write_allowed` /
-`write_block_reason`), лимиты и ссылки на личный граф и Differ.
+`write_block_reason`), видна ли очередь (`can_see_queue`: `true` у
+`editor` / `admin`), можно ли предложить личное в общую
+(`can_propose_to_rhizome`: сегодня `true` у роли `user`; `false` у
+`editor` / `admin`, ТЗ **3.27** — грубый шлюз, не вечный ACL), лимиты и ссылки на личный граф и Differ.
 `write_allowed` — договор автора и активная учётка, не «git подключён».
+Плагин прячет всю панель «Предложить в ризому», если флаг `false`
+(нет флага — прятать при роли `editor` / `admin`). Очередь от флага
+офера не зависит.
 
 Пакет (`POST /transfers` … `commit`) применяется **целиком или никак** к
 личному складу. `expected_version: null` — создать, только если пути нет.
 
-**ТЗ 3.24 (канон, не runtime ACL).** Продуктовая поверхность — **API показа
-карточки** (кто видит эту карточку / это поле) и **права на карточке**.
-Четыре класса доступа: пользователь, editor, admin, платный
-контент-мейкер. Новых маршрутов в этом черновике нет: не выдумывать
-пути и не помечать существующие `GET /api/cards/{path}` /
-`GET /api/proposals` как уже покарточный ACL. **ТЗ 3.26:** один плагин — канон (очередь — capability editor’а в том же
-клиенте; позже показ/скрытие по грантам API на карточке). Два каталога — leftover.
-**Нужен ADR:** один плагин снимает 3.09; покарточные гранты API.
+**ТЗ 3.30 — ответ на «API покарточное?».** Эндпоинты — по карточке
+(GET/PUT этот путь). Авторизация — **грант** в БД: `(user_id, card_path)`
+**или** `(user_id, tag)` **или** `(user_id, path_prefix)` на каждый запрос.
+Write, если прямой путь или любой тег карточки совпал или путь под
+префиксом папки. Не ACL в markdown. Не «права живут на
+карточке» как primary (3.24 сужен). Список, очередь, файл, sync — одна
+функция гранта. Нет гранта → 404/403, не только скрытие в UI.
+`PATCH /api/admin/users/{id}/editor-tags`: **смена 3.21** — пустой список
+= нет дополнительной записи в общую, не вся очередь. Admin выдаёт
+три формы через `GET/POST /api/admin/grants`, `DELETE /api/admin/grants/{id}`
+(`kind=path|tag|prefix`). `GET /api/cards/{path}`
+публичной общей — витрина гостя, не editorial grant. Write-grant —
+право на **один серверный файл** (`shared_notes`); личное — невыданные
+черновики; vault — клиент. **OPEN:** read-без-write для ревью очереди;
+грант по исходному автору.
+**Долг runtime:** две таблицы на один выданный путь;
+сегодня общая после очереди — `POST /resolve`. **ТЗ 3.26:**
+один плагин — runtime `obsidian-card-merge/` (очередь — capability
+editor’а). `obsidian-plugin/` — leftover. Склейку кода в этой волне не
+делать, если ещё не сделана.
+**Нужен ADR:** один плагин снимает 3.09; грант API.
 
 Изменение API-контракта в ходе проектирования стадии допустимо без отдельного
 ADR, если не меняет продуктовую модель или внешние интеграционные обязательства.
