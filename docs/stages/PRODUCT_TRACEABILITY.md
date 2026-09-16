@@ -1,7 +1,7 @@
 # Product requirements to Stage traceability
 
 Статус: DERIVED / MAINTAINED
-Источник: `docs/product/PRODUCT_SPEC.md` version 3.15
+Источник: `docs/product/PRODUCT_SPEC.md` version 3.26
 
 Матрица маршрутизирует канонические требования в Stage-файлы и не изменяет
 `PRODUCT_SPEC.md`.
@@ -37,6 +37,9 @@
 | 5.5.4 | Light/dark Theme Switcher (sliding sun/moon pill, not text buttons); localStorage | 6 (graph UX) |
 | 5.6 | Start graph always (`/graph` = rhizome by default; no «Мой граф» / `/my_graph`, TZ 3.00); guest reads published shared cards + side local graph; closed slice not editor queue; access-level entitlement (ADR-016) | 6 |
 | 5.6.4 | Two graphs = overlay filter; author view of closed slice; load = open in app; not a second repo | next wave |
+| 5.6.5 | Editor rights scoped by card tags (TZ 3.21); admin grants tags; empty = full published queue; not a fourth role / not paid level | TZ only |
+| 5.6.6 | Editor two stores: own personal via plugin sync; shared via queue capability of the **same** plugin (TZ **3.26**); TZ **3.25** two operations after accept (always write local vault; update rhizome store from editor account only if local ≠ store; skip if same); open local note; GraphNotes stays the canonical shared store; 2+ editors in parallel | TZ lock; runtime two folders leftover vs 3.26; POST `/resolve` first then maybe vault is debt; server in-work slot leftover |
+| 5.6.7 | Per-card display API + rights on the card (TZ 3.24); four access classes incl. paid content maker; global RBAC stays coarse gate; Differ stays shared write gate; **one plugin is canon (TZ 3.26)** — later show/hide from API as access becomes specific cards | TZ canon; ACL not implemented; two folders leftover; needs ADR: one plugin supersedes 3.09; per-card API grants |
 | 6.1.1 | Author legal contract in Settings only (§5.5.3); About `#/about` is credits, not contract (§5.5.8 / TZ 2.78) | shipped copy on feature/08-graph-diff |
 | 6.1.3 | vsepsy.ru email+password opens rhizome.vsepsy.ru; no second register; no catalog merge; no /ops roles | next wave + ADR (identity) |
 | 6.1.4 | Opt-in rhizome achievement (graph and/or counts) for vsepsy.ru and own site; card fields for the public internet TBD | next wave + ADR |
@@ -47,7 +50,7 @@
 | 5.4.2 | User sees own contribution stats; public person card `#/users/{login}` with achievement counters | 6 |
 | 6.2 | local personal + shared stores; GitHub copy-in (TZ 2.63); leftover merge-out; no product clone/ZIP of shared | 3 |
 | 6.3 | no download of published shared; personal working copy is GraphNotes store; git/Dropbox/Drive = copy-in, not a second canon | 4 (upload copies in), 7 (Differ vs local copy) |
-| 6.3.4 / 5.5.7 | GraphNotes Publisher + API: **free** copy of the local graph into the same personal store (TZ 2.90: queue locally; write on sidebar ItemView «Передать правки на сервер» / ribbon paper-plane / file close / idle minutes / interval, not every keystroke; first dump = send all); personal API key stored and shown again in Settings, copied into plugin `data.json` (TZ 2.76); access log / revoke; not shared, not Differ | plugin write triggers 2.90; token/API shipped 2.79 |
+| 6.3.4 / 5.5.7 | GraphNotes Publisher + API: **free** copy of the local graph into the same personal store (TZ 2.90: queue locally; write on sidebar ItemView «Передать правки на сервер» / ribbon paper-plane / file close / idle minutes / interval, not every keystroke; first dump = send all); after copy, sidebar lists outbound Differ and «Предложить в ризому» creates a proposal (TZ 3.20); personal API key stored and shown again in Settings, copied into plugin `data.json` (TZ 2.76); access log / revoke; not `shared_notes` | plugin write triggers 2.90; token/API shipped 2.79; offer list 3.20 |
 | 6.3.2 | Graph personal overlay: from git if connected else server store; layer menu/legend «ваша ризома», never «ваш git» | 6 |
 | 6.3.1 | Upload history in GraphNotes (who/when/hash), not user git log | next wave |
 | 6.4 | revisioned shared/personal/proposal derived index and rebuild | 5 |
@@ -60,9 +63,10 @@
 | 6.6 | Differ entity; outbound personal → shared (TZ 3.11) and inbound shared → personal for previously published paths (TZ 3.13); `#/differ`; not merge | 7 |
 | 6.6 | Connected git: Differ/proposal read **current public HEAD** (Obsidian push); poller/webhook backup; no second clone | 7 |
 | 6.6.2 | Author contribution; Differ extended, not replaced; three states personal/proposed/accepted | next wave |
-| 6.6.3 | Differ lists personal → shared diffs and itself offers personal cards missing from shared; chrome tab `#/differ` proposes (TZ 3.11); inbound watch of already-published paths (TZ 3.13 / §6.6.5); plugin does not read author Differ (3.04–3.07 withdrawn); Publisher does not publish to shared (TZ 2.82 / 2.88) | shipped outbound list + propose; leftover UI still on `#/offer` + «Текст сверки»; inbound TZ only |
-| 6.6.4 | Card Merge sidebar: editor/admin token = website `/queue` New tab via `GET /api/proposals` (TZ 3.10 / 3.12); `GET /proposals/{id}/files/{path}` → `{path,before,body}`; Save & Resolve `POST /proposals/{id}/resolve` `{files:[{path,source}]}`; author token has no Differ panel | view `graphnotes-card-merge-queue`; leftover OpenMergeModal still GETs `/differ` |
+| 6.6.3 | Differ lists personal → shared diffs and itself offers personal cards missing from shared; chrome tab `#/differ` proposes (TZ 3.11); Publisher sidebar may propose the same outbound list after personal copy (TZ 3.20); inbound watch of already-published paths (TZ 3.13 / §6.6.5); Card Merge does not read author Differ (3.04–3.07 withdrawn); Publisher does not write `shared_notes` (TZ 2.82 / 2.88 / 3.20) | shipped outbound list + propose on site and Publisher; leftover UI still on `#/offer` + «Текст сверки»; inbound TZ only |
+| 6.6.4 | Same plugin sidebar: editor access = website `/queue` New tab via `GET /api/proposals` shown when Obsidian opens (TZ 3.10 / 3.12 / 3.16 / 3.17 / 3.18 / 3.19 / **3.25** / **3.26**); no editor access → queue UI off; queue of **others’** edits through editor; one card in work; `GET /proposals/{id}/files/{path}` → `{path,before,body}` into work-cache scratchpad; Save & Resolve is **not** `POST /resolve`; TZ **3.25** two operations: (1) always write accepted `.md` into local vault and **open that local note** (`createLeafBySplit` / `getLeaf(true)`; never MergeView; accept unfinished if write fails); (2) update rhizome store from editor account only if local ≠ store (Differ write gate; skip if same); siblings stay on the open proposal (3.18); manual editor edit = same sync as participant | leftover view `graphnotes-card-merge-queue`; leftover OpenMergeModal still GETs `/differ`; two folders leftover vs 3.26; runtime POST `/resolve` first then maybe vault is **debt** vs 3.25 |
 | 6.6.5 | Inbound Differ: watched accepted-proposal paths; `#/differ` «Из ризомы»; accept copies published shared → personal store; hide same path from outbound (TZ 3.13); one Settings toggle «Получать уведомления об изменениях в карточках, которые вы правили» (TZ 3.15, `notify_card_changes`) | TZ only; ADR-009 amendment pending |
+| 6.6.6 | Per-card API + card rights canon (TZ 3.24); **one plugin canon (TZ 3.26, supersedes 3.09)**; inbound-in-vault / editor slice remain intended later client of per-card grants; two folders leftover until one package ships | TZ canon; ACL not implemented; needs ADR |
 | 6.5 | Author focus «мой вклад» and provenance on shared graph | next wave (after 6 overlay) |
 | 6.7 | proposal queue tabs New / In progress / Rejected; text and links first, then Graph Diff; reject/return with author comment | 7, 8 |
 | 6.7 | textual and graph impact before publication | 7, 8 |
@@ -77,7 +81,7 @@
 | account settings: email (required), phone/telegram optional, author contract | next wave (2 if register already collects email) |
 | repository status/connect/webhook; personal git connect from settings | 3 |
 | take-from-shared (historical); ZIP/MD fallback into personal git | 4 |
-| Differ outbound; leftover pair `GET /differ/files/{path}`; proposals + `{id}/files/{path}` + `resolve`; inbound TZ-only | 7 |
+| Differ outbound + inbound accept; leftover pair `GET /differ/files/{path}`; proposals + `{id}/files/{path}` + `resolve` | 7 |
 | author contribution / provenance | next wave |
 | personal/shared Graph API and rebuild | 5 |
 | search cards; card page payload; on-demand revisions (`GET /api/cards/{path}/revisions`) | 6 |
@@ -150,7 +154,9 @@
 | Editor accept line compare (Wikipedia two-column / one-column) | Closed TZ 3.02 for `/queue` (and the same proposal body). Author Differ line UX still open (§12.10) |
 | Editor accept engine is MediaWiki wikidiff2 | Closed TZ 3.03 / ADR-018 amendment. Not `difflib`. Canon runtime: pinned wikidiff2 C++ as a native helper (owner 2026-09-12), not PHP. `php-cli` in the image is unfinished code, not an alternate canon (TZ 3.05). |
 | Queue accordion + buttons under each card | Closed TZ 3.08. One proposal, one card body. Buttons still decide the whole proposal |
-| Merge Publisher + Card Merge into one plugin | Rejected TZ 3.09. Two packages; Card Merge handed to editor/admin |
+| Merge Publisher + Card Merge into one plugin | **Closed TZ 3.26:** one plugin is canon (supersedes TZ 3.09). Reason: simpler client; later the same plugin shows/hides capabilities from API as access becomes not all cards, only specific cards (fits TZ 3.24). Queue of proposals from API when Obsidian opens if the account has editor access; otherwise queue UI off. Manual editor edit = same sync as participant. Current `obsidian-plugin/` + `obsidian-card-merge/` = leftover runtime until one package ships. This session did not merge code. Needs ADR: one plugin supersedes 3.09; per-card API grants. |
+| Editor local copy of accepted cards | Closed TZ 3.25: two operations after accept, not one «Save & Resolve = POST shared». (1) Always write the accepted file to the editor local vault; opening is that local note; if write fails, accept is unfinished. (2) Update the rhizome store from the editor account only if local ≠ store; skip if same. Differ stays the shared write gate. GraphNotes stays the canonical shared store. TZ 3.22 narrowed (no corpus dump / no second canonical rhizome). Runtime POST `/resolve` first then maybe vault is **debt**. |
+| Per-card display API + card rights | Canon TZ 3.24; not implemented. Open: verbs; paid maker vs user/editor; tag vs card; ADR-016 vs ACL; amend vs supersede ADR-007. Needs ADR with 3.26 one-plugin supersede of 3.09. |
 
 ## Final completeness rule
 

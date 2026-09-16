@@ -17,10 +17,9 @@ those paths leave **outbound** Differ. TZ 3.11 / **3.13**: chrome tab
 **Сверка** (`#/differ`) is the author Differ — outbound propose, plus
 inbound take-into-personal for paths that were in this caller's accepted
 proposals and now differ. It is not a merge editor. `#/offer` is my
-proposals only. Leftover: the SPA still mounts outbound Differ on
-`#/offer` (hash `#/differ` opens the same view) plus «Текст сверки».
-Shipped `GET /api/differ` is outbound `{differences:[{path,title,kind,updated_at}]}`
-only. `POST /api/differ/inbound/{path}/accept` is TZ-only, not shipped.
+proposals only. Shipped `GET /api/differ` is `{differences, inbound}`.
+`POST /api/differ/inbound/{path}/accept` copies published shared into
+the caller's personal store for a watched inbound path.
 The git XOR upload copy is next to connect/disconnect in Settings,
 not a top-level Differ tab. While git is connected, Settings hides the bind
 field and shows a GitHub link; disconnect drops the personal `note_index`.
@@ -66,9 +65,9 @@ note bodies are stored for this.
 ## API
 
 ```text
-GET  /api/differ                         # shipped outbound list
+GET  /api/differ                         # shipped {differences, inbound}
 GET  /api/differ/files/{path}            # leftover pair JSON
-POST /api/differ/inbound/{path}/accept   # TZ 3.13, not shipped
+POST /api/differ/inbound/{path}/accept   # TZ 3.13 shipped
 POST /api/personal/import-md
 GET  /api/personal/uploads
 GET  /api/contributions/me
@@ -77,7 +76,9 @@ POST /api/proposals
 GET  /api/proposals                      # cookie or Bearer; TZ 3.10 queue
 GET  /api/proposals/{id}                 # wikidiff2 html
 GET  /api/proposals/{id}/files/{path}    # TZ 3.12 {path,before,body}
-POST /api/proposals/{id}/resolve         # TZ 3.12 Save & Resolve
+POST /api/proposals/{id}/resolve         # TZ 3.12 / 3.18 shipped runtime (one card);
+                                         # TZ 3.25: not the product accept;
+                                         # POST-first then maybe vault = debt
 POST /api/proposals/{id}/approve         # cookie only
 POST /api/proposals/{id}/reject
 POST /api/proposals/{id}/request-changes

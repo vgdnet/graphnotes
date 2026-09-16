@@ -1,20 +1,54 @@
 # GraphNotes - Stage Status
 
-Updated: 2026-09-12
+Updated: 2026-09-16
 
-Product model TZ 3.15 (one Settings checkbox/toggle: «Получать
+Product model TZ **3.26** (one Obsidian plugin is canon; TZ 3.09
+withdrawn. Queue from API is an editor capability in the same client;
+without editor access the queue UI is off. Manual editor edit = same
+sync as a participant. Catalogs `obsidian-plugin/` +
+`obsidian-card-merge/` leftover until one package ships; this session
+did not merge code. Later the same plugin shows/hides capabilities
+from the API when access is not all cards, only specific cards —
+fits TZ 3.24. Needs ADR: one plugin supersedes 3.09; per-card API
+grants) /
+3.25 (two operations after accept, not «Save &
+Resolve = POST shared»: (1) always write local vault; opening = that
+note; accept unfinished if write fails; (2) update rhizome store from
+editor account only if local ≠ store; skip if same. Queue = others’
+edits through editor. GraphNotes stays the canonical shared store;
+Differ stays the shared write gate; editor vault is not a second
+rhizome. **Runtime debt:** POSTs
+`/resolve` first then may write vault) /
+3.24 (canon, not shipped: per-card display API +
+rights on the card; four access classes incl. paid content maker;
+global RBAC stays coarse gate; Differ stays shared write gate;
+one plugin is canon TZ 3.26, two catalogs leftover; needs ADR) /
+3.22 (editor two stores: personal Publisher +
+shared via queue/Card Merge; 2+ editors parallel; 3.25: two ops —
+always local vault; store update from editor account only if local ≠
+store) /
+3.21 (editor rights by card tags, §5.6.5) /
+3.19 (after accept write the merged card
+into the local vault and open it as a normal note; TZ 3.25: that
+write is operation 1 and mandatory; store update is operation 2 only
+if local ≠ store) /
+3.18 (Save & Resolve accepts one card;
+siblings stay in the queue) /
+3.16 (Card Merge: one card in work) /
+3.15 (one Settings checkbox/toggle: «Получать
 уведомления об изменениях в карточках, которые вы правили») /
 3.13 (inbound Differ: watched published paths;
 `#/differ` take shared updates into personal store) /
 3.12 (Card Merge queue is metadata-only;
-accept-into-work caches both card sides; Save & Resolve publishes
-via POST /proposals/{id}/resolve) /
+accept-into-work caches both card sides; do not equate Save & Resolve
+with POST /proposals/{id}/resolve — TZ 3.25; that POST first is debt) /
 3.11 (author Differ is `#/differ` propose-only,
 not a merge; plugin does not list personal Differ) /
-3.10 (Card Merge editor/admin queue = website
+3.10 (editor-access queue = website
 `#/queue` New tab) /
-3.09 (two Obsidian plugins stay separate; Card Merge
-handed to editor/admin) /
+3.09 leftover withdrawn by 3.26 (two plugin
+packages are not the lock; two catalogs leftover until one package
+ships) /
 3.08 (`#/queue` one open proposal, one open card,
 decide buttons under each card) /
 3.07 leftover withdrawn by 3.11 for authors (no vault pair download
@@ -95,8 +129,9 @@ Website in-app edit is **off** until reverse download / reverse sync
 TZ 2.54: `[[wikilink]]` inherits the open card layer (personal stays personal).
 Published shared working copies live in `shared_notes` after copy-in (TZ 2.63).
 Current implementation stage is Stage 8. ADR-009: Differ outbound is
-personal → published shared; TZ 3.13 inbound is TZ-only until the ADR
-amendment.
+personal → published shared; TZ 3.13 inbound is shipped on `#/differ`
+(`GET /api/differ` + `POST /differ/inbound/{path}/accept`). ADR-009
+amendment still pending.
 TZ 2.59 shipped the 2.58 sitemap in the hash UI: `/card` start card
 (Admin → Установка); `/card/{path}` card + stack 2.56; `/queue` editor
 queue; `/user` settings; `/offer` my proposals; `/graph` shared canvas;
@@ -478,15 +513,24 @@ TZ 2.5–2.7 on this branch (not merged to main; production
   `#/auth/login-code?token=` still opens a session. Plugin manifest
   credits Юрий Ефимов. Cabinet hint: token default 30 days, max 90.
   Production `rhizome` not deployed.
-- leftover: website Сверка still mounts on `#/offer` (hash `#/differ`
-  opens the same view) plus «Текст сверки» from `GET /differ/files/{path}`;
-  canon is chrome tab `#/differ`, `/offer` = my proposals only (TZ 3.11);
-- leftover: Card Merge `OpenMergeModal` / command «Сравнить и слить
-  карточку» still calls `GET /api/differ`; sidebar already uses
-  `GET /api/proposals` (TZ 3.10 / 3.12);
-- leftover: TZ 3.13 inbound Differ + `POST /differ/inbound/{path}/accept`
-  + TZ 3.15 `notify_card_changes` — accepted TZ, not in code; ADR-009
-  amendment pending;
+- leftover: TZ 3.25 canon persist is two ops after accept (always local
+  vault write; rhizome store update from editor account only if local ≠
+  store; skip if same); Card Merge runtime
+  still POSTs `/proposals/{id}/resolve` first then may write the vault —
+  unfinished code, not a second spec;
+- leftover: Card Merge leftover vs 3.11 (`OpenMergeModal` / command
+  «Сравнить и слить карточку» / `GET /api/differ`) — other agents own
+  the plugin; do not treat site `#/differ` leftover as still open;
+- leftover: TZ **3.26** one plugin is canon (3.09 withdrawn); two
+  catalogs `obsidian-plugin/` + `obsidian-card-merge/` until one package
+  ships — unfinished code, not a second spec; this session did not
+  merge packages;
+- leftover: TZ 3.24 per-card display API + card rights accepted as
+  canon; not implemented; **needs ADR: one plugin supersedes 3.09;
+  per-card rights + display API**;
+  do not treat `GET /api/cards/{path}` as that model;
+- leftover: ADR-009 amendment for inbound Differ (code shipped; ADR
+  paperwork pending);
 - leftover: TZ 2.88 / §6.6.3 rhizome marks / topic suggestions remain
   site leftover (plugin later was withdrawn by 3.11 for authors);
 - leftover: rollback from card history (TZ 2.96) — store last 30

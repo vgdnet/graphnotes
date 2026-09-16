@@ -49,15 +49,16 @@ PUT  /api/personal/notes/{path}       # plugin / API / TZ 2.66 stub; not website
                                     # from a missing-link create (TZ 2.66)
 GET  /api/personal/uploads            # upload history: who / when / path / hash
 
-GET  /api/differ                      # TZ 3.11: chrome tab #/differ (Сверка);
-                                      # shipped JSON: {differences:[{path,title,kind,updated_at}]}
-                                      # kind=added|changed; outbound only (personal → shared);
-                                      # cookie session (site). Plugin must not list this (TZ 3.11).
+GET  /api/differ                      # TZ 3.11 / 3.13 / 3.20: chrome tab #/differ (Сверка)
+                                      # and Publisher sidebar offer list;
+                                      # {differences, inbound} path lists;
+                                      # kind=added|changed; inbound omitted from outbound;
+                                      # cookie or Bearer gnp_ / personal:read (that user only).
                                       # connected git: refresh public HEAD first.
-                                      # TZ 3.13 inbound list — accepted, not shipped (no direction field yet)
+                                      # no live direction field
 POST /api/differ/inbound/{path}/accept
-                                      # TZ 3.13 accepted, not shipped: copy published shared
-                                      # → caller's personal store for a watched path;
+                                      # TZ 3.13 shipped: copy published shared
+                                      # → caller's personal store for a watched inbound path;
                                       # not propose, not ZIP
 GET  /api/differ/files/{path}         # leftover pair JSON (shipped); not author merge UI (TZ 3.11);
                                       # incoming=published shared, current=personal or empty;
@@ -67,12 +68,17 @@ GET  /api/contributions/me            # author's notes, links, proposals, counts
                                       # editor/admin also receive own review stats
 GET  /api/users/{login}/card          # public person card (guest + signed-in, TZ 2.98):
                                       # login only (`efimov`); UUID key → 404; no user UUID in JSON;
+                                      # derived store + achievements, no git refresh;
                                       # inviter; store{personal_notes, personal_links,
                                       # proposed_notes, proposed_links, proposed_edit_bytes};
                                       # accepted notes list; not personal/closed bodies; not /user
 GET  /api/admin/contributions         # admin only: same stats for every account
-GET  /api/admin/users                 # list/search/filter; last login, sessions
+GET  /api/admin/users                 # list/search/filter; last login, sessions;
+                                      # TZ 3.21: editor tag grants when present
 POST /api/admin/users                 # admin creates an account
+PATCH /api/admin/users/{id}/editor-tags
+                                      # TZ 3.21: set editorial tag grants; admin;
+                                      # empty list = whole published queue
 GET  /api/admin/audit                 # admin only: filterable action log
 POST /api/admin/users/{id}/password   # admin sets a new password; never echoed
 POST /api/admin/users/{id}/sessions/revoke
@@ -91,9 +97,14 @@ GET  /api/search                      # default layer=visible: role-scoped corpu
                                       # hits include layer (shared/personal/proposal);
                                       # overlay/personal/shared remain for graph highlight;
                                       # guest = public hits, no snippets in the hit list
-GET  /api/cards/{path}                # published shared: guest may read the body;
-                                      # personal:{path}, personal:{uuid}:{path} (admin),
-                                      # proposal:{id}:{path} (author/editor/admin) need a session;
+GET  /api/cards/{path}                # shipped display today: published shared guest
+                                      # may read the body; personal:{path},
+                                      # personal:{uuid}:{path} (admin),
+                                      # proposal:{id}:{path} (author/editor/admin)
+                                      # need a session;
+                                      # TZ 3.24 canon is a per-card display API +
+                                      # rights on the card — not this route yet;
+                                      # do not treat this GET as that model;
                                       # write is PUT /personal/notes/{path}, not this route
 GET  /api/cards/{path}/revisions      # TZ 2.94: last 30 content revisions + unified diff;
                                       # not loaded with the card; shared = guest OK;
@@ -110,7 +121,8 @@ GET  /api/graph/personal-overlay      # ваша часть ризомы: shared
 POST /api/index/rebuild               # admin, Stage 5
 GET  /api/graph/diff?proposal_id=...  # Stage 8 structural view of Differ/proposal
 
-POST /api/proposals                   # cookie + author contract
+POST /api/proposals                   # cookie or Bearer gnp_ / personal:read;
+                                      # author contract; that user only (TZ 3.20)
 GET  /api/proposals                   # cookie or Bearer gnp_ / personal:read
                                       # (TZ 3.10: Card Merge editor queue);
                                       # editor/admin — все заявки; user — свои
@@ -122,11 +134,15 @@ GET  /api/proposals/{id}/files/{path} # TZ 3.12 shipped: {path, before, body};
                                       # before=опубликованная общая, body=предложение;
                                       # no html/engine/rows (те на GET /proposals/{id});
                                       # Card Merge «Принять в работу»
-POST /api/proposals/{id}/resolve      # TZ 3.12 shipped: cookie or Bearer editor/admin;
+POST /api/proposals/{id}/resolve      # TZ 3.12 / 3.18 shipped runtime:
+                                      # cookie or Bearer editor/admin;
                                       # {files:[{path,source}], reason?};
                                       # source = смерженный текст этой карточки;
-                                      # commit onto the proposal branch, then the same
-                                      # approve gate as POST …/approve; вся заявка (ТЗ 3.08)
+                                      # publish only those paths (branch+merge gate);
+                                      # remaining files stay on the open proposal (ТЗ 3.18);
+                                      # last file closes the proposal like approve;
+                                      # ТЗ 3.25: не равен принятию / Save & Resolve;
+                                      # runtime POST first then maybe vault = долг
 POST /api/proposals/{id}/approve      # cookie session only; website /queue
 POST /api/proposals/{id}/reject
 POST /api/proposals/{id}/request-changes
@@ -149,21 +165,31 @@ DELETE /api/integrations/obsidian/v1/transfers/{id}   # cancel if not applying
 `PUT /api/personal/notes/{path}` и `POST /api/personal/import-md`. Общую
 ризому, `shared_notes`, предложения и Differ эти методы не меняют.
 
-Плагин **GraphNotes Card Merge** (`obsidian-card-merge/`, ТЗ **3.09** /
-**3.10** / **3.11** / **3.12**) читает очередь: `GET /capabilities`
+Плагин **GraphNotes Card Merge** (`obsidian-card-merge/`) — leftover
+имя очереди editor’а до поставки одного пакета (ТЗ **3.26** снимает
+3.09). Канон — **один** плагин. Очередь читает: `GET /capabilities`
 (`user.role`), `GET /api/proposals` (только список, без тел). **«Принять в
 работу»** — `GET /api/proposals/{id}/files/{path}` → `{path, before, body}`
-в кэш `.obsidian/plugins/graphnotes-card-merge/work/{id}/…` (не обычные
-заметки vault). **Save & Resolve** — `POST /api/proposals/{id}/resolve`
-`{files:[{path,source}]}`. Авторский Differ в плагине **нет** (ТЗ 3.11).
-Отклонить / доработать — cookie на сайте. С Publisher **не склеивать**;
-раздача вручную `editor` / `admin`.
+в кэш `.obsidian/plugins/graphnotes-card-merge/work/{id}/…` (черновик
+сравнения). **Save & Resolve** в UX — принятие **этой одной** карточки
+(ТЗ **3.18**); не равнять с `POST /api/proposals/{id}/resolve`.
+**ТЗ 3.25 — две операции:** (1) всегда записать принятый файл в
+локальный vault и открыть эту заметку (`createLeafBySplit` /
+`getLeaf(true)`, не MergeView); без записи принятие не закончено;
+(2) только если локальный файл ≠ файл в хранилище ризомы — обновить
+хранилище **от аккаунта editor’а** (Differ — write gate); если
+совпадают — пропуск. Ручная правка editor’а — тот же sync, что у
+участника. Новый HTTP-глагол не выдумывать. Runtime сейчас
+POST `/api/proposals/{id}/resolve` `{files:[{path,source}]}` **сначала**,
+потом может записать vault — **долг** относительно 3.25. Очередь справа
+не перехватывает фокус (ТЗ **3.19** / **3.25**). Повторный resolve на
+уже **полностью** принятой заявке — успех. Авторский Differ в плагине
+**нет** (ТЗ 3.11). Отклонить / доработать — cookie на сайте. Два
+каталога в дереве — leftover, не канон.
 
-Leftover (код, не канон): сайт ещё рисует сверку на `#/offer` (hash
-`#/differ` открывает тот же экран) и кнопку «Текст сверки» по
-`GET /api/differ/files/{path}`. Канон 3.11 — вкладка `#/differ`, `/offer`
-только заявки. В Card Merge leftover-модалка «Сравнить карточку» ещё
-зовёт `GET /api/differ` — дырка, не второй контракт.
+Сайт 3.11 / 3.13: вкладка `#/differ`, `/offer` только заявки, «Текст
+сверки» снята. Publisher 3.20: тот же `GET /api/differ` + `POST /api/proposals`
+для офера после копии в личное. Card Merge leftover-модалка — не этот контракт.
 
 Авторизация передачи и чтения Differ: `Authorization: Bearer <token>`.
 UUID склада сервер берёт из токена; клиент **не** передаёт `user_id`,
@@ -195,6 +221,15 @@ capabilities), `personal:write` (пакет Publisher), опционально
 
 Пакет (`POST /transfers` … `commit`) применяется **целиком или никак** к
 личному складу. `expected_version: null` — создать, только если пути нет.
+
+**ТЗ 3.24 (канон, не runtime ACL).** Продуктовая поверхность — **API показа
+карточки** (кто видит эту карточку / это поле) и **права на карточке**.
+Четыре класса доступа: пользователь, editor, admin, платный
+контент-мейкер. Новых маршрутов в этом черновике нет: не выдумывать
+пути и не помечать существующие `GET /api/cards/{path}` /
+`GET /api/proposals` как уже покарточный ACL. **ТЗ 3.26:** один плагин — канон (очередь — capability editor’а в том же
+клиенте; позже показ/скрытие по грантам API на карточке). Два каталога — leftover.
+**Нужен ADR:** один плагин снимает 3.09; покарточные гранты API.
 
 Изменение API-контракта в ходе проектирования стадии допустимо без отдельного
 ADR, если не меняет продуктовую модель или внешние интеграционные обязательства.
