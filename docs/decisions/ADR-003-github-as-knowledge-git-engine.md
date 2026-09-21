@@ -1,6 +1,8 @@
 # ADR-003 - GitHub as the knowledge Git engine
 
-Status: Accepted for MVP direction; leftover vs TZ 2.63 (GitHub is copy-in source)
+Status: Superseded / leftover vs TZ **3.37** (owner 2026-09-21). Not living
+product. GitHub remains **source-code delivery only** (ADR-006:
+`nord → GitHub → rhizome-test`). Do not treat this file as ingest/merge canon.
 
 ## Decision
 Use GitHub rather than building/self-hosting a Git engine for the first product version.

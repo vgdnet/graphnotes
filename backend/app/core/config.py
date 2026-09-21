@@ -67,7 +67,7 @@ class Settings(BaseSettings):
     invite_max_per_hour: int = 10
     invite_max_pending: int = 20
     telegram_bot_token: str = ""
-    wikidiff2_php: str = "/usr/bin/php"  # leftover until native C++ helper
+    wikidiff2_helper: str = "/usr/local/bin/graphnotes-wikidiff2"
     wikidiff2_timeout_seconds: float = 10.0
 
     model_config = SettingsConfigDict(

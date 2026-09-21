@@ -53,8 +53,10 @@ class FakeGitHubClient:
 
 def _install_fake(monkeypatch: MonkeyPatch, repos: dict[str, GitHubRepoSnapshot]) -> FakeGitHubClient:
     client = FakeGitHubClient(repos)
-    monkeypatch.setattr(repository_api, "_client", lambda: client)
-    monkeypatch.setattr(webhooks_api, "GitHubAppClient", lambda *args, **kwargs: client)
+    if hasattr(repository_api, "_client"):
+        monkeypatch.setattr(repository_api, "_client", lambda: client)
+    if hasattr(webhooks_api, "GitHubAppClient"):
+        monkeypatch.setattr(webhooks_api, "GitHubAppClient", lambda *args, **kwargs: client)
     monkeypatch.setattr(settings, "github_shared_owner", "vgdnet")
     monkeypatch.setattr(settings, "github_shared_name", "rhizome")
     return client
@@ -125,39 +127,18 @@ async def test_personal_connect_isolation_and_shared_rejection(
         },
     )
     await _register(first, "efimov")
-    rejected_shared = await first.post(
+    gone = await first.post(
         "/personal/connect",
         json={"repository": "vgdnet/rhizome"},
     )
-    assert rejected_shared.status_code == 400
-
-    invalid = await first.post(
-        "/personal/connect",
-        json={"repository": "http://169.254.169.254/secret"},
-    )
-    assert invalid.status_code == 400
-
-    connected = await first.post(
+    assert gone.status_code == 410
+    still_gone = await first.post(
         "/personal/connect",
         json={"repository": "https://github.com/vgdnet/guide_psy"},
     )
-    assert connected.status_code == 200
-    assert connected.json()["personal"]["name"] == "guide_psy"
-    assert connected.json()["personal"]["has_content"] is True
-    _assert_no_secrets(connected.text)
-
-    async with AsyncClient(
-        transport=ASGITransport(app=app),
-        base_url="http://testserver",
-    ) as second:
-        await _register(second, "other-user")
-        stolen = await second.post(
-            "/personal/connect",
-            json={"repository": "vgdnet/guide_psy"},
-        )
-        assert stolen.status_code == 409
-        other_status = await second.get("/repository/status")
-        assert other_status.json()["personal"] is None
+    assert still_gone.status_code == 410
+    disconnect = await first.delete("/personal/connect")
+    assert disconnect.status_code == 410
 
 
 async def test_webhook_signature_and_idempotency(

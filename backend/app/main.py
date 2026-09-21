@@ -24,7 +24,6 @@ from app.api.users import router as users_router
 from app.api.webhooks import router as webhooks_router
 from app.core.config import settings
 from app.db.session import async_session_factory, engine
-from app.services.github import GitHubAppClient
 from app.services.integration_errors import IntegrationError, error_payload
 from app.services.sync import pull_connected_gits
 
@@ -39,7 +38,7 @@ async def _personal_sync_loop() -> None:
         await asyncio.sleep(interval)
         try:
             async with async_session_factory() as database:
-                await pull_connected_gits(database, GitHubAppClient())
+                await pull_connected_gits(database, None)
         except asyncio.CancelledError:
             raise
         except Exception:

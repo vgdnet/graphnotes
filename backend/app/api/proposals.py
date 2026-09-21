@@ -21,7 +21,6 @@ from app.schemas.proposal import (
     ProposalWorkFileResponse,
 )
 from app.services.differ import accept_inbound_file, get_difference_file, list_differences
-from app.services.github import GitHubAppClient
 from app.services.proposal import (
     ProposalError,
     create_proposal,
@@ -33,10 +32,6 @@ from app.services.proposal import (
 )
 
 router = APIRouter(tags=["proposals"])
-
-
-def _client() -> GitHubAppClient:
-    return GitHubAppClient()
 
 
 def _raise(error: ProposalError) -> NoReturn:

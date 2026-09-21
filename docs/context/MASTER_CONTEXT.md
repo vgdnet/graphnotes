@@ -2,7 +2,9 @@
 
 Updated: 2026-09-21
 Status: canonical architecture baseline
-Aligned with PRODUCT_SPEC **3.39** (`#/graph` Obsidian-like graph
+Aligned with PRODUCT_SPEC **3.40** (`#/graph` settings panel chrome matches
+Obsidian: folds, switches, slider readouts, restart layout) /
+**3.39** (`#/graph` Obsidian-like graph
 settings: tags/orphans, groups, display, forces; browser `localStorage`) /
 **3.38** (`#/user` has no personal-git connect;
 working copy is GraphNotes store; plugin writes personal; leftover git
@@ -55,8 +57,8 @@ also authors cards outside the write grant. One Obsidian plugin is canon;
 TZ 3.09 withdrawn. Queue from API is an editor capability in the
 same client; without editor access the queue UI is off. Manual
 editor edit uses the same sync as a participant. Catalogs
-`obsidian-plugin/` + `obsidian-card-merge/` are leftover runtime
-until Publisher is retired. Runtime is `obsidian-card-merge/` (participant sync + offer gated by `can_propose_to_rhizome` + editor queue). Later the
+`obsidian-plugin/` + `obsidian-card-merge/` are leftover catalogs;
+do not merge trees. Runtime is `obsidian-card-merge/` (participant sync + offer gated by `can_propose_to_rhizome` + editor queue). Later the
 same plugin shows/hides capabilities from the API when access is not
 all cards, only granted cards — fits TZ 3.28 / 3.29 / **3.30**. Needs ADR: one plugin
 supersedes 3.09; grant API.
@@ -117,9 +119,9 @@ creates POST /api/proposals with the same gnp_ token) /
 no git copy-in, no bodies, no wikidiff2 on list; plugin `?include_inbound=false`) /
 3.10 (editor-access sidebar =
 website `#/queue` New tab via GET /api/proposals) /
-3.09 leftover withdrawn by 3.26 (two plugin
-packages are not the lock; `obsidian-plugin/` + `obsidian-card-merge/`
-are leftover until one package ships) /
+3.09 leftover withdrawn by 3.26 (one plugin is canon;
+runtime client is `obsidian-card-merge/`; `obsidian-plugin/` leftover —
+do not merge trees again) /
 3.08 (`#/queue` accordion: one proposal, one
 card body, decide buttons under each card still approve/reject/return the
 whole proposal) /
@@ -130,9 +132,12 @@ second spec) /
 3.03 (editor queue text diff is MediaWiki
 **wikidiff2** table HTML, ADR-018; not `difflib`. Wikipedia two-column
 layout. Author Differ stays a path-checkbox list.
-Owner 2026-09-12 / ADR-018 amendment: canon is a compiled native
-wikidiff2 C++ helper, not `php-cli` / `php-wikidiff2`. PHP in the image
-is unfinished code — a hole, not an alternate canon.) /
+Owner 2026-09-12 / ADR-018 amendment: editor-diff helper is compiled
+native wikidiff2 C++, not `php-cli` / `php-wikidiff2`. **Shipped
+2026-09-21:** backend image compiles pinned Wikimedia **1.14.2**
+`src/lib` + GraphNotes CLI. Those PHP packages leave because they
+were only for this helper — not a project-wide PHP ban. Missing
+helper → HTTP 503, not `difflib`.) /
 3.02 (Wikipedia-style editor table) /
 3.01 leftover withdrawn by 3.11: Differ is chrome tab `#/differ` again
 (propose differing paths; not merge). `#/offer` is my proposals only.
@@ -413,7 +418,9 @@ filters (tag nodes, orphans), groups (search query + color), display
 repel, link elasticity, ideal length). Prefs: `localStorage`
 `graphnotes-graph-settings`, same class as `graphnotes-theme`, not `/user`.
 The card-page aside local graph does not open that panel. Gene-demo sliders
-are still not ported. The canvas has two views (TZ 2.51):
+are still not ported. TZ **3.40** matches Obsidian chrome: collapsible
+sections, right-hand switches, numeric slider readouts, round color swatch,
+«Запустить анимацию» re-runs fCoSE, header reset/close. The canvas has two views (TZ 2.51):
 **весь граф** (bounded page) and **локальный граф** (`center` + `depth` 1–4,
 «Показать всё»). Overlay-only personal nodes keep `personal:{path}` as the
 local-graph center so the neighborhood is not the first shared page. Nested `.md` trees are indexed from
@@ -457,7 +464,7 @@ pending unused invites) lives **only** on that invite tab (`POST /api/invites`,
 `GET /api/invites`); personal-data has the «who invited you» line, not the
 send form. Required unique email, optional phone/Telegram contacts (not login)
 and author contract — not the public person card. Leftover
-`POST`/`DELETE /api/personal/connect` is not mounted in the cabinet.
+`POST`/`DELETE /api/personal/connect` is HTTP 410 and is not mounted in the cabinet.
 ZIP download of published shared is removed (TZ 2.5; ADR-009 amendment
 2026-09-11). **Rhizome access
 levels** (ADR-016 / TZ 2.31, UX 2.41): a paid level is a closed slice of
@@ -478,6 +485,16 @@ spec, no per-agent private TZ. If code and TZ diverge, stop. Leftover
 runtime is unfinished code, not a second spec. Leftover: `AGENTS.md` is
 gitignored, so clones of the source remote do not carry it; do not treat that hole as
 a second brief.
+
+**Technical TZ / runtime architecture** is coordinated by the technical
+agent (`MASTER_CONTEXT`, observer, deployment). Always-applied Cursor
+rule: `.cursor/rules/technical-canon.mdc`. The product editor does
+**not** invent a second stack. Code writers follow this file and
+`PRODUCT_SPEC.md` last accepted (owner 2026-09-21: **3.37** ingest;
+later overlay numbers on disk such as 3.38–3.40 are already in
+PRODUCT_SPEC — do not silently bump). Live Obsidian client is
+`obsidian-card-merge/`; leftover Publisher dir `obsidian-plugin/` —
+do not merge trees again.
 
 The canonical product requirements are maintained in
 `docs/product/PRODUCT_SPEC.md`. This file defines the accepted architecture that
@@ -549,21 +566,31 @@ Internet
            -> PostgreSQL
 ```
 
-Leftover (not canon, TZ **3.35** / **3.37**): personal git bind API and unused merge-out.
+Leftover (not canon, TZ **3.35** / **3.37**): `POST`/`DELETE /personal/connect`
+is HTTP 410 (no GitHub App). Knowledge merge-out is **gone**: no
+`create_branch` / `merge_branch` / `commit_markdown` / `reconcile_proposals`.
+Approve/reject/rollback write `shared_notes` and proposal rows. GitHub is
+**source-code delivery only** (ADR-006). Knowledge App credentials are
+not required to run the stack. ADR-003 / ADR-007 / ADR-008 / ADR-009 are
+leftover vs TZ **3.37** — living product is 3.37 + this file; do not
+treat those ADRs as ingest canon.
 
 Technologies:
 - FastAPI / Python
 - MediaWiki **wikidiff2** C++ (`src/lib`: `Wikidiff2` + `TableFormatter`)
-  compiled in the backend image from a pinned Wikimedia tarball/git
-  (https://releases.wikimedia.org/wikidiff2/, currently 1.14.2) plus a
-  thin GraphNotes CLI `main`. Build without `HAVE_CONFIG_H` so
-  `WD2_ALLOCATOR` is `std::allocator`; Zend lives only in
-  `php_wikidiff2.cpp` and is not linked. Runtime dep: `libthai0`
-  (compile: `g++`, `libthai-dev`). FastAPI subprocess → same table
-  HTML as `wikidiff2_do_diff`. PHP (`php-cli`, `php-wikidiff2`,
-  `wikidiff2_table.php`) in the image is unfinished code (helper not
-  shipped), not an alternate canon. Editor proposal text only
-  (ADR-018 / TZ 3.03; owner 2026-09-12 native path)
+  compiled in the backend image from pinned Wikimedia tarball
+  1.14.2 (https://releases.wikimedia.org/wikidiff2/,
+  sha256 `97c91a0d4b5b468c533bcd2485fa089612dbcd541773f57f1ffc086942107724`)
+  plus GraphNotes CLI `wikidiff2/main.cpp` →
+  `/usr/local/bin/graphnotes-wikidiff2`. Compile with `-include cstdint`
+  (GCC 15). Build without `HAVE_CONFIG_H` so
+  `WD2_ALLOCATOR` is `std::allocator`; Zend / `php_wikidiff2.cpp` is not
+  linked. Runtime dep: `libthai0` (compile: `g++`, `libthai-dev`).
+  FastAPI subprocess, JSON stdin `before`/`after` → `table_html`, same
+  allow-list as before. This path does not depend on `php-cli` /
+  `php-wikidiff2` (dropped with the helper; they were only for
+  editor-diff). Missing helper → HTTP 503, not `difflib` (ADR-018 /
+  TZ 3.03; owner 2026-09-21 native helper shipped).
 - React + TypeScript
 - PostgreSQL
 - SQLAlchemy 2.x async
@@ -586,25 +613,28 @@ Ingest is the Obsidian plugin into `personal_uploads` / `shared_notes`.
 GraphNotes is not Wikipedia. An external git host is **not** in the living
 canon: not a store, connector, merge engine, or live API.
 
-Leftover unfinished (not canon): personal git **bind** API
-(`POST`/`DELETE /personal/connect` still talks to the GitHub App for
-metadata, no copy-in), unused `copy_git_*` / `commit_markdown` /
-`reconcile_proposals` merge-out, webhook delivery log without live disk.
+Leftover unfinished (not canon): `POST`/`DELETE /personal/connect` is
+HTTP 410 (no GitHub App for knowledge). `copy_git_*` / `commit_markdown`
+/ `create_branch` / `merge_branch` / `reconcile_proposals` are **removed**
+from product runtime. Approve writes `shared_notes`. Webhook delivery
+log does not copy-in.
 Poller default `GRAPHNOTES_PERSONAL_SYNC_INTERVAL_SECONDS=0`;
-`pull_connected_gits` is a no-op. Admin «Подключить общую ризому» is
+`pull_connected_gits` is a no-op. Knowledge GitHub App env vars are
+**not** required to run Compose. Admin «Подключить общую ризому» is
 **gone**; `POST /repository/connect` ensures a **local** shared binding
 and reindexes `shared_notes`. `#/user` does **not** show «Свой git» (TZ **3.38**).
 Do not add MinIO/S3/Gitea. Pull Request pages, branch names and SHAs are
 not shown in the product UI.
 
-ADR conflict this wave (do not rewrite ADRs): ADR-003 leftover; git-part of
-ADR-008 leftover; Obsidian authoring remains.
+ADR-003 / git-part of ADR-008 / ADR-009 git-circulation wording:
+leftover vs TZ **3.37**. Obsidian authoring remains. GitHub stays
+ADR-006 source delivery.
 
 GraphNotes should handle:
 - application users and permissions
 - the hosted personal store (plugin) as the **default** personal rhizome
 - leftover optional connected personal git remotes (bind metadata only) — not canon
-- leftover GitHub App client / merge_branch — unused from product request paths
+- leftover `GitHubAppClient` stub — raises, does not call GitHub
 - Differ (outbound personal layer → published shared; TZ 3.13 inbound
   published shared → personal store for watched accepted paths;
   list/open reads local stores, not a live remote HEAD)
@@ -678,7 +708,7 @@ Initial product store concept:
 GraphNotes personal store             = always the working copy (TZ 2.62)
 GraphNotes shared store               = working copy of published rhizome (TZ 2.63)
 git / later Dropbox / Google Drive    = connectors that copy .md into those stores
-shared knowledge repo                 = leftover merge-out after editor accept
+shared knowledge repo                 = gone; accept writes shared_notes
 .md / ZIP upload                      = copy into the same local personal store
 Obsidian plugin API + GraphNotes Publisher = copy vault edits after save into that store (TZ 2.68–2.82)
 proposal                              = selected Differ results, queued for editors
@@ -994,9 +1024,9 @@ Authentication / users:
 - `GET  /api/repository/status`
 
 Personal layer (plugin write to the local store; git connector leftover):
-- `POST /api/personal/connect` (leftover TZ **3.38**: cabinet does not
-  call this; requires author contract)
-- `DELETE /api/personal/connect` (leftover unbind; store files remain)
+- `POST /api/personal/connect` (HTTP 410; leftover TZ **3.38**: cabinet
+  does not call this; knowledge GitHub App is not used)
+- `DELETE /api/personal/connect` (HTTP 410; leftover unbind)
 - `POST /api/personal/import-md` (leftover TZ 2.96: no website button;
   future upload must sync into the local store like the plugin;
   ZIP up to 10 000 members, else 400 `archive has too many files`;
@@ -1126,8 +1156,9 @@ Reconciliation hook (leftover, not canon ingest):
 
 Product requirement: §6.3.4 / §5.5.7 / TZ 2.82 / 2.90. Operator examples:
 `docs/deployment/OBSIDIAN_PLUGIN_API.md`. The desktop plugin
-(`obsidian-plugin/`, GraphNotes Publisher) is part of this product
-(TZ 2.69). GraphNotes owns the HTTP API and the personal store.
+(`obsidian-card-merge/`, GraphNotes Card Merge) is the live product
+client. `obsidian-plugin/` (Publisher) is leftover — do not resurrect
+or merge trees (TZ 2.69 catalog history). GraphNotes owns the HTTP API and the personal store.
 TZ 2.90 client: vault create/modify/delete/rename enqueue locally.
 Network runs on the sidebar ItemView «Передать правки на сервер»,
 ribbon paper-plane, file close, idle minutes after the
@@ -1282,8 +1313,8 @@ rows as in-app / ZIP ingest). Attachments live in `personal_assets`
 (BYTEA). Opaque `object_version` on both; compare version even when
 SHA-256 matches. Transfer / blob / idempotency / snapshot tables are
 **not** a knowledge canon. Apply must **not** call git copy-in
-(`copy_git_into_personal_store` / `rebuild_personal`): that would
-overwrite plugin writes. After files commit, reindex personal
+(`copy_git_*` is deleted; `rebuild_personal` reindexes uploads only):
+that would overwrite plugin writes. After files commit, reindex personal
 `note_index` **from uploads only**. Graph and search already read
 `personal_uploads` when the store has rows.
 

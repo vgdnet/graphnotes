@@ -54,3 +54,11 @@ Until that helper ships, the working tree may still call leftover
 unfinished code — a hole in the runtime, not a second spec and not
 «this deploy runs PHP». When the helper ships, those packages leave
 the image.
+
+## Amendment 2026-09-21 (helper shipped)
+
+Native CLI `graphnotes-wikidiff2` is compiled in the backend image from
+pinned Wikimedia **1.14.2** (`src/lib` + GraphNotes `main.cpp`).
+`php-cli` / `php-wikidiff2` / `wikidiff2_table.php` leave this path
+(they were only the old editor-diff helper). Missing helper → 503.
+This is not a project-wide PHP ban.

@@ -123,4 +123,5 @@ Leftover (недописанный код, не канон): copy-in из
 остановиться. Leftover в runtime — недописанный код, не второй канон.
 
 Движок editor-diff — MediaWiki **wikidiff2** C++ (ТЗ 3.03 / ADR-018).
-`php-cli` в образе — дырка в коде, не канон.
+Native helper в образе backend; `php-cli` / `php-wikidiff2` — не
+install path этого helper.

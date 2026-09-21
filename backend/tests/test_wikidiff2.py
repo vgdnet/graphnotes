@@ -38,3 +38,4 @@ def test_wikidiff2_engine_table_and_word_level() -> None:
     assert "diff-addedline" in added.html
     assert "# Mine" in added.html
     assert added.rows == [{"op": "insert", "left": "", "right": "# Mine"}]
+    assert changed.version == "1.14.2"

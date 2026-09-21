@@ -53,6 +53,10 @@ test("page graph has Obsidian-like settings panel, not a toolbar tag box", () =>
   assert.match(panelSrc, /Сила отталкивания/);
   assert.match(panelSrc, /Сила связи/);
   assert.match(panelSrc, /Расстояние между узлами/);
+  assert.match(panelSrc, /Поисковый запрос/);
+  assert.match(panelSrc, /Запустить анимацию/);
+  assert.match(panelSrc, /role="switch"/);
+  assert.match(panelSrc, /Сбросить настройки/);
   assert.equal(graphViewSrc.includes('placeholder="тег"'), false);
 });
 

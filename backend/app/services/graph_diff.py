@@ -14,9 +14,9 @@ from app.models.proposal import Proposal, ProposalStatus
 from app.models.personal_upload import PersonalUpload
 from app.models.shared_note import SharedNote
 from app.models.user import User
-from app.services.github import GitHubAppClient, GitHubAppError
+from app.services.github import GitHubAppClient
 from app.services.markdown import notes_lookup_map, parse_markdown, resolve_link_target
-from app.services.proposal import ProposalError, _github, _paths, proposal_for_viewer
+from app.services.proposal import ProposalError, _paths, proposal_for_viewer
 from app.services.repository import SHARED_SINGLETON_ID, published_sha
 
 _PENDING = {

@@ -1,7 +1,7 @@
 # Product requirements to Stage traceability
 
 Статус: DERIVED / MAINTAINED
-Источник: `docs/product/PRODUCT_SPEC.md` version 3.39
+Источник: `docs/product/PRODUCT_SPEC.md` version 3.40
 
 Матрица маршрутизирует канонические требования в Stage-файлы и не изменяет
 `PRODUCT_SPEC.md`.
@@ -152,7 +152,7 @@
 | Elasticsearch next-search questions 1–9 (§6.5.3) | When is closed (TZ 2.83): **only after the first approved rhizome production deploy**. Answers 1–9 stay open; do not invent. SQL until then |
 | Open personal repo as a public catalog (search/find/comment by everyone, bypassing editor queue) | Not accepted. PRODUCT_SPEC 2.41 §5.6.4 / §12.9; needs owner decision + ADR vs ADR-007 / §3.3 |
 | Editor accept line compare (Wikipedia two-column / one-column) | Closed TZ 3.02 for `/queue` (and the same proposal body). Author Differ line UX still open (§12.10) |
-| Editor accept engine is MediaWiki wikidiff2 | Closed TZ 3.03 / ADR-018 amendment. Not `difflib`. Canon runtime: pinned wikidiff2 C++ as a native helper (owner 2026-09-12), not PHP. `php-cli` in the image is unfinished code, not an alternate canon (TZ 3.05). |
+| Editor accept engine is MediaWiki wikidiff2 | Closed TZ 3.03 / ADR-018 amendment. Not `difflib`. Canon runtime: pinned wikidiff2 C++ 1.14.2 as a native helper (shipped 2026-09-21). `php-cli` / `php-wikidiff2` leave this path only. |
 | Queue accordion + buttons under each card | Closed TZ 3.08. One proposal, one card body. Buttons still decide the whole proposal |
 | Merge Publisher + Card Merge into one plugin | **Closed TZ 3.26 / 3.27 runtime 2026-09-16:** `obsidian-card-merge/` is the one client (participant sync; offer gated by `can_propose_to_rhizome`; editor queue gated by `can_see_queue`). `obsidian-plugin/` leftover catalog. Needs ADR: one plugin supersedes 3.09; per-card API grants. |
 | Editor local copy of accepted cards | Closed TZ 3.25 / **3.30**: two operations after accept onto the **same** server file, not one «Save & Resolve = POST shared». (1) Always write the accepted file to the editor local vault; opening is that local note; if write fails, accept is unfinished. (2) Update the rhizome store from the editor account only if local ≠ store; skip if same. Differ stays the ungranted shared write gate. GraphNotes stays the canonical shared store. TZ 3.22 narrowed (no corpus dump / no second canonical rhizome). **Shipped:** vault-first; POST `/resolve` second if local ≠ store. |

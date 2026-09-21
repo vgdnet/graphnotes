@@ -69,12 +69,10 @@ async def test_author_contract_settings_aliases_and_git_disconnect(
     assert accepted.json()["is_author"] is True
 
     connected = await author.post("/personal/connect", json={"repository": "vgdnet/guide_psy"})
-    assert connected.status_code == 200
-    assert connected.json()["personal"]["connected"] is True
+    assert connected.status_code == 410
 
     gone = await author.delete("/personal/connect")
-    assert gone.status_code == 200
-    assert gone.json()["personal"] is None
+    assert gone.status_code == 410
     status = await author.get("/repository/status")
     assert status.json()["personal"] is None
 
@@ -82,7 +80,7 @@ async def test_author_contract_settings_aliases_and_git_disconnect(
     assert withdrawn.status_code == 200
     assert withdrawn.json()["is_author"] is False
     blocked = await author.post("/personal/connect", json={"repository": "vgdnet/guide_psy"})
-    assert blocked.status_code == 403
+    assert blocked.status_code == 410
     await author.aclose()
 
 

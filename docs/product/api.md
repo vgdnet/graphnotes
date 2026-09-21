@@ -35,8 +35,8 @@ DELETE /api/users/me/integration-tokens/{id}
 
 GET  /api/repository/status
 
-POST /api/personal/connect          # leftover TZ 3.35 / **3.38**: cabinet
-                                    # `#/user` does not call this
+POST /api/personal/connect          # HTTP 410; leftover TZ 3.35 / **3.38**
+DELETE /api/personal/connect        # HTTP 410
 POST /api/personal/import-md          # leftover TZ 2.96: no website button;
                                     # future upload must sync into the local store
                                     # (same as plugin); ZIP ≤ 10 000 files;

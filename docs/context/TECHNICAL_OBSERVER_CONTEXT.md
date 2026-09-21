@@ -1,9 +1,10 @@
 # GraphNotes — канонический контекст Technical Observer
 
 Статус: ACTIVE
-Updated: 2026-09-21 (PRODUCT_SPEC **3.39**: `#/graph` Obsidian-like
+Updated: 2026-09-21 (PRODUCT_SPEC **3.40**: graph settings panel chrome as
+Obsidian. **3.39**: `#/graph` Obsidian-like
 settings cog, `localStorage` `graphnotes-graph-settings`. **3.38**: `#/user` has no personal-git
-connect; four tabs; leftover `/api/personal/connect` only. **3.37**: living canon does not name an
+connect; four tabs; leftover `/api/personal/connect` is HTTP 410. **3.37**: living canon does not name an
 external git host; plugin ingest. **3.36**: guest chrome / search four states /
 hanging local graph / italic `_…_` / plural «2 заметки» / Russian roles
 участник/редактор/администратор / title/og / about copy. **3.35**: plugin ingest;
@@ -91,8 +92,8 @@ proposal, one card body, decide buttons under each card for the whole
 proposal. **3.06** leftover withdrawn by 3.11. **3.05**: one canon for all agents —
 this file is a working brief, not a second TZ. **3.03**: editor queue
 **wikidiff2**. Owner 2026-09-12 / ADR-018 amendment: compile the C++
-core as a native helper. `php-cli` / `php-wikidiff2` in the image is
-unfinished code, not an alternate canon. Do not keep PHP as the install path.
+core as a native helper. **Shipped 2026-09-21:** pinned 1.14.2 + CLI in
+the backend image. `php-cli` / `php-wikidiff2` leave this path only.
 **2.99**: product TZ → technical TZ →
 `rhizome-test`. TZ 2.89 / §17 shipped on
 `rhizome-test`: invite email link; no Register tab; any account may invite;
@@ -353,9 +354,10 @@ Differ is derived. Outbound is personal layer → published shared.
 TZ 3.13 inbound is published shared → personal store for paths in the
 caller's accepted proposals. Differ/status/graph/search/card GET compare
 or serve local stores (`personal_uploads` / `shared_notes` / `note_index`).
-Leftover (not canon, TZ **3.35** / **3.37**): GitHub App **bind** of a
-personal remote (no copy-in); unused merge-out (`reconcile_proposals` /
-`merge_branch`); webhook **delivery log** without live disk; poller
+Leftover (not canon, TZ **3.35** / **3.37**): `POST`/`DELETE
+/personal/connect` is 410. Knowledge merge-out is **gone** (no
+`reconcile_proposals` / `merge_branch` / `create_branch`). Webhook
+**delivery log** without live disk; poller
 default off (`GRAPHNOTES_PERSONAL_SYNC_INTERVAL_SECONDS=0`) and
 `pull_connected_gits` no-op. `POST /index/rebuild` reindexes stores only.
 Canon ingest is the plugin. Differ list is not
@@ -374,7 +376,9 @@ panel on `#/graph` (`frontend/src/graphSettings.ts`, `GraphSettingsPanel.tsx`):
 tag nodes are synthesized client-side (`gn-tag:` ids; not Graph API);
 orphans hide `isolated` notes; groups paint `node[groupColor]`; display and
 forces feed `graphStylesheet` / `runFcoseLayout`. Aside local graph on a
-card keeps depth only. Prefs are browser-local.
+card keeps depth only. Prefs are browser-local. TZ **3.40** restyles that
+panel to Obsidian chrome (folds, `role=switch`, slider numbers, round
+swatch, restart-layout button).
 
 Landing `/` is `/graph` (TZ 2.14 / 2.58 / 3.00): rhizome by default; no
 «Мой граф» tab. Guests may read published shared card bodies (TZ 2.64);
@@ -422,8 +426,9 @@ empty left), then links, then Graph Diff; tabs are New / In progress / Rejected.
 the review with only the proposed Markdown body. Do not fall back to
 `difflib` when the engine is missing. Do not rewrite the engine in JS
 or put C++ in the browser. The FastAPI contract stays: allow-listed
-table HTML + `engine` + `rows`. The helper is a compiled binary (or
-later the same `src/lib` in-process); not `php-cli`.
+table HTML + `engine` + `rows`. The helper is a compiled binary from
+pinned Wikimedia 1.14.2 (or later the same `src/lib` in-process); PHP
+is not the install path.
 Card search `/search` (TZ 2.39 / 2.58) is role-scoped over `note_index`
 (`layer=visible` default): guest = published shared hits; card page is
 openable for those shared paths (TZ 2.64)
@@ -566,9 +571,8 @@ Observer проверяет diff на:
   or Telegram login (TZ 3.15 is one checkbox/toggle + the same bot/SMTP);
 - replacing wikidiff2 with `difflib` for editor review, or dropping
   the native wikidiff2 helper from the backend image without a 503
-  (TZ 3.03 / ADR-018 amendment: do not keep `php-cli` /
-  `php-wikidiff2` as the install path — PHP in the image is unfinished
-  code, not an alternate canon);
+  (TZ 3.03 / ADR-018: native helper shipped 2026-09-21; `php-cli` /
+  `php-wikidiff2` leave this path only);
 - remounting the «Мой граф» tab or treating `#/my_graph` as a separate
   canvas (TZ 3.00: `/graph` is the rhizome by default);
 - invite map (`GET /api/graph/invites`, `#/invites`) visible to non-admin

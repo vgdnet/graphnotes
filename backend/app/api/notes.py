@@ -30,7 +30,6 @@ from app.schemas.comments import (
 from app.schemas.provenance import CardRevisionListResponse, NoteFeedResponse
 from app.services.comments import CommentError, create_comment, list_comments, moderate_comment
 from app.services.provenance import list_card_revisions, list_note_feed
-from app.services.github import GitHubAppClient
 from app.services.closed_corpus import (
     ClosedCorpusError,
     close_path,
@@ -53,10 +52,6 @@ from app.services.installation import resolve_start_card_path
 from app.services.proposal import ProposalError, get_proposal_card
 
 router = APIRouter(tags=["notes"])
-
-
-def _client() -> GitHubAppClient:
-    return GitHubAppClient()
 
 
 def _raise(error: IngestError) -> NoReturn:

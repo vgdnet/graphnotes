@@ -509,6 +509,11 @@ export function GraphView({
             onChange={setSettings}
             open={settingsOpen}
             onOpenChange={setSettingsOpen}
+            onRestartLayout={() => {
+              const cy = cyRef.current;
+              if (!cy || cy.nodes().empty()) return;
+              runFcoseLayout(cy, forceLayoutOptions(settingsRef.current));
+            }}
           />
         )}
       </div>

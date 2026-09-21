@@ -51,7 +51,7 @@ async def test_contribute_requires_author_contract(
         "/personal/connect",
         json={"repository": "vgdnet/guide_psy"},
     )
-    assert blocked_connect.status_code == 403
+    assert blocked_connect.status_code == 410
 
     blocked_differ = await guest.get("/differ")
     assert blocked_differ.status_code == 403
@@ -113,7 +113,7 @@ async def test_contribute_requires_author_contract(
         "/personal/connect",
         json={"repository": "vgdnet/guide_psy"},
     )
-    assert connected.status_code == 200
+    assert connected.status_code == 410
 
     archive = await guest.get("/shared/archive")
     assert archive.status_code == 410

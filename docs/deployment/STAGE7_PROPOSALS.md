@@ -23,11 +23,8 @@ were in this caller's accepted proposals and now differ. It is not a merge
 editor. `#/offer` is my proposals only. Shipped `GET /api/differ` is
 `{differences, inbound}` path/hash metadata. `POST /api/differ/inbound/{path}/accept`
 copies published shared into the caller's personal store for a watched
-inbound path. Leftover `POST`/`DELETE /api/personal/connect` is not
-canon ingest and is **not** on `#/user` (TZ **3.38**). Disconnect of leftover
-git, if an operator still calls the API, must not wipe copied store
-files. Leftover poller/webhook may still copy `.md` in; they are not on
-the Differ list path.
+inbound path. `POST`/`DELETE /api/personal/connect` is HTTP 410. Leftover
+poller/webhook do not copy-in from GitHub.
 
 GraphNotes does **not** offer ZIP download of published shared (`Скачать` /
 `GET /api/shared/archive` removed, TZ 2.5). Shared is read in the app.
@@ -42,10 +39,9 @@ decide the whole proposal. Opening a proposal shows a Wikipedia-style line table
 ADR-018): **wikidiff2** table HTML from the C++ `TableFormatter`
 (same fragment as `wikidiff2_do_diff`; «В ризоме» |
 «В предложении»; added cards have an empty left). Graph Diff is the
-following rhizome block. Target runtime is a compiled native helper
-from pinned Wikimedia `src/lib` (owner 2026-09-12 / ADR-018 amendment).
-`php-cli` / `php-wikidiff2` in the image is unfinished code, not an
-alternate canon. `GET /api/proposals/{id}` file diffs include `html`,
+following rhizome block. Runtime compiles pinned Wikimedia **1.14.2**
+`src/lib` plus GraphNotes CLI (owner 2026-09-21). Editor-diff does not
+depend on `php-cli` / `php-wikidiff2`. `GET /api/proposals/{id}` file diffs include `html`,
 `engine`, proposed `body`, shared `before`, leftover unified `diff`, and
 `rows` parsed from the table. Missing engine is HTTP 503, not `difflib`.
 There is no inline/unified toggle. Author Differ stays a path-checkbox list.

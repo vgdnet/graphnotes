@@ -180,52 +180,12 @@ async def connect_personal_repository(
     *,
     user: User,
     repository: str,
-    client: GitHubAppClient,
+    client: GitHubAppClient | None = None,
 ) -> PersonalRepository:
-    owner, name = parse_repository_ref(repository)
-    if (
-        owner.casefold() == settings.github_shared_owner.casefold()
-        and name.casefold() == settings.github_shared_name.casefold()
-    ):
-        raise RepositoryBindError(400, "the shared rhizome cannot be used as a personal git")
-
-    try:
-        snapshot = await client.get_repository(owner, name)
-    except GitHubAppError as exc:
-        status_code = {
-            "not_found": 404,
-            "unavailable": 503,
-            "rate_limited": 503,
-        }.get(exc.status, 400)
-        raise RepositoryBindError(status_code, exc.message) from exc
-
-    existing = await database.scalar(
-        select(PersonalRepository).where(
-            PersonalRepository.github_node_id == snapshot.node_id
-        )
+    del database, user, repository, client
+    raise RepositoryBindError(
+        410, "personal git connect is not offered; ingest is the Obsidian plugin"
     )
-    if existing is not None and existing.user_id != user.id:
-        raise RepositoryBindError(409, "this git is already connected to another account")
-
-    row = await database.scalar(
-        select(PersonalRepository).where(PersonalRepository.user_id == user.id)
-    )
-    if row is None:
-        row = PersonalRepository(user_id=user.id)
-        database.add(row)
-    apply_snapshot(row, snapshot)
-    record_audit_event(
-        database,
-        action="repository.personal_connected",
-        actor_user_id=user.id,
-        target_user_id=user.id,
-        subject_username=user.username,
-        details={"owner": snapshot.owner, "name": snapshot.name},
-    )
-    await database.commit()
-    await database.refresh(row)
-    # Leftover bind only (TZ 3.37). Do not copy git into personal_uploads.
-    return row
 
 
 async def disconnect_personal_repository(

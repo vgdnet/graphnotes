@@ -11,8 +11,7 @@ from app.models.proposal import Proposal
 from app.models.rhizome_event import RhizomeEvent
 from app.models.user import User
 from app.services.git_paths import PathError, normalize_git_path
-from app.services.github import GitHubAppClient, GitHubAppError
-from app.services.markdown import notes_lookup_map, parse_markdown, resolve_link_target
+from app.services.markdown import parse_markdown
 from app.services.proposal import _paths
 from app.services.repository import SHARED_SINGLETON_ID
 
@@ -62,34 +61,6 @@ async def _shared_edges(
         if source and target:
             edges.add((source, target))
     return edges
-
-
-async def snapshot_shared_revision(
-    client: GitHubAppClient,
-    owner: str,
-    name: str,
-    revision: str | None,
-) -> tuple[set[str], set[tuple[str, str]]]:
-    """Read the published tree from Git. The derived index is wiped on rebuild."""
-    if not revision:
-        return set(), set()
-    try:
-        listed = set(await client.list_markdown_files(owner, name, revision))
-    except GitHubAppError:
-        return set(), set()
-    lookup = notes_lookup_map(listed)
-    edges: set[tuple[str, str]] = set()
-    for path in listed:
-        try:
-            text = await client.get_file(owner, name, path, revision)
-        except GitHubAppError:
-            continue
-        note = parse_markdown(path, text)
-        for link in note.typed_links:
-            target = resolve_link_target(link.target, lookup)
-            if target:
-                edges.add((path, target))
-    return listed, edges
 
 
 async def record_publication_events(

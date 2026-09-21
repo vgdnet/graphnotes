@@ -1,28 +1,20 @@
 from fastapi import APIRouter, HTTPException
 from sqlalchemy import select
 
-from app.api.dependencies import CurrentAdmin, CurrentAuthor, CurrentUser, DatabaseSession, OptionalUser
+from app.api.dependencies import CurrentAdmin, CurrentUser, DatabaseSession, OptionalUser
 from app.models.github import PersonalRepository, SharedRepository
 from app.schemas.repository import (
-    PersonalConnectRequest,
     RepositoryStatus,
     RepositoryStatusResponse,
 )
-from app.services.github import GitHubAppClient
 from app.services.repository import (
     SHARED_SINGLETON_ID,
     RepositoryBindError,
-    connect_personal_repository,
     connect_shared_repository,
-    disconnect_personal_repository,
     public_status,
 )
 
 router = APIRouter(tags=["repository"])
-
-
-def _client() -> GitHubAppClient:
-    return GitHubAppClient()
 
 
 def _shared_payload(row: SharedRepository | None) -> RepositoryStatus:
@@ -72,36 +64,19 @@ async def connect_shared(
     return RepositoryStatusResponse(shared=_shared_payload(shared), personal=None)
 
 
-@router.post("/personal/connect", response_model=RepositoryStatusResponse)
-async def connect_personal(
-    payload: PersonalConnectRequest,
-    user: CurrentAuthor,
-    database: DatabaseSession,
-) -> RepositoryStatusResponse:
-    try:
-        personal = await connect_personal_repository(
-            database,
-            user=user,
-            repository=payload.repository,
-            client=_client(),
-        )
-    except RepositoryBindError as exc:
-        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
-    shared = await database.get(SharedRepository, SHARED_SINGLETON_ID)
-    return RepositoryStatusResponse(
-        shared=_shared_payload(shared),
-        personal=_personal_payload(personal),
+@router.post("/personal/connect")
+async def connect_personal(user: CurrentUser) -> None:
+    del user
+    raise HTTPException(
+        status_code=410,
+        detail="personal git connect is not offered; ingest is the Obsidian plugin",
     )
 
 
-@router.delete("/personal/connect", response_model=RepositoryStatusResponse)
-async def disconnect_personal(
-    user: CurrentUser,
-    database: DatabaseSession,
-) -> RepositoryStatusResponse:
-    try:
-        await disconnect_personal_repository(database, user=user)
-    except RepositoryBindError as exc:
-        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
-    shared = await database.get(SharedRepository, SHARED_SINGLETON_ID)
-    return RepositoryStatusResponse(shared=_shared_payload(shared), personal=None)
+@router.delete("/personal/connect")
+async def disconnect_personal(user: CurrentUser) -> None:
+    del user
+    raise HTTPException(
+        status_code=410,
+        detail="personal git connect is not offered; ingest is the Obsidian plugin",
+    )

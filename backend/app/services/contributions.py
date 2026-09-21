@@ -18,7 +18,6 @@ from app.services.markdown import (
     parse_markdown,
     resolve_link_target,
 )
-from app.services.proposal import reconcile_proposals
 from app.services.closed_corpus import closed_paths_for_user
 from app.services.repository import SHARED_SINGLETON_ID, refresh_personal, refresh_shared
 

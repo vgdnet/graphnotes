@@ -36,11 +36,10 @@
   выкладки открывается `http://172.16.13.14:8080/#/invites`.
 - Integrator не выдумывает продукт и не правит ТЗ вместо продуктолога.
 - `compose.yaml` остаётся production-safe: backend и frontend на loopback, PostgreSQL без host-порта.
-Образ backend: цель — собранный native helper MediaWiki wikidiff2 C++
-(ТЗ 3.03 / ADR-018 amendment / решение владельца 2026-09-12), не
-`php-cli` / `php-wikidiff2`. Этот тестовый выкат ещё без helper: в
-образе leftover PHP-пакеты той же таблицы. Без движка очередь editor
-не рисует таблицу правок (503, не `difflib`). После поставки helper
-PHP-пакеты снимаются.
+Образ backend: native helper MediaWiki wikidiff2 C++ (pinned 1.14.2 +
+CLI, ТЗ 3.03 / ADR-018 / owner 2026-09-21). `php-cli` / `php-wikidiff2`
+снимаются, потому что они были только для этого helper — не запрет PHP
+во всём проекте. Без helper очередь editor не рисует таблицу правок
+(503, не `difflib`).
 - На rhizome-test — overlay `deploy/compose.rhizome-test.yaml` (LAN только у frontend).
 - На rhizome нет credentials с правом push.

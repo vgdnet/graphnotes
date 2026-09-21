@@ -78,7 +78,7 @@ async def _connect_pair(
 ) -> None:
     """Seed personal_uploads via import-md. Leftover git bind if the mock answers."""
     leftover = await client.post("/personal/connect", json={"repository": personal})
-    assert leftover.status_code in {200, 400, 403, 404, 409, 502, 503}, leftover.text
+    assert leftover.status_code in {200, 400, 403, 404, 409, 410, 502, 503}, leftover.text
     files = {"already.md": "# Mine\n"}
     if github is not None:
         repo = github.repos.get(personal)
@@ -314,14 +314,18 @@ def _install(
     monkeypatch: MonkeyPatch,
     github: MemoryGitHub,
 ) -> MemoryGitHub:
-    monkeypatch.setattr(notes_api, "_client", lambda: github)
-    monkeypatch.setattr(repository_api, "_client", lambda: github)
-    monkeypatch.setattr(proposals_api, "_client", lambda: github)
+    if hasattr(notes_api, "_client"):
+        monkeypatch.setattr(notes_api, "_client", lambda: github)
+    if hasattr(repository_api, "_client"):
+        monkeypatch.setattr(repository_api, "_client", lambda: github)
+    if hasattr(proposals_api, "_client"):
+        monkeypatch.setattr(proposals_api, "_client", lambda: github)
     if hasattr(contributions_api, "_client"):
         monkeypatch.setattr(contributions_api, "_client", lambda: github)
     if hasattr(graph_api, "_client"):
         monkeypatch.setattr(graph_api, "_client", lambda: github)
-    monkeypatch.setattr(webhooks_api, "GitHubAppClient", lambda *args, **kwargs: github)
+    if hasattr(webhooks_api, "GitHubAppClient"):
+        monkeypatch.setattr(webhooks_api, "GitHubAppClient", lambda *args, **kwargs: github)
     monkeypatch.setattr(settings, "github_shared_owner", "vgdnet")
     monkeypatch.setattr(settings, "github_shared_name", "rhizome")
     return github
@@ -452,7 +456,7 @@ async def test_stale_revision_and_two_user_isolation(
     assert "already.md" in paths
     assert "fresh.md" in paths
     gone = await first.delete("/personal/connect")
-    assert gone.status_code == 200
+    assert gone.status_code == 410
     kept = await first.get("/personal/notes")
     kept_paths = {item["path"] for item in kept.json()["notes"]}
     assert "already.md" in kept_paths
@@ -1082,7 +1086,7 @@ async def test_git_copy_stays_after_disconnect(
     assert copied.status_code == 200
     assert copied.json()["source"] == "# Mine\n"
     gone = await client.delete("/personal/connect")
-    assert gone.status_code == 200
+    assert gone.status_code == 410
     still = await client.get("/personal/notes/already.md")
     assert still.status_code == 200
     assert still.json()["source"] == "# Mine\n"

@@ -1,0 +1,25 @@
+---
+description: Code writer — follow MASTER + last accepted PRODUCT_SPEC; do not invent a second stack
+globs: backend/**,frontend/**,obsidian-card-merge/**,obsidian-plugin/**,compose.yaml,deploy/**
+alwaysApply: false
+---
+
+# Code Writer
+
+Follow `docs/context/MASTER_CONTEXT.md` and `docs/product/PRODUCT_SPEC.md`
+last accepted. Owner 2026-09-21: last named accepted product is **TZ 3.37**
+(ingest = Obsidian + plugin; GitHub is not product knowledge). Later overlay
+numbers may already be on disk — do not silently bump.
+
+Technical TZ / runtime architecture is coordinated by the technical agent.
+Do not invent a second stack.
+
+Live Obsidian client is `obsidian-card-merge/`. `obsidian-plugin/` is leftover
+Publisher — do not merge trees or resurrect it.
+
+GitHub is source-code delivery only (ADR-006). Do not call a knowledge GitHub
+App. Do not invent a new proposal-apply engine beyond disconnecting GitHub.
+
+Editor diff is native C++ wikidiff2 in the backend image (speed). Missing
+helper → 503, not `difflib`. Drop `php-cli` / `php-wikidiff2` only on this
+path; not a project-wide PHP ban.

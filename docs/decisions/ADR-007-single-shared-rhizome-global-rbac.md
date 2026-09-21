@@ -1,6 +1,9 @@
 # ADR-007 - Single shared rhizome and global RBAC
 
-Status: Accepted
+Status: Leftover vs TZ **3.37** (owner 2026-09-21). Not a second product
+canon. Living model is PRODUCT_SPEC last accepted **3.37** + MASTER_CONTEXT
+(one shared rhizome, global `user < editor < admin`). Do not invent new
+ADR text here.
 Accepted: 2026-08-18
 Refined by: ADR-008 (personal rhizome is the user's Git remote; public read of shared knowledge)
 

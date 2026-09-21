@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.models.card_revision import CardRevision
-from app.models.github import PersonalRepository, SharedRepository
+from app.models.github import SharedRepository
 from app.models.personal_upload import PersonalUpload
 from app.models.proposal import Proposal, ProposalStatus
 from app.models.shared_note import SharedNote
@@ -19,12 +19,12 @@ from app.models.user import User, UserRole, can_propose_to_rhizome
 from app.services.audit import record_audit_event
 from app.services.closed_corpus import closed_paths_for_user
 from app.services.git_paths import PathError, normalize_git_path
-from app.services.github import GitHubAppClient, GitHubAppError
+from app.services.github import GitHubAppClient
 from app.services.grants import editorial_path_allowed, filter_editorial_paths, queue_scope
-from app.services.index import IndexerError, drop_proposal_notes, index_proposal_notes, rebuild_shared, reindex_shared_store
+from app.services.index import IndexerError, drop_proposal_notes, index_proposal_notes, reindex_shared_store
 from app.services.markdown import parse_markdown, unresolved_links
 from app.services.notify import notify_new_proposal
-from app.services.repository import SHARED_SINGLETON_ID, apply_snapshot, ensure_local_shared, published_sha
+from app.services.repository import SHARED_SINGLETON_ID, ensure_local_shared, published_sha
 from app.services.wikidiff2 import Wikidiff2Error, table_diff
 
 
@@ -40,23 +40,6 @@ def _paths(raw: str) -> list[str]:
     if not isinstance(loaded, list):
         return []
     return [str(item) for item in loaded]
-
-
-def _github(error: GitHubAppError) -> ProposalError:
-    status = {
-        "not_found": 404,
-        "stale": 409,
-        "conflict": 409,
-        "forbidden": 403,
-        "unavailable": 503,
-        "rate_limited": 503,
-        "empty": 409,
-    }.get(error.status, 502)
-    if error.status == "conflict":
-        return ProposalError(409, "this proposal conflicts with the current shared rhizome")
-    if error.status == "stale":
-        return ProposalError(409, "git changed, retry")
-    return ProposalError(status, error.message)
 
 
 async def _personal_layer_file(
@@ -516,63 +499,6 @@ async def decide(
     raise ProposalError(400, "unknown decision")
 
 
-async def reconcile_proposals(database: AsyncSession, client: GitHubAppClient) -> None:
-    shared = await database.get(SharedRepository, SHARED_SINGLETON_ID)
-    if shared is None:
-        return
-    rows = (
-        await database.scalars(
-            select(Proposal).where(
-                Proposal.status.in_(
-                    [
-                        ProposalStatus.ACCEPTED_PENDING_MERGE.value,
-                        ProposalStatus.MERGED_INDEXING.value,
-                        ProposalStatus.FAILED.value,
-                    ]
-                )
-            )
-        )
-    ).all()
-    for row in rows:
-        if row.status == ProposalStatus.ACCEPTED_PENDING_MERGE.value:
-            try:
-                merged = await client.merge_branch(
-                    shared.owner,
-                    shared.name,
-                    base=shared.default_branch,
-                    head=row.branch_name,
-                    message=row.summary,
-                )
-                row.merged_sha = merged
-                row.status = ProposalStatus.MERGED_INDEXING.value
-            except GitHubAppError as exc:
-                row.status = (
-                    ProposalStatus.CONFLICTED.value
-                    if exc.status == "conflict"
-                    else ProposalStatus.FAILED.value
-                )
-                row.error = exc.message[:255]
-                continue
-        if row.merged_sha and shared.indexed_sha == row.merged_sha and shared.index_status == "current":
-            row.status = ProposalStatus.PUBLISHED.value
-            row.published_at = datetime.now(UTC)
-            continue
-        if row.merged_sha:
-            try:
-                snapshot = await client.get_repository(shared.owner, shared.name)
-                apply_snapshot(shared, snapshot)
-                await rebuild_shared(database, client)
-                shared = await database.get(SharedRepository, SHARED_SINGLETON_ID) or shared
-                if shared.indexed_sha == row.merged_sha:
-                    row.status = ProposalStatus.PUBLISHED.value
-                    row.published_at = datetime.now(UTC)
-                    row.error = None
-            except (GitHubAppError, IndexerError) as exc:
-                row.status = ProposalStatus.FAILED.value
-                row.error = str(getattr(exc, "detail", exc))[:255]
-    await database.commit()
-
-
 async def _viewer_payload(database: AsyncSession, row: Proposal, fallback: User) -> dict[str, object]:
     author = await database.get(User, row.author_user_id)
     return _public(row, author or fallback)
@@ -857,17 +783,6 @@ async def _set_status(
     await database.refresh(row)
     author = await database.get(User, row.author_user_id)
     return _public(row, author or user)
-
-
-async def _file(
-    client: GitHubAppClient, owner: str, name: str, path: str, ref: str
-) -> str | None:
-    try:
-        return await client.get_file(owner, name, path, ref)
-    except GitHubAppError as exc:
-        if exc.status == "not_found":
-            return None
-        raise _github(exc) from exc
 
 
 def _diff(path: str, before: str, after: str) -> str:

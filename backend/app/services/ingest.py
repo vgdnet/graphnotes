@@ -24,8 +24,8 @@ from app.services.closed_corpus import (
     matches_closed,
 )
 from app.services.git_paths import PathError, normalize_git_path
-from app.services.github import GitHubAppClient, GitHubAppError
-from app.services.index import IndexerError, ensure_personal_current
+from app.services.github import GitHubAppClient
+from app.services.index import IndexerError
 from app.services.markdown import parse_markdown, unresolved_links
 from app.services.provenance import record_card_revision, record_personal_edit_events
 from app.services.noise import (
@@ -33,7 +33,7 @@ from app.services.noise import (
     inspect_markdown_text,
 )
 from app.services.notify import notify_admins_white_noise
-from app.services.repository import SHARED_SINGLETON_ID, refresh_personal
+from app.services.repository import SHARED_SINGLETON_ID
 
 
 class IngestError(Exception):
@@ -120,17 +120,6 @@ async def _reject_white_noise(
         database, user, paths=paths, reasons=reasons, source=source
     )
     raise IngestError(400, CONTENT_NOT_NOTES)
-
-
-def _http_status(error: GitHubAppError) -> int:
-    return {
-        "not_found": 404,
-        "stale": 409,
-        "forbidden": 403,
-        "unavailable": 503,
-        "rate_limited": 503,
-        "empty": 409,
-    }.get(error.status, 502)
 
 
 async def _personal_or_none(database: AsyncSession, user_id) -> PersonalRepository | None:
@@ -306,134 +295,6 @@ async def _uploads_for(database: AsyncSession, user_id) -> list[PersonalUpload]:
     )
 
 
-async def copy_git_into_personal_store(
-    database: AsyncSession,
-    user_id,
-    client: GitHubAppClient,
-    row: PersonalRepository,
-    *,
-    previous_sha: str | None,
-) -> bool:
-    """Copy connector Markdown into the local personal store (TZ 2.62).
-
-    Remote wins on the same path when HEAD moved. Local-only paths stay.
-    A failed connector read leaves the store unchanged and returns False.
-    """
-    if row.observed_sha is None:
-        return False
-    existing = await _uploads_for(database, user_id)
-    by_path = {item.path: item for item in existing}
-    try:
-        current_paths = list(
-            await client.list_markdown_files(row.owner, row.name, row.observed_sha)
-        )
-    except GitHubAppError as exc:
-        if exc.status in {"unavailable", "rate_limited"}:
-            raise
-        return False
-
-    sha_moved = previous_sha is not None and previous_sha != row.observed_sha
-    if not sha_moved and existing:
-        to_fetch = [path for path in current_paths if path not in by_path]
-        if not to_fetch:
-            return True
-    else:
-        to_fetch = list(current_paths)
-
-    fetched: dict[str, str] = {}
-    noise_hits: list[tuple[str, tuple[str, ...]]] = []
-    for path in to_fetch:
-        try:
-            fetched[path] = await client.get_file(
-                row.owner, row.name, path, row.observed_sha
-            )
-        except GitHubAppError as exc:
-            if exc.status in {"unavailable", "rate_limited"}:
-                raise
-            if exc.message == "file is not UTF-8 Markdown":
-                noise_hits.append((path, ("invalid_utf8",)))
-                continue
-            return False
-
-    for path, text in fetched.items():
-        verdict = inspect_markdown_text(text)
-        if verdict.is_noise:
-            noise_hits.append((path, verdict.reasons))
-    if noise_hits:
-        owner = await database.get(User, user_id)
-        if owner is not None:
-            await lock_for_white_noise(
-                database,
-                owner,
-                paths=[path for path, _ in noise_hits],
-                reasons=sorted({reason for _, reasons in noise_hits for reason in reasons}),
-                source="git",
-            )
-        return False
-
-    for path, text in fetched.items():
-        parsed = parse_markdown(path, text)
-        current = by_path.get(path)
-        if current is None or current.body != text:
-            await _upsert_personal_upload(
-                database, user_id, path, text, parsed.content_hash
-            )
-    await database.commit()
-    return True
-
-
-async def copy_shared_git_into_store(
-    database: AsyncSession,
-    client: GitHubAppClient,
-    row: SharedRepository,
-    *,
-    previous_sha: str | None,
-    actor_user_id=None,
-) -> bool:
-    """Copy shared GitHub Markdown into the local rhizome store (TZ 2.63).
-
-    A failed fetch leaves the store unchanged.
-    """
-    if row.observed_sha is None:
-        return False
-    existing = list((await database.scalars(select(SharedNote))).all())
-    if previous_sha == row.observed_sha and existing:
-        return True
-    try:
-        paths = await client.list_markdown_files(row.owner, row.name, row.observed_sha)
-    except GitHubAppError as exc:
-        if exc.status in {"unavailable", "rate_limited"}:
-            raise
-        return False
-    by_path = {item.path: item for item in existing}
-    fetched: dict[str, str] = {}
-    for path in paths:
-        try:
-            fetched[path] = await client.get_file(
-                row.owner, row.name, path, row.observed_sha
-            )
-        except GitHubAppError as exc:
-            if exc.status in {"unavailable", "rate_limited"}:
-                raise
-            return False
-    for path, text in fetched.items():
-        parsed = parse_markdown(path, text)
-        current = by_path.get(path)
-        if current is None or current.body != text:
-            await _upsert_shared_note(
-                database,
-                path,
-                text,
-                parsed.content_hash,
-                actor_user_id=actor_user_id,
-            )
-    stale = [item.path for item in existing if item.path not in fetched]
-    if stale:
-        await database.execute(delete(SharedNote).where(SharedNote.path.in_(stale)))
-    await database.commit()
-    return True
-
-
 def _projection_from_text(path: str, text: str, available: set[str]) -> dict[str, object]:
     parsed = parse_markdown(path, text)
     return {
@@ -448,10 +309,6 @@ def _projection_from_text(path: str, text: str, available: set[str]) -> dict[str
         "locked": False,
         "closed": False,
     }
-
-
-def _github_to_ingest(error: GitHubAppError) -> IngestError:
-    return IngestError(_http_status(error), error.message)
 
 
 async def list_shared_notes(
@@ -585,74 +442,6 @@ async def save_personal_note(
         parsed_hash=parsed.content_hash,
         expected_hash=expected_hash,
     )
-
-
-async def _save_personal_git(
-    database: AsyncSession,
-    *,
-    user: User,
-    row: PersonalRepository,
-    path: str,
-    source: str,
-    expected_hash: str,
-    client: GitHubAppClient,
-) -> dict[str, object]:
-    await refresh_personal(database, user.id, client)
-    row = await _personal_or_none(database, user.id)
-    if row is None or not row.observed_sha:
-        raise IngestError(409, "personal git has no commits yet")
-    try:
-        paths = set(await client.list_markdown_files(row.owner, row.name, row.observed_sha))
-    except GitHubAppError as exc:
-        raise _github_to_ingest(exc) from exc
-    if path not in paths:
-        raise IngestError(404, "note was not found")
-    try:
-        current = await client.get_file(row.owner, row.name, path, row.observed_sha)
-    except GitHubAppError as exc:
-        raise _github_to_ingest(exc) from exc
-    current_hash = parse_markdown(path, current).content_hash
-    if expected_hash != current_hash:
-        raise IngestError(409, "note changed, reload the card")
-    if current != source:
-        try:
-            head = await client.commit_markdown(
-                row.owner,
-                row.name,
-                row.default_branch,
-                {path: source},
-                f"GraphNotes: {path}",
-                row.observed_sha,
-            )
-        except GitHubAppError as exc:
-            if exc.status == "stale":
-                raise IngestError(409, "note changed, reload the card") from exc
-            raise _github_to_ingest(exc) from exc
-        row.observed_sha = head
-        row.observed_at = datetime.now(UTC)
-        row.sync_status = "ready"
-        row.last_error = None
-        await record_personal_edit_events(
-            database,
-            user=user,
-            path=path,
-            before_text=current,
-            after_text=source,
-        )
-        record_audit_event(
-            database,
-            action="notes.edit_personal",
-            actor_user_id=user.id,
-            target_user_id=user.id,
-            subject_username=user.username,
-            details={"path": path, "source": "git"},
-        )
-        await database.commit()
-        try:
-            await ensure_personal_current(database, user.id, client)
-        except IndexerError:
-            pass
-    return await get_personal_note(database, user, path, client)
 
 
 async def _save_personal_upload(
@@ -894,29 +683,3 @@ async def _import_without_git(
         "warnings": warnings,
         "revision": None,
     }
-
-
-async def _project_repo(
-    client: GitHubAppClient,
-    owner: str,
-    name: str,
-    revision: str,
-) -> list[dict[str, object]]:
-    paths = await client.list_markdown_files(owner, name, revision)
-    available = set(paths)
-    notes: list[dict[str, object]] = []
-    for path in sorted(paths):
-        text = await client.get_file(owner, name, path, revision)
-        parsed = parse_markdown(path, text)
-        notes.append(
-            {
-                "path": path,
-                "title": parsed.title,
-                "tags": list(parsed.tags),
-                "aliases": list(parsed.aliases),
-                "links": list(parsed.links),
-                "unresolved_links": list(unresolved_links(parsed.links, available)),
-                "warnings": list(parsed.warnings),
-            }
-        )
-    return notes

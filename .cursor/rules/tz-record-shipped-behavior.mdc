@@ -1,0 +1,42 @@
+---
+description: Shipped product/UX/behavior must be written into product TZ and technical TZ immediately
+alwaysApply: true
+---
+
+# Record shipped behavior in both TZs
+
+Delivery order (TZ 2.99 / product §13.4): **product TZ first**, then
+**technical TZ**, then Code Writer **deploys to `rhizome-test`**. Do not
+deploy unnamed behavior. Do not write TZ after the test deploy.
+
+Any product, UX, or behavior change this agent **ships** must be written into
+both TZs in that order, in the same delivery, not as chat residue.
+
+- **Product TZ:** `docs/product/PRODUCT_SPEC.md` and the section file that owns
+  the requirement (and related product files if the scenario changed).
+- **Technical TZ:** `docs/context/MASTER_CONTEXT.md`, plus
+  `TECHNICAL_OBSERVER_CONTEXT.md` and `docs/deployment/**` when architecture,
+  constraints, or operator runtime changed.
+
+Discussion, a prompt, or a PR description is not the spec. **One canon
+for all agents (TZ 3.05):** product editor, technical editor, code writer,
+observers, Codex/Cursor — the same files. No second Markdown canon, no
+per-agent private TZ. If code and TZ diverge, stop and say so. Do not
+invent a leftover runtime as a second spec (`php-cli` / `php-wikidiff2`
+in the image is unfinished code; canon is native C++ wikidiff2,
+ADR-018 / TZ 3.03).
+
+This agent is a **builder**, not the spec editor. Do not silently become the
+product or architecture owner. Hand off the exact shipped behavior to the
+neighbors:
+
+- `.cursor/rules/product-spec-editor.mdc` writes product TZ only
+- `.cursor/rules/technical-spec-editor.mdc` writes technical TZ only
+
+If this session was told to update TZ itself, still stay in those files’ rules:
+no invented workspaces, no second Markdown canon, no ADR by stealth.
+
+```text
+❌ Ship a theme toggle / graph label fix and leave PRODUCT_SPEC + MASTER_CONTEXT untouched
+✅ Ship it and have both TZs name the behavior (or an explicit editor handoff that does)
+```

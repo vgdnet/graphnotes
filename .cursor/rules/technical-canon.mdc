@@ -1,0 +1,22 @@
+---
+description: Technical architecture goes through MASTER_CONTEXT; do not invent a second stack
+alwaysApply: true
+---
+
+# Technical canon (chief technical agent)
+
+Technical architecture, runtime, stack, and technical TZ are one file:
+`docs/context/MASTER_CONTEXT.md` plus last accepted `PRODUCT_SPEC` (owner
+named **3.37**; later 3.38+ on disk — report, do not silently treat as accepted).
+
+- Do not invent a second stack, second ingest, or a second Markdown canon.
+- Do not amend an ADR or change runtime without matching `MASTER_CONTEXT.md`.
+- Technical questions go through the technical agent / `MASTER_CONTEXT.md`.
+- Product editor writes product TZ only (`docs/product/**`). Code writers
+  implement the same two files. Leftover runtime is unfinished code, not a
+  second spec.
+
+Knowledge has **no git**. Ingest is Obsidian → plugin → GraphNotes stores.
+GitHub is ADR-006 source-code delivery only. Editor text-diff is native C++
+wikidiff2 (PHP only off that path). Live plugin: `obsidian-card-merge/`.
+Grants: `access_grants` `(user, path|tag|prefix)`; empty ≠ whole queue.

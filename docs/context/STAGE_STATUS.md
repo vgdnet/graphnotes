@@ -2,11 +2,28 @@
 
 Updated: 2026-09-21
 
-**Shipped this session (nord):** TZ **3.39** Obsidian-like graph settings
-on `#/graph` (cog: Tags, Orphans, groups + color, display sliders, force
-sliders). Browser `localStorage` `graphnotes-graph-settings`. Card aside
-local graph has no panel. Not production; rhizome-test overlay pending
-this same delivery.
+**Shipped this session (nord):** knowledge merge-out **gone** (no
+`create_branch` / `merge_branch` / `commit_markdown` / `reconcile_proposals`;
+`GitHubAppClient` cannot talk to GitHub). Approve/reject/rollback write
+`shared_notes` + proposal rows. Native C++ **wikidiff2** helper in the
+backend image (pinned Wikimedia 1.14.2 + CLI); PHP only off that path.
+Grants already in tree and on `rhizome-test` (`access_grants`, Admin
+«Доступы», empty ≠ whole queue) — not rewritten. Always-applied Cursor
+rule `.cursor/rules/technical-canon.mdc`. GitHub remains source-code
+delivery (ADR-006). Live plugin is `obsidian-card-merge/`. Not production.
+
+**Previous overlay on rhizome-test (TZ 3.40):** graph settings
+panel chrome as Obsidian (folds, switches, slider numbers, round color,
+«Запустить анимацию») on `http://172.16.13.14:8080/#/graph`. Overlay
+frontend only. Not production.
+
+**Also on rhizome-test:** TZ **3.39** Obsidian-like
+graph settings on `#/graph`
+(`http://172.16.13.14:8080/#/graph`). Cog: Filters (Теги, Объекты без
+связей), groups (query + color), display (arrows, text fade, node size,
+link thickness), forces (center, repel, link, distance). Prefs in
+`localStorage` `graphnotes-graph-settings`. Card aside local graph has no
+panel. Overlay deploy frontend only. Not production.
 
 **Previously on rhizome-test:** TZ **3.38** cabinet
 `#/user` has **no** personal-git connect
@@ -149,8 +166,8 @@ from personal Differ) /
 3.05 (one canon for all agents; leftover runtime is
 unfinished code, not a second spec) /
 3.03 (editor accept engine is wikidiff2; ADR-018
-amendment: native C++ helper; `php-cli` in the image is unfinished
-code, not an alternate canon) /
+amendment: native C++ helper shipped 2026-09-21; `php-cli` /
+`php-wikidiff2` leave this path only) /
 3.02 (Wikipedia-style two-column table; Differ author list stays path checkboxes) /
 3.01 leftover withdrawn by 3.11 (Differ is chrome tab `#/differ` again) /
 3.00 (no «Мой граф» / `/my_graph`; `/graph` defaults to
@@ -525,10 +542,9 @@ TZ 2.5–2.7 on this branch (not merged to main; production
   Differ is an offer under the stack, not the landing. Semantic compare
   later + ADR; author Differ line-by-line UX is still open. TZ 3.02–3.03
   closed Wikipedia-style line compare for **editor accept** only; the
-  engine is wikidiff2 C++ (ADR-018 amendment), not `difflib`. Owner
-  2026-09-12: compile pinned `src/lib` as a native helper; `php-cli`
-  / `php-wikidiff2` in the image is unfinished code, not an alternate
-  canon.
+  engine is wikidiff2 C++ (ADR-018 amendment), not `difflib`. Native
+  helper shipped 2026-09-21 (pinned 1.14.2); `php-cli` / `php-wikidiff2`
+  leave the editor-diff path only.
 - TZ 2.55: one `/card/{path}` router; no layer folders. Own note is
   editable, published is not. Hash `personal:` is transitional.
 - TZ 2.54: `[[wikilink]]` inherits the open card layer (personal stays
@@ -569,8 +585,8 @@ TZ 2.5–2.7 on this branch (not merged to main; production
   **3.37**): leftover git copy `.md` into
   `personal_uploads` / `shared_notes`; Differ and cards read the copies;
   disconnect keeps the personal store; search/graph still use `note_index`.
-  Leftover: personal git bind API (no copy-in); unused merge-out
-  (`reconcile_proposals` / `merge_branch`). Closed this wave: GET Differ /
+  Leftover: personal git bind API is 410. Knowledge merge-out
+  (`reconcile_proposals` / `merge_branch`) is **deleted**. Closed this wave: GET Differ /
   repository status / graph / search / cards / comments / contributions /
   `POST /proposals` / `POST /index/rebuild` / webhook live disk / poller
   do not copy-in or live-pull GitHub. Admin «Подключить общую ризому» gone.
@@ -621,10 +637,9 @@ TZ 2.5–2.7 on this branch (not merged to main; production
 - leftover: Card Merge leftover vs 3.11 (`OpenMergeModal` / command
   «Сравнить и слить карточку» / `GET /api/differ`) — other agents own
   the plugin; do not treat site `#/differ` leftover as still open;
-- leftover: TZ **3.26** one plugin is canon (3.09 withdrawn); two
-  catalogs `obsidian-plugin/` + `obsidian-card-merge/` until one package
-  ships — unfinished code, not a second spec; this session did not
-  merge packages;
+- leftover: TZ **3.26** one plugin is canon (3.09 withdrawn); runtime
+  is `obsidian-card-merge/`; `obsidian-plugin/` leftover — do not merge
+  trees;
 - leftover: TZ 3.24 per-card display API + card rights accepted as
   canon; not implemented; **needs ADR: one plugin supersedes 3.09;
   per-card rights + display API**;
@@ -640,9 +655,10 @@ TZ 2.5–2.7 on this branch (not merged to main; production
   the first approved rhizome production deploy**; not this branch; SQL
   `/search` until then; §6.5.3 questions 1–9 unanswered; do not add ES
   to Compose;
-- leftover: native wikidiff2 C++ helper not built; `php-cli` /
-  `php-wikidiff2` in the image is unfinished code, not an alternate
-  canon (TZ 3.03 / 3.05 / ADR-018);
+- leftover: ADR-003 / ADR-007 / ADR-008 / ADR-009 vs TZ **3.37**
+  (superseded/leftover; GitHub is ADR-006 source delivery only);
+- leftover: native wikidiff2 C++ helper **shipped** 2026-09-21; PHP
+  is not the install path (TZ 3.03 / 3.05 / ADR-018);
 - leftover: Bearer calls on `/differ` and `/proposals` do not append
   `integration_token_access` (only `/integrations/obsidian/v1` does);
   `/differ` and `/proposals` errors stay `{detail}`, not the v1

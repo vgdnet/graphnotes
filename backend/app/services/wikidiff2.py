@@ -9,7 +9,7 @@ from pathlib import Path
 
 from app.core.config import settings
 
-HELPER = Path(__file__).with_name("wikidiff2_table.php")
+_SIBLING_HELPER = Path(__file__).with_name("graphnotes-wikidiff2")
 
 
 class Wikidiff2Error(Exception):
@@ -171,12 +171,25 @@ def rows_from_table(html: str) -> list[dict[str, str]]:
     return parser.rows
 
 
+def helper_path() -> Path:
+    configured = Path(settings.wikidiff2_helper)
+    if configured.is_file():
+        return configured
+    if _SIBLING_HELPER.is_file():
+        return _SIBLING_HELPER
+    return configured
+
+
 def available() -> bool:
+    path = helper_path()
+    if not path.is_file():
+        return False
     try:
         completed = subprocess.run(
-            [settings.wikidiff2_php, "-r", "exit(function_exists('wikidiff2_do_diff') ? 0 : 1);"],
+            [str(path), "--version"],
             check=False,
             timeout=5,
+            capture_output=True,
         )
     except (OSError, subprocess.TimeoutExpired):
         return False
@@ -184,7 +197,8 @@ def available() -> bool:
 
 
 def table_diff(before: str, after: str) -> WikiDiffResult:
-    if not HELPER.is_file():
+    path = helper_path()
+    if not path.is_file():
         raise Wikidiff2Error("wikidiff2 helper is missing")
     payload = json.dumps(
         {"before": before.replace("\r\n", "\n").replace("\r", "\n"), "after": after.replace("\r\n", "\n").replace("\r", "\n")},
@@ -192,7 +206,7 @@ def table_diff(before: str, after: str) -> WikiDiffResult:
     ).encode("utf-8")
     try:
         completed = subprocess.run(
-            [settings.wikidiff2_php, str(HELPER)],
+            [str(path)],
             input=payload,
             capture_output=True,
             check=False,

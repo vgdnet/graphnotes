@@ -5,7 +5,9 @@
 AGENTS.md
 README_FIRST.md
 START_*.md
-.cursor/
+.cursor/*
+!.cursor/rules/
+!.cursor/rules/**/*.mdc
 docs/*
 !docs/deployment/
 !docs/product/
@@ -23,6 +25,8 @@ __pycache__/
 *.egg-info/
 dist/
 build/
+backend/app/services/graphnotes-wikidiff2
+.cache/
 node_modules/
 .pnpm-store/
 frontend/dist/

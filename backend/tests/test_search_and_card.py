@@ -228,7 +228,7 @@ async def test_search_overlay_excludes_unlinked_personal(
     assert "mine.md" in paths
 
     gone = await author.delete("/personal/connect")
-    assert gone.status_code == 200
+    assert gone.status_code == 410
     cleared = await author.get("/search", params={"q": "Alone", "layer": "personal"})
     assert f"personal:alone.md" in {item["path"] for item in cleared.json()["hits"]}
     graph_after = await author.get("/graph/personal")

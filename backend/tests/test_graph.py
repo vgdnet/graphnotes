@@ -122,7 +122,8 @@ async def test_personal_isolation_and_obsidian_sha_refresh(
     paths = {node["path"] for node in refreshed.json()["nodes"]}
     assert "from-obsidian.md" in paths
     status = await first.get("/repository/status")
-    assert status.json()["personal"]["index_status"] == "current"
+    assert status.status_code == 200
+    assert status.json()["personal"] is None
 
 
 async def test_graph_bounds_and_user_cannot_rebuild(

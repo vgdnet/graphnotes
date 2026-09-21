@@ -1,6 +1,9 @@
 # ADR-009 - Differ and Markdown circulation
 
-Status: Accepted
+Status: Leftover vs TZ **3.37** (owner 2026-09-21) for git-circulation
+wording. Living Differ is store path/hash (`personal_uploads` ↔
+`shared_notes`); ZIP of published shared is not the product path. Do not
+invent new ADR text here.
 Accepted: 2026-08-19
 Refines: ADR-008 (how Markdown moves between personal git and the shared rhizome)
 Supersedes in part: the ADR-008 user action «take selected shared notes into
