@@ -17,6 +17,7 @@ import {
   persistGraphSettings,
   stylesheetOptions,
   tagNodePath,
+  wheelSensitivityValue,
 } from "../test-out/graphSettings.js";
 
 const graphViewSrc = readFileSync(
@@ -25,6 +26,10 @@ const graphViewSrc = readFileSync(
 );
 const panelSrc = readFileSync(
   join(dirname(fileURLToPath(import.meta.url)), "../src/GraphSettingsPanel.tsx"),
+  "utf8",
+);
+const pixiSrc = readFileSync(
+  join(dirname(fileURLToPath(import.meta.url)), "../src/PixiGraphView.tsx"),
   "utf8",
 );
 
@@ -49,6 +54,7 @@ test("page graph has Obsidian-like settings panel, not a toolbar tag box", () =>
   assert.match(panelSrc, /Порог исчезания текста/);
   assert.match(panelSrc, /Размер узла/);
   assert.match(panelSrc, /Толщина линий/);
+  assert.match(panelSrc, /Скорость зума/);
   assert.match(panelSrc, /Сила притяжения/);
   assert.match(panelSrc, /Сила отталкивания/);
   assert.match(panelSrc, /Сила связи/);
@@ -58,6 +64,8 @@ test("page graph has Obsidian-like settings panel, not a toolbar tag box", () =>
   assert.match(panelSrc, /role="switch"/);
   assert.match(panelSrc, /Сбросить настройки/);
   assert.equal(graphViewSrc.includes('placeholder="тег"'), false);
+  assert.match(pixiSrc, /GraphSettingsPanel/);
+  assert.match(pixiSrc, /seedCircularLayout/);
 });
 
 test("orphans toggle hides isolated notes", () => {
@@ -108,6 +116,7 @@ test("parse and persist keep slider defaults and clamp junk", () => {
   assert.equal(parsed.arrows, true);
   assert.equal(parsed.textFade, 10);
   assert.equal(parsed.nodeSize, 0.4);
+  assert.equal(parsed.zoomSpeed, GRAPH_SETTINGS_DEFAULTS.zoomSpeed);
   assert.equal(parsed.centerForce, GRAPH_SETTINGS_DEFAULTS.centerForce);
   assert.equal(parsed.groups[0].color, "#e93147");
   assert.equal(parsed.groups[1].color, "#00ff00");
@@ -135,4 +144,7 @@ test("default display and forces match the previous fCoSE look", () => {
   const forces = forceLayoutOptions(GRAPH_SETTINGS_DEFAULTS);
   assert.equal(forces.nodeRepulsion, 4500);
   assert.equal(Math.round(forces.idealEdgeLength), 79);
+  assert.equal(GRAPH_SETTINGS_DEFAULTS.zoomSpeed, 2);
+  assert.equal(wheelSensitivityValue(1), 0.25);
+  assert.equal(wheelSensitivityValue(2), 0.5);
 });

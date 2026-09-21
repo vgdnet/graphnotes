@@ -1,7 +1,12 @@
-import { useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { GraphView } from "./GraphView";
 import type { FilterKind, GraphResponse } from "./GraphView";
+
+const PixiGraphView = lazy(async () => {
+  const mod = await import("./PixiGraphView");
+  return { default: mod.PixiGraphView };
+});
 import { InviteGraph, type InviteGraphPayload } from "./InviteGraph";
 import { graphRequestParams } from "./graphQuery";
 import { GraphDiffView } from "./GraphDiffView";
@@ -1882,6 +1887,9 @@ export function App() {
           <button className={view === "graph" ? "button button--quiet tab--active" : "button button--quiet"} type="button" onClick={() => backToGraph()}>
             Граф
           </button>
+          <button className={view === "graph_test" ? "button button--quiet tab--active" : "button button--quiet"} type="button" onClick={() => goHash(viewHash("graph_test"))}>
+            Тестовый граф
+          </button>
           {user?.role === "admin" && (
             <button className={view === "invites" ? "button button--quiet tab--active" : "button button--quiet"} type="button" onClick={() => goHash(viewHash("invites"))}>
               Инвайты
@@ -2788,6 +2796,22 @@ export function App() {
               <InviteGraph graph={inviteGraph} loading={inviteGraphLoading} />
             </section>
           )}
+          {view === "graph_test" && (
+            <section className="notes-panel notes-panel--graph" aria-labelledby="graph-test-heading">
+              <div>
+                <p className="eyebrow">Проба</p>
+                <h2 id="graph-test-heading">Тестовый граф</h2>
+                <p className="admin-panel__hint">
+                  Тот же индекс ризомы, другой холст: Pixi.js и d3-force. Канон остаётся
+                  вкладка «Граф» (Cytoscape / fCoSE). Клик по узлу открывает карточку.
+                </p>
+                {graphLoadError ? <p className="form-error" role="alert">{graphLoadError}</p> : null}
+              </div>
+              <Suspense fallback={<p className="admin-panel__hint">Загружаем холст…</p>}>
+                <PixiGraphView graph={sharedGraph} loading={graphLoading} />
+              </Suspense>
+            </section>
+          )}
           {view === "graph" && (
             <section className="notes-panel notes-panel--graph" aria-labelledby="graph-heading">
               <div>
@@ -2940,7 +2964,22 @@ export function App() {
           />
         )}
         {view === "about" && legalAboutPanel}
-        {view !== "card" && view !== "search" && view !== "about" && view !== "person" && view !== "invites" && !authOpen && (
+        {view === "graph_test" && !authOpen && (
+          <section className="notes-panel notes-panel--graph" aria-labelledby="public-graph-test-heading">
+            <div>
+              <p className="eyebrow">Проба</p>
+              <h2 id="public-graph-test-heading">Тестовый граф</h2>
+              <p className="admin-panel__hint">
+                Тот же публичный индекс, холст Pixi.js + d3-force. Канон — вкладка «Граф».
+              </p>
+              {graphLoadError ? <p className="form-error" role="alert">{graphLoadError}</p> : null}
+            </div>
+            <Suspense fallback={<p className="admin-panel__hint">Загружаем холст…</p>}>
+              <PixiGraphView graph={sharedGraph} loading={graphLoading} />
+            </Suspense>
+          </section>
+        )}
+        {view !== "card" && view !== "search" && view !== "about" && view !== "person" && view !== "invites" && view !== "graph_test" && !authOpen && (
           <section className="notes-panel notes-panel--graph" aria-labelledby="public-graph-heading">
             <div>
               <p className="eyebrow">Граф</p>

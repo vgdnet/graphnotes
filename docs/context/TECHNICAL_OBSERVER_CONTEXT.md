@@ -1,7 +1,8 @@
 # GraphNotes — канонический контекст Technical Observer
 
 Статус: ACTIVE
-Updated: 2026-09-22 (PRODUCT_SPEC **3.41**: `#/graph-test` Pixi+d3-force test
+Updated: 2026-09-22 (PRODUCT_SPEC **3.43**: `#/graph-test` shares `#/graph`
+settings cog + circular Obsidian seed. **3.41**: `#/graph-test` Pixi+d3-force test
 tab; canon `#/graph` Cytoscape. **3.40 accepted**: graph settings panel chrome as
 Obsidian. **3.39**: `#/graph` Obsidian-like
 settings cog, `localStorage` `graphnotes-graph-settings`. **3.38**: `#/user` has no personal-git
@@ -382,21 +383,28 @@ canonical clone of personal Markdown.
 Shared-graph UI uses **fCoSE** (`cytoscape-fcose`), not core `cose`. Layout
 coordinates remain UI-only. TZ **3.41** adds a **test** tab `#/graph-test`
 (`PixiGraphView.tsx`, `pixi.js` + `d3-force`) on the same Graph API; do not
-treat it as the rhizome canvas or drop Cytoscape. TZ **3.39** adds the Obsidian-like settings
+treat it as the rhizome canvas or drop Cytoscape. TZ **3.43** mounts the
+same `GraphSettingsPanel` there (`graphnotes-graph-settings`);
+`seedCircularLayout` + `forceRadial` / `forceCollide` keep the cloud in
+an Obsidian-like disk. TZ **3.39** adds the Obsidian-like settings
 panel on `#/graph` (`frontend/src/graphSettings.ts`, `GraphSettingsPanel.tsx`):
 tag nodes are synthesized client-side (`gn-tag:` ids; not Graph API);
 orphans hide `isolated` notes; groups paint `node[groupColor]`; display and
 forces feed `graphStylesheet` / `runFcoseLayout`. Aside local graph on a
 card keeps depth only. Prefs are browser-local. TZ **3.40** restyles that
 panel to Obsidian chrome (folds, `role=switch`, slider numbers, round
-swatch, restart-layout button).
+swatch, restart-layout button). TZ **3.42**: display slider `zoomSpeed`
+(default 2 → Cytoscape `wheelSensitivity` 0.5); live via renderer
+`wheelSensitivity`. On `#/graph-test` the same slider scales the Pixi
+wheel step.
 
 Landing `/` is `/graph` (TZ 2.14 / 2.58 / 3.00): rhizome by default; no
 «Мой граф» tab. Guests may read published shared card bodies (TZ 2.64);
 they must not receive personal, queue, feed or comments.
 Settings (TZ 2.13 / 2.58 / **3.38**) live at **`/user`** (email/contacts,
 author contract, Obsidian tokens, invite; **no** personal-git bind); not the public person card and not the
-graph home. Graph canvas prefs (TZ **3.39**) stay on `#/graph`, not `/user`.
+graph home. Graph canvas prefs (TZ **3.39** / **3.43**) stay on `#/graph` and
+`#/graph-test` (same `localStorage`), not `/user`.
 The shipped contract copy (TZ 2.44, version `2026-09-05`) is WTFPL for
 cards plus AGPL-3.0 for software; it lives in Settings → Договор автора,
 not on **О программе**. `#/about` shows rhizome copy (TZ **3.36**) plus

@@ -264,6 +264,15 @@ export function GraphSettingsPanel({
               step={0.05}
               onChange={(linkThickness) => onChange(patchSettings(settings, { linkThickness }))}
             />
+            <SliderRow
+              label="Скорость зума"
+              value={settings.zoomSpeed}
+              readout={`${settings.zoomSpeed.toFixed(1)}×`}
+              min={1}
+              max={4}
+              step={0.5}
+              onChange={(zoomSpeed) => onChange(patchSettings(settings, { zoomSpeed }))}
+            />
             <button className="graph-settings__wide" type="button" onClick={() => onRestartLayout?.()}>
               Запустить анимацию
             </button>

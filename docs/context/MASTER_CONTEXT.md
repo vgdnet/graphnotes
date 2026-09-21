@@ -2,7 +2,11 @@
 
 Updated: 2026-09-22
 Status: canonical architecture baseline
-Aligned with PRODUCT_SPEC **3.41** (test tab `#/graph-test`: Pixi.js +
+Aligned with PRODUCT_SPEC **3.43** (`#/graph-test` shares the `#/graph`
+settings cog and `localStorage`; circular/Obsidian disk seed) /
+**3.42** (`#/graph` wheel zoom 2× default;
+slider «Скорость зума» in display settings) /
+**3.41** (test tab `#/graph-test`: Pixi.js +
 d3-force on the same `GET /api/graph/*`; canon canvas stays Cytoscape
 `#/graph`; Vite/pnpm deps, not CDN) /
 **3.40** (`#/graph` settings panel chrome matches
@@ -435,7 +439,10 @@ sections, right-hand switches, numeric slider readouts, round color swatch,
 «Запустить анимацию» re-runs fCoSE, header reset/close. TZ **3.41**
 adds chrome tab `#/graph-test` (`view` `graph_test`): WebGL/canvas via
 Pixi.js, layout via `d3-force` (`forceManyBody` / `forceLink` /
-`forceCenter`). Payload is the **same** `sharedGraph` fetch as default
+`forceCenter` / `forceRadial` / `forceCollide`). TZ **3.43** mounts the
+same `GraphSettingsPanel` and `graphnotes-graph-settings` key; first
+paint and «Запустить анимацию» seed a sunflower disk around the canvas
+center. Payload is the **same** `sharedGraph` fetch as default
 `#/graph` (guest published index / signed-in shared page), not
 `GET /graph/personal`. Do not point this tab at a second index. Do not
 replace `#/graph`. The canvas has two views (TZ 2.51):
@@ -654,13 +661,20 @@ Technologies:
   dependencies, not a CDN. Same Graph JSON as the default `#/graph`
   load: `nodes[].path` → simulation id, `nodes[].title` → label,
   `edges[].source|target` → links. No new FastAPI route, no
-  `graph.json`. The tab is **not** the rhizome canvas: no 3.39/3.40
-  settings cog, no «весь / локальный», no «ваша часть / ваша личная
-  ризома» layer switch. Guest and session both get the chrome tab.
-  Click opens `/card/{path}` (tag/`locked:` nodes do not; unresolved
-  → hanging-card hash). Wheel zoom, pan, node drag, hover neighbors,
-  labels appear with zoom. Missing helper libraries must fail the
-  frontend build, not silently skip the tab.
+  `graph.json`. The tab is **not** the rhizome canvas: TZ **3.43**
+  shares the 3.39/3.40/3.42 settings cog (`GraphSettingsPanel`, same
+  `localStorage`); still no «весь / локальный», no «ваша часть / ваша
+  личная ризома» layer switch. Guest and session both get the chrome
+  tab. Click opens `/card/{path}` (tag/`locked:` nodes do not;
+  unresolved → hanging-card hash). Layout: sunflower disk +
+  `forceRadial` / `forceCollide` / `forceCenter`; charge, link
+  distance and strengths come from the shared sliders. Dark clear
+  `#1a1a1a`; idle links alpha 0.25. Wheel zoom (min/max, `zoomSpeed`),
+  pan, node drag (`fx`/`fy` + `alphaTarget(0.3)`), hover neighbors,
+  labels fade in with zoom or hover. Tick updates Pixi x/y only (no
+  new display objects). Missing
+  helper libraries must fail the frontend build, not silently skip the
+  tab.
 - GraphNotes Markdown preview on the card page; MDXEditor leftover until
   reverse download / reverse sync (TZ 2.93; was TZ 2.49 / 2.50)
 - Light/dark themes via CSS custom properties on `document.documentElement`

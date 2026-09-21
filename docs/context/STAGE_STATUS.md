@@ -2,16 +2,23 @@
 
 Updated: 2026-09-22
 
-**Shipped this session (nord):** TZ **3.41** tab **Тестовый граф**
-`#/graph-test` — product requirements in functional §6.5.1 / terms /
-acceptance; technical contract in MASTER (Pixi.js + d3-force, same
-`GET /api/graph/*`, no new API, no 3.39 cog on the test tab). Canon
-`#/graph` stays Cytoscape/fCoSE. Not deployed.
+**This overlay on rhizome-test:** TZ **3.43** `#/graph-test` uses the
+same settings cog as `#/graph` (one `localStorage`) and seeds nodes in
+a disk around the center like Obsidian. TZ **3.42** `#/graph` wheel
+zoom is 2× by default; display slider «Скорость зума» (1×–4×).
+TZ **3.41** tab **Тестовый граф**
+`#/graph-test` — Pixi.js + d3-force, same `GET /api/graph/*`. Canon
+`#/graph` stays Cytoscape/fCoSE.
+`http://172.16.13.14:8080/#/graph` and
+`http://172.16.13.14:8080/#/graph-test`. Frontend overlay only. Not
+production.
 
-**Accepted product TZ 3.40** (owner 2026-09-21) plus this **3.41** test
-tab (owner asked 2026-09-22). Ingest remains **3.37** plugin / no external git
-host. One canon: PRODUCT_SPEC **3.41** + MASTER_CONTEXT. Do not invent
-extra product. Do not treat Pixi as the rhizome canvas.
+**Accepted product TZ 3.40** (owner 2026-09-21) plus **3.41** test tab,
+**3.42** wheel zoom and **3.43** test-tab settings/circle (owner
+2026-09-22). Ingest remains **3.37**
+plugin / no external git host. One canon: PRODUCT_SPEC **3.43** +
+MASTER_CONTEXT. Do not invent extra product. Do not treat Pixi as the
+rhizome canvas.
 
 **This wave (TZ hygiene, not a product bump):** owner superseded
 ADR-003 / ADR-007 / ADR-008 / ADR-009 (and ADR-004 remains superseded

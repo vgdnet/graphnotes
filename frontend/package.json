@@ -7,17 +7,20 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit -p tsconfig.app.json && tsc --noEmit -p tsconfig.node.json && vite build",
-    "test": "tsc -p tsconfig.test.json && node --test test/card-route.test.mjs test/graph-query.test.mjs test/auth-mail.test.mjs test/admin-rights.test.mjs test/labels.test.mjs test/user-settings.test.mjs test/graph-settings.test.mjs",
+    "test": "tsc -p tsconfig.test.json && node --test test/card-route.test.mjs test/graph-query.test.mjs test/auth-mail.test.mjs test/admin-rights.test.mjs test/labels.test.mjs test/user-settings.test.mjs test/graph-settings.test.mjs test/pixi-graph.test.mjs",
     "preview": "vite preview"
   },
   "dependencies": {
     "@mdxeditor/editor": "^4.2.3",
     "cytoscape": "3.34.1",
     "cytoscape-fcose": "2.2.0",
+    "d3-force": "^3.0.0",
+    "pixi.js": "^8.21.0",
     "react": "latest",
     "react-dom": "latest"
   },
   "devDependencies": {
+    "@types/d3-force": "^3.0.10",
     "@types/react": "latest",
     "@types/react-dom": "latest",
     "@vitejs/plugin-react": "latest",

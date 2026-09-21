@@ -29,6 +29,8 @@ export type GraphSettings = {
   repelForce: number;
   linkForce: number;
   linkDistance: number;
+  /** Multiplier of the old Cytoscape 0.25 wheel step. Default 2 = twice as fast. */
+  zoomSpeed: number;
 };
 
 export type GraphElementNode = {
@@ -86,7 +88,14 @@ export const GRAPH_SETTINGS_DEFAULTS: GraphSettings = {
   repelForce: 40,
   linkForce: 45,
   linkDistance: 33,
+  zoomSpeed: 2,
 };
+
+export const WHEEL_SENSITIVITY_BASE = 0.25;
+
+export function wheelSensitivityValue(zoomSpeed: number): number {
+  return WHEEL_SENSITIVITY_BASE * clamp(zoomSpeed, 1, 4);
+}
 
 function clamp(value: number, min: number, max: number): number {
   if (!Number.isFinite(value)) return min;
@@ -146,6 +155,7 @@ export function parseGraphSettings(raw: unknown): GraphSettings {
     repelForce: value.repelForce == null ? GRAPH_SETTINGS_DEFAULTS.repelForce : clamp(Number(value.repelForce), 0, 100),
     linkForce: value.linkForce == null ? GRAPH_SETTINGS_DEFAULTS.linkForce : clamp(Number(value.linkForce), 0, 100),
     linkDistance: value.linkDistance == null ? GRAPH_SETTINGS_DEFAULTS.linkDistance : clamp(Number(value.linkDistance), 0, 100),
+    zoomSpeed: value.zoomSpeed == null ? GRAPH_SETTINGS_DEFAULTS.zoomSpeed : clamp(Number(value.zoomSpeed), 1, 4),
   };
 }
 

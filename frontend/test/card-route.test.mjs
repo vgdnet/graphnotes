@@ -23,6 +23,9 @@ test("empty #/card/ is legacy search; #/card is the start card", () => {
   assert.equal(routeToView(parseAppRoute("#/user")), "settings");
   assert.equal(routeToView(parseAppRoute("#/my_graph")), "graph");
   assert.equal(parseAppRoute("#/my_graph").kind, "graph");
+  assert.equal(routeToView(parseAppRoute("#/graph-test")), "graph_test");
+  assert.equal(parseAppRoute("#/graph-test").kind, "graph_test");
+  assert.equal(viewHash("graph_test"), "#/graph-test");
   assert.equal(routeToView(parseAppRoute("#/invites")), "invites");
   assert.equal(viewHash("invites"), "#/invites");
   assert.equal(routeToView(parseAppRoute("#/contribution")), "contribution");

@@ -3,6 +3,7 @@ import { parseAuthHash, type AuthMailPurpose } from "./authMail.js";
 
 export type ShellView =
   | "graph"
+  | "graph_test"
   | "invites"
   | "settings"
   | "queue"
@@ -17,6 +18,7 @@ export type ShellView =
 
 export type AppRoute =
   | { kind: "graph" }
+  | { kind: "graph_test" }
   | { kind: "invites" }
   | { kind: "search" }
   | { kind: "start_card" }
@@ -34,6 +36,7 @@ export type AppRoute =
 
 const VIEW_HASH: Record<Exclude<AppRoute["kind"], "card" | "start_card" | "auth" | "person" | "person_unknown">, string> = {
   graph: "#/graph",
+  graph_test: "#/graph-test",
   invites: "#/invites",
   search: "#/search",
   user: "#/user",
@@ -69,6 +72,7 @@ export function parseAppRoute(hash: string): AppRoute {
   const raw = hash.startsWith("#") ? hash.slice(1) : hash;
   const value = raw.startsWith("/") ? raw : `/${raw}`;
   if (value === "/" || value === "" || value === "/graph") return { kind: "graph" };
+  if (value === "/graph-test") return { kind: "graph_test" };
   if (value === "/my_graph") return { kind: "graph" };
   if (value === "/invites") return { kind: "invites" };
   if (value === "/search") return { kind: "search" };
@@ -97,6 +101,8 @@ export function parseAppRoute(hash: string): AppRoute {
 
 export function routeToView(route: AppRoute): ShellView {
   switch (route.kind) {
+    case "graph_test":
+      return "graph_test";
     case "invites":
       return "invites";
     case "search":

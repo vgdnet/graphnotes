@@ -17,6 +17,7 @@ import {
   isTagNodePath,
   loadGraphSettings,
   persistGraphSettings,
+  wheelSensitivityValue,
 } from "./graphSettings";
 import type { GraphSettings } from "./graphSettings";
 import { graphIndexStatusLabel } from "./labels";
@@ -54,6 +55,12 @@ export type GraphResponse = {
 };
 
 export type FilterKind = "all" | "unresolved" | "isolated" | "overlay" | "personal";
+
+function applyCyWheelSensitivity(cy: Core, zoomSpeed: number): void {
+  const value = wheelSensitivityValue(zoomSpeed);
+  const renderer = (cy as Core & { renderer?: () => { wheelSensitivity?: number } }).renderer?.();
+  if (renderer) renderer.wheelSensitivity = value;
+}
 
 function originLabel(origin: string | undefined, personalLayer: boolean): string {
   if (origin === "tag") return "тег";
@@ -194,7 +201,7 @@ export function GraphView({
       elements: [],
       minZoom: 0.15,
       maxZoom: 3,
-      wheelSensitivity: 0.25,
+      wheelSensitivity: wheelSensitivityValue(settingsRef.current.zoomSpeed),
       style: graphStylesheet(settingsRef.current),
     });
     cyRef.current = cy;
@@ -242,6 +249,12 @@ export function GraphView({
     if (!cy) return;
     cy.style().fromJson(graphStylesheet(settings)).update();
   }, [theme, settings.arrows, settings.textFade, settings.nodeSize, settings.linkThickness]);
+
+  useEffect(() => {
+    const cy = cyRef.current;
+    if (!cy) return;
+    applyCyWheelSensitivity(cy, settings.zoomSpeed);
+  }, [settings.zoomSpeed]);
 
   useEffect(() => {
     const cy = cyRef.current;
