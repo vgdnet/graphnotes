@@ -17,6 +17,7 @@ Technical architecture, runtime, stack, and technical TZ are one file:
   second spec.
 
 Knowledge has **no git**. Ingest is Obsidian → plugin → GraphNotes stores.
+GitHub `https://github.com/vgdnet/rhizome` is **private**, not ingest.
 GitHub is ADR-006 source-code delivery only. Editor text-diff is native C++
 wikidiff2 (PHP only off that path). Live plugin: `obsidian-card-merge/`.
 Grants: `access_grants` `(user, path|tag|prefix)`; empty ≠ whole queue.

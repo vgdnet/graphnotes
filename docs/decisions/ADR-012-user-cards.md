@@ -1,8 +1,9 @@
 # ADR-012 - In-app user cards
 
-Status: Accepted
+Status: Accepted (living). ADR-007 is superseded; same-UUID rule still
+lives in MASTER. Not a GitHub profile and not another person's git.
 Accepted: 2026-09-03
-Refines: ADR-007 (same UUID, not three people); ADR-010; ADR-011
+Refines: ADR-010; ADR-011
 
 ## Decision
 

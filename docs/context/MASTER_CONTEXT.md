@@ -64,8 +64,9 @@ Do not invent a third merge. TZ 3.09 withdrawn. Queue from API is an
 editor capability in the same client; without editor access the queue UI
 is off. Manual editor edit uses the same sync as a participant. Later the
 same plugin shows/hides capabilities from the API when access is not
-all cards, only granted cards — fits TZ 3.28 / 3.29 / **3.30**. Needs ADR: one plugin
-supersedes 3.09; grant API.
+all cards, only granted cards — fits TZ 3.28 / 3.29 / **3.30**. Grant API and one plugin live in this file
+(3.26 / 3.30); ADR-007 is superseded. OPEN next stage: grant-write to
+already-shared.
 3.25: two distinct operations after accept,
 not «Save & Resolve = POST shared». (1) **Always:** write the accepted
 file to the editor’s local vault; opening = that local note; if the
@@ -86,7 +87,8 @@ two-table copies leftover) /
 change kept; «editor account is the rhizome» withdrawn) /
 3.24 (narrowed by 3.30: not «rights live on the card»;
 four access classes incl. paid content maker; global RBAC stays the
-coarse gate; Differ stays the ungranted shared write gate; needs ADR) /
+coarse gate; Differ stays the ungranted shared write gate; grant model
+lives in this file, ADR-007 superseded) /
 3.22 (editor has two stores: own personal
 via Publisher, shared via queue/Card Merge; 2+ editors in parallel
 on different cards; no shared ZIP into vault; 3.25: two operations
@@ -110,7 +112,7 @@ other accept buttons stay off until Save & Resolve or cancel) /
 `notify_card_changes`; email+Telegram when on; event = inbound Differ) /
 3.13 (inbound Differ: watched published
 paths; `#/differ` can take shared updates into personal store;
-ADR-009 amendment pending) /
+ADR-009 superseded) /
 3.12 (Card Merge queue is metadata-only;
 accept-into-work caches both card sides; do not equate Save & Resolve
 with POST /proposals/{id}/resolve — TZ 3.25 two operations; that POST
@@ -130,9 +132,9 @@ do not merge trees again) /
 card body, decide buttons under each card still approve/reject/return the
 whole proposal) /
 3.06 leftover withdrawn by 3.11 (author plugin does not list Differ) /
-3.05 (one canon for all agents: product TZ,
-this file, accepted ADRs. Leftover runtime is unfinished code, not a
-second spec) /
+3.05 (one canon for all agents: PRODUCT_SPEC
+**3.40** + this file; living ADRs in §0, not a stack. Leftover runtime
+is unfinished code, not a second spec) /
 3.03 (editor queue text diff is MediaWiki
 **wikidiff2** table HTML, ADR-018; not `difflib`. Wikipedia two-column
 layout. Author Differ stays a path-checkbox list.
@@ -318,8 +320,8 @@ Working copies of **published shared** Markdown live in `shared_notes`
 is not a write path that bypasses Differ. Personal hosted Markdown
 (plugin) is the product default (TZ 2.61 / **3.35** / **3.37**; 2.62–2.63
 leftover).
-ADR-008 leftover: «no hosted vault» does not forbid
-that store; «no in-app Obsidian» forbids a second Obsidian-class editor;
+ADR-008 is **superseded**. Hosted personal store is canon (plugin).
+«No in-app Obsidian» still forbids a second Obsidian-class editor;
 TZ 2.93 also keeps the thin website editor off until reverse sync.
 Differ is a two-store compare (TZ 3.11 / **3.13**): UI is chrome tab
 `#/differ` (outbound propose; inbound accept into personal for watched
@@ -469,8 +471,8 @@ pending unused invites) lives **only** on that invite tab (`POST /api/invites`,
 send form. Required unique email, optional phone/Telegram contacts (not login)
 and author contract — not the public person card. Leftover
 `POST`/`DELETE /api/personal/connect` is HTTP 410 and is not mounted in the cabinet.
-ZIP download of published shared is removed (TZ 2.5; ADR-009 amendment
-2026-09-11). **Rhizome access
+ZIP download of published shared is removed (TZ 2.5; ADR-009
+**superseded**). **Rhizome access
 levels** (ADR-016 / TZ 2.31, UX 2.41): a paid level is a closed slice of
 content, not a «потребитель» role. Closed Markdown stays in the author's
 personal store (local copy; path/frontmatter mark); PostgreSQL holds a derived flag
@@ -483,9 +485,10 @@ This file is the canonical handoff context for GraphNotes across ChatGPT/Codex s
 
 **One canon for all agents (TZ 3.05).** Product editor, technical editor,
 code writer, observers, and Codex/Cursor agents read the same truth:
-`docs/product/PRODUCT_SPEC.md`, this file, and accepted
-`docs/decisions/ADR-*.md`. No second Markdown canon, no chat residue as
-spec, no per-agent private TZ. If code and TZ diverge, stop. Leftover
+`docs/product/PRODUCT_SPEC.md` **3.40** (what) and **this file** (how).
+Chat is not spec. Do **not** read the `docs/decisions/` pile as a second
+Markdown canon. Living vs superseded ADR one-liners: §0 below and
+`docs/decisions/README.md`. If code and TZ diverge, stop. Leftover
 runtime is unfinished code, not a second spec. Leftover: `AGENTS.md` is
 gitignored, so clones of the source remote do not carry it; do not treat that hole as
 a second brief.
@@ -502,8 +505,39 @@ second shipped package. Do not invent a third merge.
 
 The canonical product requirements are maintained in
 `docs/product/PRODUCT_SPEC.md`. This file defines the accepted architecture that
-implements those requirements. Cross-cutting decisions and rationale are stored
-in `docs/decisions/ADR-*.md`.
+implements those requirements. Living ADRs are indexed in §0; superseded
+files are history.
+
+## 0. ADR index (not a second spec)
+
+Agents open **two** living files. Do not stack every `ADR-*.md`.
+
+**Living** (still true):
+
+- ADR-001 — Markdown is knowledge source of truth; graph derived; no `graph.json`
+- ADR-002 — MVP auth is local username/password; Telegram IdP later on the same UUID
+- ADR-005 — software AGPL-3.0 (`LICENSE`); card content to shared is WTFPL (TZ 2.44)
+- ADR-006 — GitHub is **source-code delivery only** (repo private; `nord → GitHub → rhizome-test → rhizome`); production git read-only
+- ADR-010 — author contract flag on the UUID; not a fourth RBAC role
+- ADR-011 — closed corpus stays in the author's personal store; derived `closed_paths`; not a second canon in PostgreSQL
+- ADR-012 — in-app person card `#/users/{login}`; no public UUID
+- ADR-013 — `rhizome_events` provenance, no bodies
+- ADR-014 — commenter is not a fourth RBAC role
+- ADR-015 — Elasticsearch only after first approved `rhizome` production deploy; SQL `/search` until then; not in Compose now
+- ADR-016 — rhizome access levels = closed slice, not a consumer role; no second knowledge repo
+- ADR-017 — installation SMTP for confirm / login-by-mail / reset; not a replacement IdP
+- ADR-018 — editor `/queue` text diff is native C++ wikidiff2; not `difflib`; **not PHP as the engine**
+
+**Superseded** (keep the files; do not treat as ingest / git-disk / ZIP / «editor account is the rhizome»):
+
+- ADR-003 — GitHub as knowledge git engine
+- ADR-004 — environment/delivery (living successor: ADR-006)
+- ADR-007 — single rhizome + global RBAC *as git-merge architecture* (still-true one-rhizome / `user < editor < admin` / no workspaces live in this file and PRODUCT_SPEC)
+- ADR-008 — personal = git remote / ZIP of shared / no hosted store (Obsidian authoring remains)
+- ADR-009 — git circulation + ZIP of published shared (living Differ is store path/hash)
+
+Do not invent grant-write-to-already-shared this wave (OPEN, next stage).
+Do not wipe the personal store.
 
 ## 1. Product
 GraphNotes is a Markdown publisher with access rights and exactly one shared
@@ -518,9 +552,8 @@ shared rhizome as a graph in the app (read-only Markdown, cards). It does
 Differ outbound is **local personal copy** → published shared (propose).
 TZ 3.13 adds inbound **published shared → personal store** only for paths
 this author already got accepted. Editors still merge selected outbound
-differences into shared. See ADR-008 leftover (git authoring withdrawn;
-Obsidian remains), ADR-009, PRODUCT_SPEC
-**3.37** / 3.13 / **3.24**.
+differences into shared. ADR-008 / ADR-009 are **superseded**; living
+circulation is this file + PRODUCT_SPEC **3.40** / 3.13 / **3.24**.
 
 Core data flow:
 
@@ -576,8 +609,8 @@ is HTTP 410 (no GitHub App). Knowledge merge-out is **gone**: no
 Approve/reject/rollback write `shared_notes` and proposal rows. GitHub is
 **source-code delivery only** (ADR-006). Knowledge App credentials are
 not required to run the stack. ADR-003 / ADR-007 / ADR-008 / ADR-009 are
-leftover vs TZ **3.37** — living product is **3.40** + this file
-(ingest still 3.37); do not treat those ADRs as ingest canon.
+**superseded** (owner 2026-09-21) — living product is **3.40** + this file
+(ingest still 3.37). Do not read those files as ingest canon.
 
 Technologies:
 - FastAPI / Python
@@ -630,9 +663,8 @@ and reindexes `shared_notes`. `#/user` does **not** show «Свой git» (TZ **
 Do not add MinIO/S3/Gitea. Pull Request pages, branch names and SHAs are
 not shown in the product UI.
 
-ADR-003 / git-part of ADR-008 / ADR-009 git-circulation wording:
-leftover vs TZ **3.37**. Obsidian authoring remains. GitHub stays
-ADR-006 source delivery.
+ADR-003 / ADR-008 / ADR-009 are **superseded**. Obsidian authoring
+remains. GitHub stays ADR-006 source delivery.
 
 GraphNotes should handle:
 - application users and permissions
@@ -695,8 +727,8 @@ GraphNotes should handle:
   reversal is its own edge change, not add+remove
 
 Do not expose ZIP download or clone-the-corpus as product UX.
-Shared knowledge git in the leftover stack is a backend merge source, not a
-user take-away and not the user's disk (TZ 2.61).
+Leftover git in the image is unfinished code, not a user take-away and
+not the user's disk (TZ 2.61 / **3.37**).
 
 Do not build a custom Git/version/3-way-merge engine for the MVP.
 Do not replace writing on GraphNotes with a second Obsidian (live preview,
@@ -711,7 +743,7 @@ Initial product store concept:
 ```text
 GraphNotes personal store             = always the working copy (TZ 2.62)
 GraphNotes shared store               = working copy of published rhizome (TZ 2.63)
-git / later Dropbox / Google Drive    = connectors that copy .md into those stores
+git / later Dropbox / Google Drive    = leftover connectors, not ingest canon
 shared knowledge repo                 = gone; accept writes shared_notes
 .md / ZIP upload                      = copy into the same local personal store
 Obsidian plugin API + GraphNotes Publisher = copy vault edits after save into that store (TZ 2.68–2.82)
@@ -739,10 +771,9 @@ Stage 2 delivered:
 - email can still be used as contact data when SMTP is off (treated as
   confirmed at registration)
 - author status (ADR-010): `is_author` plus contract version and
-  accepted/withdrawn timestamps; contributing (personal git connect, upload
-  as contribution, Obsidian plugin write to the personal store, Differ, propose)
-  requires an accepted contract; editor
-  review and admin user management do not
+  accepted/withdrawn timestamps; contributing (Obsidian plugin write to
+  the personal store, Differ, propose; leftover upload) requires an
+  accepted contract; editor review and admin user management do not
 
 Telegram as an **identity provider** remains future scope, linked to the
 existing internal user UUID (ADR-002). TZ 2.40 adds Telegram only as an
@@ -795,12 +826,13 @@ vault → the same shared file. Do not collapse the vault with the rhizome.
 Do not collapse ungranted drafts.
 Four access classes unchanged. No workspaces/orgs.
 
-**Needs ADR: one plugin supersedes 3.09; grant API (3.28 / 3.29 / 3.30).**
-Whether ADR-007 is
-amended or superseded, how a paid maker differs from `user` vs
-`editor`, tag inheritance vs per-card override, and ADR-016 closed
-slice vs per-card ACL are open. Technical editor does not write that
-ADR. TZ **3.26**: one plugin is canon, not an intended-later client.
+Owner 2026-09-21: ADR-007 is **superseded**; still-true one-rhizome /
+global RBAC live in this file. Grant API (3.28 / 3.29 / 3.30) and one
+plugin (3.26) live here — not a second ADR this wave. OPEN (next stage,
+not this wave): grant-write to already-shared cards; how a paid maker
+differs from `user` vs `editor`; tag inheritance vs per-card override;
+ADR-016 closed slice vs grant. TZ **3.26**: one plugin is canon, not an
+intended-later client.
 Queue from API is an editor capability in the same client; without
 editor access the queue UI is off. Two catalogs are leftover runtime
 until one package ships; do not treat the leftover folders as a second
@@ -819,13 +851,13 @@ second op if local ≠ shared; 504 does not undo the vault. A leftover
 POST-then-vault path would be unfinished code, not a second spec. Do not
 remount the website Markdown editor.
 
-All shared writes remain audited Markdown/Git changes followed by revisioned
-re-indexing. Editors/admins cannot approve their own proposals. There are no
-workspace, organization, team or multi-shared-rhizome entities. See ADR-007
-and ADR-008.
+All shared writes remain audited Markdown store changes followed by
+revisioned re-indexing. Editors/admins cannot approve their own proposals.
+There are no workspace, organization, team or multi-shared-rhizome entities
+(one shared rhizome per install; global `user < editor < admin`).
 
-Personal knowledge is the user's git **or** unpublished uploads owned by that
-UUID. It is not a second published vault. GraphNotes does not give the
+Personal knowledge is unpublished drafts in the owner's GraphNotes store
+(plugin). It is not a second published vault. GraphNotes does not give the
 published shared corpus out as files. Reading shared is in-app (graph, card,
 Markdown). Proposing requires an accepted author contract (ADR-010).
 Editorial merge requires an editor/admin account; self-approval remains
@@ -908,10 +940,12 @@ nord
               -> rhizome
 ```
 
-The canonical source repository is `https://github.com/vgdnet/graphnotes`
-(owner 2026-09-21: **not a public product**; visibility private).
-ADR-006 delivery still uses that repo. `rhizome-test` must fetch with
-authenticated Git (SSH deploy key / token), not anonymous HTTPS.
+Owner 2026-09-21: GitHub **`https://github.com/vgdnet/rhizome`** is
+**private**. Not a public product, not knowledge ingest. Do not confuse
+with production host `rhizome`. `nord` `origin` for this tree is still
+`git@github.com:vgdnet/graphnotes.git` until the owner retargets.
+`rhizome-test` must fetch the source remote with authenticated Git
+(SSH deploy key / token), not anonymous HTTPS.
 
 Git is the primary delivery mechanism. SSH/rsync is a fallback or bootstrap mechanism only. `nord` owns source authoring and write operations on that remote. `rhizome-test` is the development-runtime and test environment; it normally consumes candidate revisions read-only and is never canonical source. `rhizome` is production. Its Git access must be read-only, with no credentials capable of push, and it receives only commits or tags approved on `rhizome-test`. Every new feature revision must pass the applicable integration, deployment and migration checks on `rhizome-test` before the same approved revision is deployed to `rhizome`. Do not use `rhizome` for destructive experiments, first-run migrations or ad-hoc source edits. See `docs/decisions/ADR-006-production-git-readonly.md`.
 
@@ -920,7 +954,7 @@ Git is the primary delivery mechanism. SSH/rsync is a fallback or bootstrap mech
 - Stage 1 - Project Bootstrap - DONE
 - Stage 2 - Password Authentication - DONE
 - Stage 3 - historical git connector - DONE
-- Stage 4 - Take from shared / ZIP fallback - DONE (product path superseded by ADR-009)
+- Stage 4 - Take from shared / ZIP fallback - DONE (product path superseded; ZIP of published shared is not UX)
 - Stage 5 - Graph Engine - DONE
 - Stage 6 - Shared graph + personal overlay (links to shared) - DONE
 - Stage 7 - Differ, editor proposal queue / merge / rollback - DONE
@@ -930,8 +964,8 @@ Git is the primary delivery mechanism. SSH/rsync is a fallback or bootstrap mech
 
 ## 9. Stage branches
 Recommended source-code branch **names** stay historical so later stages do not
-rename remotes. Product meaning of Stages 4, 6, 7 and 8 is ADR-008 and ADR-009,
-not the old branch titles.
+rename remotes. Product meaning of Stages 4, 6, 7 and 8 is PRODUCT_SPEC
+**3.40** + this file, not superseded ADR-008 / ADR-009.
 
 ```text
 main

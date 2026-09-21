@@ -1,8 +1,9 @@
 # ADR-014 - Commenter is not a fourth RBAC role
 
-Status: Accepted
+Status: Accepted (living). ADR-007 is superseded; roles still
+`user < editor < admin` in MASTER.
 Accepted: 2026-09-03
-Refines: ADR-007 (roles stay `user < editor < admin`); ADR-010
+Refines: ADR-010
 
 ## Decision
 

@@ -1,6 +1,8 @@
 # ADR-002 - Password authentication for MVP
 
-Status: Accepted
+Status: Accepted (living). SMTP mail-login (ADR-017) is additional, not
+a replacement IdP. Full auth chrome is PRODUCT_SPEC **3.40** +
+MASTER_CONTEXT.
 
 ## Decision
 The MVP uses GraphNotes-owned username/password authentication.

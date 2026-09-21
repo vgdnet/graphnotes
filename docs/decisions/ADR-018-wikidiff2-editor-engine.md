@@ -1,9 +1,10 @@
 # ADR-018 - wikidiff2 is the editor text-diff engine
 
-Status: Accepted
+Status: Accepted (living). Native C++ helper; **not PHP as the engine**.
+ADR-009 (path list / circulation) is superseded; living Differ is
+PRODUCT_SPEC **3.40** + MASTER_CONTEXT. This ADR still names the
+`/queue` text-diff engine.
 Accepted: 2026-09-12
-Refines: ADR-009 (Differ chooses paths; this ADR names the engine that
-shows the chosen text to an editor)
 
 ## Context
 

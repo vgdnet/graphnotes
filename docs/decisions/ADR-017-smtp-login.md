@@ -1,6 +1,6 @@
 # ADR-017 - Installation SMTP for email confirmation and login
 
-Status: Accepted
+Status: Accepted (living).
 Accepted: 2026-09-05
 Updated: 2026-09-05 (TZ 2.40: password reset + queue notify channels)
 Refines: ADR-002 (password authentication remains; email is an additional

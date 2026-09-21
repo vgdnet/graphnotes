@@ -1,8 +1,14 @@
 # ADR-003 - GitHub as the knowledge Git engine
 
-Status: Superseded / leftover vs TZ **3.37** (owner 2026-09-21). Not living
-product. GitHub remains **source-code delivery only** (ADR-006:
-`nord → GitHub → rhizome-test`). Do not treat this file as ingest/merge canon.
+**Status: Superseded** (owner 2026-09-21). Not living canon. Do not read
+this file as ingest, store, or merge spec.
+
+Living product: `docs/product/PRODUCT_SPEC.md` **3.40** +
+`docs/context/MASTER_CONTEXT.md`. GitHub is **source-code delivery only**
+(ADR-006). Knowledge ingest is Obsidian →
+plugin → GraphNotes stores. GitHub **`https://github.com/vgdnet/rhizome`**
+is **private** (owner 2026-09-21): not ingest, not a public product.
+Index: `docs/decisions/README.md`.
 
 ## Decision
 Use GitHub rather than building/self-hosting a Git engine for the first product version.

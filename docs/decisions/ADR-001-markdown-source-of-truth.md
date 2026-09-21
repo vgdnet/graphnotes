@@ -1,6 +1,8 @@
 # ADR-001 - Markdown is the knowledge source of truth
 
-Status: Accepted
+Status: Accepted (living). Canon of *where* Markdown lives is
+PRODUCT_SPEC **3.40** + MASTER_CONTEXT (plugin stores), not the
+2026-09-11 git-location amendment below.
 
 ## Decision
 Canonical knowledge content is Markdown. Graph nodes/edges/indexes are derived from Markdown.

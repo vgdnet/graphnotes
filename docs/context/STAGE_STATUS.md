@@ -3,8 +3,16 @@
 Updated: 2026-09-21
 
 **Accepted product TZ 3.40** (owner 2026-09-21). Technical TZ last
-accepted is **3.40** (graph settings chrome as Obsidian). Ingest remains
-**3.37** plugin / no external git host. Do not invent extra product.
+accepted is **3.40**. Ingest remains **3.37** plugin / no external git
+host. One canon: PRODUCT_SPEC **3.40** + MASTER_CONTEXT. Do not invent
+extra product.
+
+**This wave (TZ hygiene, not a product bump):** owner superseded
+ADR-003 / ADR-007 / ADR-008 / ADR-009 (and ADR-004 remains superseded
+by ADR-006). Living ADRs: 001, 002, 005, 006, 010–018. Index:
+`docs/decisions/README.md` and MASTER §0. Agents read SPEC + MASTER,
+not the ADR pile. Do not invent grant-write-to-already-shared. Do not
+wipe the personal store. Do not deploy. Do not merge `main`.
 
 **This wave:** user cards always stay in `personal_uploads` (see graph,
 send edits). A card into the rhizome = proposal from that personal copy.
@@ -27,10 +35,11 @@ treat personal store rows as overlay dirt. Canonical compose:
 image so native C++ **wikidiff2** is in the running container. Not
 production.
 
-Owner: source remote is **not a public product**; `gh repo edit
-vgdnet/graphnotes --visibility private`. ADR-006 delivery still uses
-that repo; test fetch must be authenticated. Leftover this session if
-`gh` has no login: visibility not flipped until an operator token.
+Owner 2026-09-21: GitHub **`https://github.com/vgdnet/rhizome`** is
+**private** (not a public product, not ingest). Do not confuse with
+production host `rhizome`. `nord` origin is still
+`vgdnet/graphnotes` until retarget. Test fetch of a private source
+remote must be authenticated.
 
 **Previously shipped on nord:** knowledge merge-out **gone** (no
 `create_branch` / `merge_branch` / `commit_markdown` / `reconcile_proposals`;
@@ -270,10 +279,10 @@ Website in-app edit is **off** until reverse download / reverse sync
 TZ 2.54: `[[wikilink]]` inherits the open card layer (personal stays personal).
 Published shared working copies live in `shared_notes` (TZ 2.63 historical
 copy-in leftover; ingest is plugin, TZ **3.35** / **3.37**).
-Current implementation stage is Stage 8. ADR-009: Differ outbound is
+Current implementation stage is Stage 8. Differ outbound is
 personal → published shared; TZ 3.13 inbound is shipped on `#/differ`
-(`GET /api/differ` + `POST /differ/inbound/{path}/accept`). ADR-009
-amendment still pending.
+(`GET /api/differ` + `POST /differ/inbound/{path}/accept`). ADR-009 is
+**superseded** (living Differ is store path/hash in MASTER / SPEC 3.40).
 TZ 2.59 shipped the 2.58 sitemap in the hash UI: `/card` start card
 (Admin → Установка); `/card/{path}` card + stack 2.56; `/queue` editor
 queue; `/user` settings; `/offer` my proposals; `/graph` shared canvas;
@@ -671,11 +680,9 @@ TZ 2.5–2.7 on this branch (not merged to main; production
   is `obsidian-card-merge/`; `obsidian-plugin/` leftover — do not merge
   trees;
 - leftover: TZ 3.24 per-card display API + card rights accepted as
-  canon; not implemented; **needs ADR: one plugin supersedes 3.09;
-  per-card rights + display API**;
+  canon in MASTER (3.30 grant); **not** a new ADR this wave; ADR-007
+  is superseded;
   do not treat `GET /api/cards/{path}` as that model;
-- leftover: ADR-009 amendment for inbound Differ (code shipped; ADR
-  paperwork pending);
 - leftover: TZ 2.88 / §6.6.3 rhizome marks / topic suggestions remain
   site leftover (plugin later was withdrawn by 3.11 for authors);
 - leftover: rollback from card history (TZ 2.96) — store last 30
@@ -685,8 +692,10 @@ TZ 2.5–2.7 on this branch (not merged to main; production
   the first approved rhizome production deploy**; not this branch; SQL
   `/search` until then; §6.5.3 questions 1–9 unanswered; do not add ES
   to Compose;
-- leftover: ADR-003 / ADR-007 / ADR-008 / ADR-009 vs TZ **3.37**
-  (superseded/leftover; GitHub is ADR-006 source delivery only);
+- leftover: ADR-003 / ADR-007 / ADR-008 / ADR-009 **superseded**
+  2026-09-21 (owner); living product is PRODUCT_SPEC **3.40** +
+  MASTER_CONTEXT; GitHub is ADR-006 source delivery only;
+  index `docs/decisions/README.md`;
 - leftover: native wikidiff2 C++ helper **shipped** 2026-09-21; PHP
   is not the install path (TZ 3.03 / 3.05 / ADR-018);
 - leftover: Bearer calls on `/differ` and `/proposals` do not append

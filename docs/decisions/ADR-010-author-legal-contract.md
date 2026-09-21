@@ -1,10 +1,11 @@
 # ADR-010 - Author legal contract for contributing
 
-Status: Accepted
+Status: Accepted (living). Git-connect as a contributing act is leftover
+vs PRODUCT_SPEC **3.40** / MASTER_CONTEXT (plugin ingest). Author flag
+on the UUID remains. ADR-007 is superseded; RBAC still lives in MASTER.
 Accepted: 2026-09-03
 Owner decision: remaining TZ waves approved 2026-09-03
-Refines: ADR-002 (account remains username/password); ADR-007 (RBAC stays
-`user < editor < admin`; author is not a fourth role)
+Refines: ADR-002 (account remains username/password)
 
 ## Context
 

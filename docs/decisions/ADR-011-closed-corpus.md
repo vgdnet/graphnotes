@@ -1,10 +1,12 @@
 # ADR-011 - Closed corpus stays personal
 
-Status: Accepted
+Status: Accepted (living). Closed bodies live in the author's **personal
+store** (plugin); git-as-canon wording below is leftover vs PRODUCT_SPEC
+**3.40** / MASTER_CONTEXT. ADR-008 is superseded.
 Accepted: 2026-09-03
 Owner decision: remaining TZ waves approved 2026-09-03
-Refines: ADR-001 (Markdown/Git remains the closed-note canon); ADR-008;
-ADR-010 (only an author can mark a path closed)
+Refines: ADR-001 (Markdown remains the closed-note canon); ADR-010 (only
+an author can mark a path closed)
 
 ## Context
 

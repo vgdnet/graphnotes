@@ -1,13 +1,17 @@
 # ADR-009 - Differ and Markdown circulation
 
-Status: Leftover vs TZ **3.37** (owner 2026-09-21) for git-circulation
-wording. Living Differ is store path/hash (`personal_uploads` ↔
-`shared_notes`); ZIP of published shared is not the product path. Do not
-invent new ADR text here.
+**Status: Superseded** (owner 2026-09-21). Not living canon. Do not read
+this file as circulation, ZIP, or git-Differ spec.
+
+Living product: `docs/product/PRODUCT_SPEC.md` **3.40** +
+`docs/context/MASTER_CONTEXT.md`. Still-true bits live there: Differ is
+personal store → published shared (plus TZ 3.13 inbound for watched
+paths); take-from-shared is gone; Graph Diff is the structural view.
+ZIP of published shared and git-circulation as canon — not product.
+Index: `docs/decisions/README.md`.
+
 Accepted: 2026-08-19
-Refines: ADR-008 (how Markdown moves between personal git and the shared rhizome)
-Supersedes in part: the ADR-008 user action «take selected shared notes into
-the user's git» as a GraphNotes write into personal git
+Historically refined ADR-008 (also superseded).
 
 ## Context
 

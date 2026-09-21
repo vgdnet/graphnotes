@@ -1,13 +1,17 @@
 # ADR-008 - Authoring in Git/Obsidian, GraphNotes as shared rhizome layer
 
-Status: Superseded / leftover vs TZ **3.37** (owner 2026-09-21). Git as
-personal remote / merge engine is not living product. Authors write in
-Obsidian; the plugin copies `.md`. GitHub is source delivery (ADR-006)
-only. Do not invent new ADR text here.
+**Status: Superseded** (owner 2026-09-21). Not living canon. Do not read
+this file as ingest, vault, or ZIP spec.
+
+Living product: `docs/product/PRODUCT_SPEC.md` **3.40** +
+`docs/context/MASTER_CONTEXT.md`. Still-true bits live there: authors
+write in Obsidian; the plugin copies `.md`; GraphNotes is not a second
+Obsidian (website editor off until reverse sync, TZ 2.93). Personal =
+remote git, «no hosted vault», ZIP of published shared — not canon.
+Index: `docs/decisions/README.md`.
+
 Accepted: 2026-08-19
-Refines: ADR-007 (personal rhizome location and ingest); ADR-003 (Git remains the merge engine)
-Partially superseded by: ADR-009 (Differ and ZIP download replace take-into-git);
-  TZ 2.61 / amendment 2026-09-11 (hosted personal store is the default; git XOR)
+Historically refined ADR-007 / ADR-003 (both superseded).
 
 ## Context
 

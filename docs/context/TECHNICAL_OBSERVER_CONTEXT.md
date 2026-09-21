@@ -53,8 +53,9 @@ editor edit = same sync as a participant. One live client
 leftover-not-built, not a second shipped package. Do not invent a
 third merge. Later the same plugin shows/hides
 capabilities from the API when access is not all cards, only
-specific cards — fits TZ 3.24 / 3.28 / 3.29 / **3.30**. Needs ADR: one plugin supersedes 3.09;
-per-card API grants. **3.25**: queue of **others’** edits; editorial
+specific cards — fits TZ 3.24 / 3.28 / 3.29 / **3.30**. Grant API and one
+plugin live in MASTER; ADR-007 is superseded. OPEN next stage:
+grant-write to already-shared. **3.25**: queue of **others’** edits; editorial
 gate; after each accepted file **two operations** — always local
 vault first; update the rhizome store from the editor’s account only
 if local ≠ store; open the **local** note. Not «Save & Resolve = POST
@@ -79,7 +80,7 @@ toggle «Получать уведомления об изменениях в к
 правили» — `notify_card_changes`; same SMTP/bot when on; event =
 inbound Differ. **3.13**: inbound Differ on `#/differ`
 for watched published paths; accept copies shared → personal store;
-ADR-009 amendment pending. **3.12**: Card Merge queue is
+ADR-009 superseded. **3.12**: Card Merge queue is
 metadata-only; one card in work (TZ 3.16); «Принять в работу» caches both card sides;
 do not equate Save & Resolve with `POST /proposals/{id}/resolve` (TZ 3.25). **3.18**: one accepted card; remaining files stay on the open proposal. **3.25** two operations: (1) always write the local vault first (open that note; accept unfinished if write fails); (2) update the rhizome store from the editor account only if local ≠ store (Differ write gate; skip if equal). Open the local note with `createLeafBySplit` / `getLeaf(true)` + `openFile` + `revealLeaf` only if the leaf is not MergeView (fallback `openLinkText(basename, path, true)`; never `getLeaf(false)` / `openFile` on MergeView), close MergeView only after the note is the active view — required UX; append each step to plugin `debug.log` (`time | STEP | OK/FAIL | detail`; command «Показать debug.log»); reload queue in place without stealing the markdown leaf; repeat resolve on a fully accepted proposal is success. **Shipped vs 3.25:** Card Merge writes the vault first, then may POST `/resolve` if local ≠ store — not a second spec. **3.11**: author outbound Differ is chrome
 tab `#/differ` — compare two stores and propose, not merge; plugin
@@ -90,7 +91,8 @@ two catalogs leftover until one package ships. **3.08**: `#/queue`
 accordion — one
 proposal, one card body, decide buttons under each card for the whole
 proposal. **3.06** leftover withdrawn by 3.11. **3.05**: one canon for all agents —
-this file is a working brief, not a second TZ. **3.03**: editor queue
+PRODUCT_SPEC **3.40** + MASTER_CONTEXT; this file is a working brief, not a
+second TZ. **3.03**: editor queue
 **wikidiff2**. Owner 2026-09-12 / ADR-018 amendment: compile the C++
 core as a native helper. **Shipped 2026-09-21:** pinned 1.14.2 + CLI in
 the backend image. `php-cli` / `php-wikidiff2` leave this path only.
@@ -136,9 +138,11 @@ GraphNotes. Его можно передать новому воркеру це�
 канонические документы проекта и не создаёт новых архитектурных решений.
 **Канон всегда один (ТЗ 3.05):** product editor, technical editor, code
 writer, наблюдатели и агенты Codex/Cursor читают одну истину —
-`PRODUCT_SPEC.md`, `MASTER_CONTEXT.md`, принятые ADR. Нет личного ТЗ у
-агента. Если код и ТЗ расходятся — остановиться; leftover runtime не
-второй канон.
+`PRODUCT_SPEC.md` **3.40** и `MASTER_CONTEXT.md`. Чат не спецификация.
+Living vs superseded ADR — индекс в MASTER §0 и
+`docs/decisions/README.md`. **Не читай superseded ADR как канон.** Нет
+личного ТЗ у агента. Если код и ТЗ расходятся — остановиться; leftover
+runtime не второй канон.
 
 ## 1. Роль
 
@@ -168,15 +172,17 @@ Technical Observer:
 
 Перед каждым аудитом прочитать полностью:
 
-1. `AGENTS.md` (leftover: gitignored — not on source-remote clones; TZ 3.05
-   canon is still `PRODUCT_SPEC` + `MASTER_CONTEXT` + ADRs);
-2. `docs/product/PRODUCT_SPEC.md`;
-3. `docs/context/MASTER_CONTEXT.md`;
-4. `docs/context/ENVIRONMENTS.md`;
-5. `docs/context/STAGE_STATUS.md`;
-6. все применимые `docs/decisions/ADR-*.md`;
-7. активный `docs/stages/STAGE<N>.md`;
-8. предыдущий `STAGE<N-1>_COMPLETED.md`, если он существует.
+1. `docs/product/PRODUCT_SPEC.md` **3.40**;
+2. `docs/context/MASTER_CONTEXT.md` (включая §0 ADR index);
+3. `docs/context/ENVIRONMENTS.md`;
+4. `docs/context/STAGE_STATUS.md`;
+5. активный `docs/stages/STAGE<N>.md`;
+6. предыдущий `STAGE<N-1>_COMPLETED.md`, если он существует.
+
+`AGENTS.md` leftover: gitignored — not on source-remote clones. Living
+ADRs — only those listed living in MASTER §0 / `docs/decisions/README.md`.
+Do **not** read superseded ADR-003 / 004 / 007 / 008 / 009 as canon.
+Do not stack every `docs/decisions/ADR-*.md`.
 
 Для маршрутизации требований между стадиями использовать производную матрицу
 `docs/stages/PRODUCT_TRACEABILITY.md`; при расхождении побеждает
@@ -189,8 +195,8 @@ Technical Observer:
 Приоритет определяется зоной ответственности документов:
 
 - `PRODUCT_SPEC.md` — продуктовые требования и границы MVP;
-- `MASTER_CONTEXT.md` — принятая архитектура;
-- ADR — решение, причины и последствия;
+- `MASTER_CONTEXT.md` — принятая архитектура (включая индекс living ADR);
+- living ADR — только те, что в MASTER §0; superseded — история;
 - `ENVIRONMENTS.md` — роли и ограничения сред;
 - `STAGE_STATUS.md` — фактическое состояние дорожной карты;
 - Stage-файл — исполнимый объём конкретной стадии;
@@ -254,7 +260,7 @@ Card Merge leftover-модалка / `GET /api/differ` — у агентов п�
 
 - exactly one shared rhizome per installation;
 - exactly one personal rhizome per user (GraphNotes local store; **plugin**
-  writes `.md` — TZ **3.35** / ADR-008 leftover git);
+  writes `.md` — TZ **3.35**; ADR-008 superseded);
 - no workspace/organization/team/community/multiple-shared entities;
 - published shared working copies live in `shared_notes` (TZ **3.35**;
   leftover git copy-in unfinished); Differ remains the write gate;
@@ -273,7 +279,8 @@ Card Merge leftover-модалка / `GET /api/differ` — у агентов п�
   only after «История правок» (`GET /api/cards/{path}/revisions`); do not
   fetch `/feed` or `/revisions` when opening the card;
   shared / others' personal / proposal stay read-only; do not ship a
-  vault-replacing second Obsidian; ADR-008 leftover «no hosted vault» vs TZ 2.61;
+  vault-replacing second Obsidian; ADR-008 is superseded (hosted store is
+  canon; GraphNotes is still not a second Obsidian);
 - app routes (TZ 2.58 / 2.60): `/card` start card (admin settings); `/card/{path}`
   card (2.55–2.56 stack + Differ offer); `/queue` editor queue; `/user`
   **settings** (not person card); `#/users/{login}` **public person card**
@@ -311,14 +318,14 @@ Card Merge leftover-модалка / `GET /api/differ` — у агентов п�
   → 404/403. Empty grant = no extra shared write. TZ **3.30** one shared
   file for a granted card; personal = ungranted drafts; vault = client.
   Two-table copies leftover. Do not treat
-  `GET /api/cards/{path}` of published shared as that grant. **Needs ADR: one plugin
-  supersedes 3.09; grant API.** Open: read-without-write for queue;
-  paid maker vs user/editor; editor-slice vs editor-author of card B;
-  ADR-016 slice vs grant; amend vs supersede ADR-007. TZ **3.26**: one plugin is
-  canon; queue from API is an editor capability in the same client;
-  two catalogs leftover until one package ships. Editor vault may hold
-  a local copy of accepted cards; GraphNotes stays the canonical shared
-  store;
+  `GET /api/cards/{path}` of published shared as that grant. Grant API
+  and one plugin live in MASTER (3.26 / 3.30); ADR-007 is **superseded**.
+  Open (next stage, not this wave): grant-write to already-shared;
+  read-without-write for queue; paid maker vs user/editor. TZ **3.26**:
+  one plugin is canon; queue from API is an editor capability in the same
+  client; two catalogs leftover until one package ships. Editor vault may
+  hold a local copy of accepted cards; GraphNotes stays the canonical
+  shared store;
 - rhizome **access levels** (ADR-016 / TZ 2.41) are not a fourth role:
   closed/paid slices stay in the author's personal store (hosted XOR git), marked in Markdown;
   derived `closed_paths` (later level id); entitlements UUID↔slice later;
@@ -338,7 +345,8 @@ switch, and recovery from merge/index failure.
 
 ### Circulation, Differ and Graph Diff
 
-ADR-009 is accepted. Markdown circulation is:
+ADR-009 is **superseded**. Living circulation (PRODUCT_SPEC **3.40** /
+MASTER_CONTEXT):
 
 ```text
 personal layer (plugin → personal_uploads) -> Differ -> selected proposal
@@ -629,7 +637,7 @@ deployment.
 - `PRODUCT_SPEC.md`;
 - разделов `Scope`, `Security requirements`, `Verification` и
   `Definition of Done` активного Stage;
-- принятых ADR;
+- living ADR из MASTER §0 (не стопка superseded);
 - требований среды и promotion gate.
 
 Минимальные колонки:

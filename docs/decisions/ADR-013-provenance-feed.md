@@ -1,8 +1,9 @@
 # ADR-013 - Provenance and rhizome-card feed
 
-Status: Accepted
+Status: Accepted (living). Note-text canon is GraphNotes stores
+(PRODUCT_SPEC **3.40** / MASTER_CONTEXT), not git. ADR-007 is superseded.
 Accepted: 2026-09-03
-Refines: ADR-001 (Git remains the text canon); ADR-007
+Refines: ADR-001 (Markdown remains the text canon)
 
 ## Decision
 

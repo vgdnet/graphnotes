@@ -1,6 +1,7 @@
 # ADR-006 - GitHub delivery and read-only production access
 
-Status: Accepted
+Status: Accepted (living). GitHub is **source-code delivery only**, not
+knowledge ingest. Repo visibility: private (owner 2026-09-21).
 
 ## Context
 GraphNotes needs a reproducible promotion path from development through
@@ -8,14 +9,15 @@ integration testing to the production environment. Deployment hosts must not
 become competing sources of truth, and compromise of the production host must
 not provide credentials capable of changing the canonical repository.
 
-The canonical source repository is:
+Owner 2026-09-21: GitHub **`https://github.com/vgdnet/rhizome`** is
+**private**. That is not a public product and **not** knowledge ingest
+(TZ 3.37). Do not confuse it with production host `rhizome`
+(`172.16.13.13`). Agents must not copy-in from that repo.
 
-`https://github.com/vgdnet/graphnotes`
-
-Owner 2026-09-21: the repo is **not a public product**. Visibility
-private; this ADR still uses that GitHub repo for source-code delivery
-only. `rhizome-test` consumes it read-only via **authenticated** fetch
-(SSH deploy key / token), not anonymous HTTPS.
+Source-code delivery (this ADR) on `nord` today is still
+`git@github.com:vgdnet/graphnotes.git` until the owner retargets
+`origin`. `rhizome-test` consumes the source remote read-only via
+**authenticated** fetch (SSH deploy key / token), not anonymous HTTPS.
 
 ## Decision
 The canonical delivery workflow is:

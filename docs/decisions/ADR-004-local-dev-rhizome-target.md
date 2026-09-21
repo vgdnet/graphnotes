@@ -1,6 +1,11 @@
 # ADR-004 - Local-first development, Rhizome as target
 
-Status: Superseded by ADR-006
+**Status: Superseded** by ADR-006 (delivery). Not living canon.
+
+Living product: `docs/product/PRODUCT_SPEC.md` **3.40** +
+`docs/context/MASTER_CONTEXT.md` (environments) + living ADR-006.
+Do not read this file as the environment/delivery spec.
+Index: `docs/decisions/README.md`.
 
 ## Decision
 Current code authoring happens on `nord` with Codex + VS Code. At the time of

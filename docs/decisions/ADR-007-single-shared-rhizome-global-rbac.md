@@ -1,11 +1,18 @@
 # ADR-007 - Single shared rhizome and global RBAC
 
-Status: Leftover vs TZ **3.37** (owner 2026-09-21). Not a second product
-canon. Living model is PRODUCT_SPEC last accepted **3.37** + MASTER_CONTEXT
-(one shared rhizome, global `user < editor < admin`). Do not invent new
-ADR text here.
+**Status: Superseded** (owner 2026-09-21). Not living canon. Do not read
+this file as RBAC, merge, or git-as-knowledge spec.
+
+Living product: `docs/product/PRODUCT_SPEC.md` **3.40** +
+`docs/context/MASTER_CONTEXT.md`. Still-true bits live there: one shared
+rhizome per install; one personal store per user; global
+`user < editor < admin`; no workspaces/orgs; no self-approval of
+proposals. Git-as-knowledge-disk and «editor account is the rhizome» are
+not canon. Grants are `access_grants` `(user, path|tag|prefix)`; empty ≠
+whole queue. Index: `docs/decisions/README.md`.
+
 Accepted: 2026-08-18
-Refined by: ADR-008 (personal rhizome is the user's Git remote; public read of shared knowledge)
+Historically refined by: ADR-008 (that file is also superseded)
 
 ## Context
 

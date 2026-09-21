@@ -138,14 +138,12 @@ nord
               -> rhizome
 ```
 
-Canonical source repository:
-`https://github.com/vgdnet/graphnotes`
-
-Owner 2026-09-21: this is **not a public product**. Visibility private;
-ADR-006 delivery still uses that repo. `rhizome-test` must clone/fetch
-with authenticated Git (SSH deploy key / token). Anonymous HTTPS fetch
-will fail once the repo is private. `nord` already uses
-`git@github.com:vgdnet/graphnotes.git`.
+Owner 2026-09-21: GitHub **`https://github.com/vgdnet/rhizome`** is
+**private**. Not a public product, not knowledge ingest. Do not confuse
+with production host `rhizome`. `nord` `origin` for this tree is still
+`git@github.com:vgdnet/graphnotes.git` until the owner retargets.
+`rhizome-test` must clone/fetch the source remote with authenticated Git
+(SSH deploy key / token). Anonymous HTTPS to a private repo fails.
 
 Git is the primary delivery mechanism. SSH/rsync is permitted only as a fallback
 or bootstrap mechanism when Git delivery is not yet available. A fallback copy

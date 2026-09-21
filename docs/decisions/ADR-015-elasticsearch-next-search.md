@@ -1,12 +1,13 @@
 # ADR-015 - Elasticsearch for the next search iteration
 
-Status: Accepted (scheduled after first approved rhizome production
-deploy; not this branch / not current MVP)
+Status: Accepted (living; scheduled after first approved rhizome
+production deploy; not this branch / not current MVP). Git/ADR-008
+wording below is leftover vs PRODUCT_SPEC **3.40** / MASTER_CONTEXT.
+Search replica stays derived from Markdown stores.
 Accepted: 2026-09-04
 Schedule confirmed: 2026-09-12 (TZ 2.83)
-Refines: ADR-001 (search is derived, Git/Markdown stays canon); ADR-008
-(no second note corpus); ADR-011 (closed bodies stay out of other people's
-search)
+Refines: ADR-001 (search is derived, Markdown stays canon); ADR-011
+(closed bodies stay out of other people's search)
 
 ## Context
 

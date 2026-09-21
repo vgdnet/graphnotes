@@ -1,10 +1,12 @@
 # ADR-016 — Rhizome access levels (not a paid-consumer role)
 
-Status: Accepted
+Status: Accepted (living). Personal-git storage wording below is leftover
+vs PRODUCT_SPEC **3.40** / MASTER_CONTEXT (plugin personal store). ADR-007
+is superseded; one shared rhizome and three RBAC roles still live in MASTER.
 Accepted: 2026-09-04
 Owner decision: canonical name «уровни доступа к ризоме»; paid level = closed
-slice that requires that level. Refines ADR-007 (one shared rhizome),
-ADR-011 (closed corpus stays personal), ADR-002 (RBAC stays three roles).
+slice that requires that level. Refines ADR-011 (closed corpus stays
+personal), ADR-002 (RBAC stays three roles).
 
 ## Context
 
