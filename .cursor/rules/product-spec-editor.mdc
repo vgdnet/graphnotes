@@ -17,7 +17,7 @@ delivery. A chat or prompt is not the spec. You still do not write application
 code; you do not edit `MASTER_CONTEXT.md` — tell technical-spec-editor.
 
 **One canon (TZ 3.05).** You write the same product TZ every agent reads
-(`PRODUCT_SPEC.md` **3.40**). Architecture is MASTER_CONTEXT. Living vs
+(`PRODUCT_SPEC.md` **3.41**). Architecture is MASTER_CONTEXT. Living vs
 superseded ADR: `docs/decisions/README.md` — do not treat superseded
 files as product canon. Do not keep a private product brief. If this
 file set and the code diverge, stop; leftover in the image is unfinished
@@ -26,7 +26,7 @@ code, not a second spec.
 Product requirements live in `PRODUCT_SPEC.md`. A global product change needs an explicit owner decision, then ADR + PRODUCT_SPEC + MASTER_CONTEXT together — you update PRODUCT_SPEC and stop; tell the owner the architecture file still needs the builder.
 
 Accepted product model: **TZ 3.35 / 3.37** ingest is Obsidian + plugin
-(owner 2026-09-21: last accepted product they named is **3.40**; ingest
+(last accepted product **3.41** `#/graph-test` probe; ingest **3.37**
 unchanged). Differ is store path/hash (`personal_uploads` ↔
 `shared_notes`); ZIP of published shared is not the product path.
 Not Wikipedia / MediaWiki as a product.

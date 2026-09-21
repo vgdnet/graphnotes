@@ -1,8 +1,11 @@
 # GraphNotes - MASTER CONTEXT
 
-Updated: 2026-09-21
+Updated: 2026-09-22
 Status: canonical architecture baseline
-Aligned with PRODUCT_SPEC **3.40** (`#/graph` settings panel chrome matches
+Aligned with PRODUCT_SPEC **3.41** (test tab `#/graph-test`: Pixi.js +
+d3-force on the same `GET /api/graph/*`; canon canvas stays Cytoscape
+`#/graph`; Vite/pnpm deps, not CDN) /
+**3.40** (`#/graph` settings panel chrome matches
 Obsidian: folds, switches, slider readouts, restart layout) /
 **3.39** (`#/graph` Obsidian-like graph
 settings: tags/orphans, groups, display, forces; browser `localStorage`) /
@@ -172,8 +175,11 @@ for guests and signed-in users (`store` counts + inviter; no foreign
 personal bodies). TZ 2.94: card history is **not** fetched
 with the card body. Button «История правок» loads `GET /api/cards/{path}/revisions`
 — last **30** snapshots + diff (TZ **3.34**: who **proposed** the edit,
-optional accepter, volume).
-Table `card_revisions` (Alembic `0021`); working copy stays in the store;
+optional accepter, volume). **Shipped 2026-09-21:** `actor_user_id` is the
+proposer (proposal author / grant writer); `accepter_user_id` is who
+accepted in the queue; list payload includes `proposer`, `accepter`,
+`lines_added`, `lines_removed`, `bytes`. Alembic `0021` + `0025`.
+Table `card_revisions` (Alembic `0021`, accepter `0025`); working copy stays in the store;
 this is not a second living canon. ADR-013 `rhizome_events` stay body-less
 for contribution counts; the card page does not auto-fetch `/feed`.
 TZ 2.93: the website Markdown editor is
@@ -426,7 +432,13 @@ repel, link elasticity, ideal length). Prefs: `localStorage`
 The card-page aside local graph does not open that panel. Gene-demo sliders
 are still not ported. TZ **3.40** matches Obsidian chrome: collapsible
 sections, right-hand switches, numeric slider readouts, round color swatch,
-«Запустить анимацию» re-runs fCoSE, header reset/close. The canvas has two views (TZ 2.51):
+«Запустить анимацию» re-runs fCoSE, header reset/close. TZ **3.41**
+adds chrome tab `#/graph-test` (`view` `graph_test`): WebGL/canvas via
+Pixi.js, layout via `d3-force` (`forceManyBody` / `forceLink` /
+`forceCenter`). Payload is the **same** `sharedGraph` fetch as default
+`#/graph` (guest published index / signed-in shared page), not
+`GET /graph/personal`. Do not point this tab at a second index. Do not
+replace `#/graph`. The canvas has two views (TZ 2.51):
 **весь граф** (bounded page) and **локальный граф** (`center` + `depth` 1–4,
 «Показать всё»). Overlay-only personal nodes keep `personal:{path}` as the
 local-graph center so the neighborhood is not the first shared page. Nested `.md` trees are indexed from
@@ -634,8 +646,21 @@ Technologies:
 - Alembic
 - Docker Engine + Docker Compose
 - Nginx on target host
-- Cytoscape.js plus `cytoscape-fcose` for the shared graph, personal overlay
-  and Graph Diff (layout coordinates are UI only)
+- Cytoscape.js plus `cytoscape-fcose` for the **canonical** shared graph
+  (`#/graph`), personal overlay and Graph Diff (layout coordinates are
+  UI only)
+- TZ **3.41** test canvas: `pixi.js` + `d3-force` on `#/graph-test`
+  (`frontend/src/PixiGraphView.tsx`, `pixiGraph.ts`). Vite/pnpm
+  dependencies, not a CDN. Same Graph JSON as the default `#/graph`
+  load: `nodes[].path` → simulation id, `nodes[].title` → label,
+  `edges[].source|target` → links. No new FastAPI route, no
+  `graph.json`. The tab is **not** the rhizome canvas: no 3.39/3.40
+  settings cog, no «весь / локальный», no «ваша часть / ваша личная
+  ризома» layer switch. Guest and session both get the chrome tab.
+  Click opens `/card/{path}` (tag/`locked:` nodes do not; unresolved
+  → hanging-card hash). Wheel zoom, pan, node drag, hover neighbors,
+  labels appear with zoom. Missing helper libraries must fail the
+  frontend build, not silently skip the tab.
 - GraphNotes Markdown preview on the card page; MDXEditor leftover until
   reverse download / reverse sync (TZ 2.93; was TZ 2.49 / 2.50)
 - Light/dark themes via CSS custom properties on `document.documentElement`

@@ -1,11 +1,17 @@
 # GraphNotes - Stage Status
 
-Updated: 2026-09-21
+Updated: 2026-09-22
 
-**Accepted product TZ 3.40** (owner 2026-09-21). Technical TZ last
-accepted is **3.40**. Ingest remains **3.37** plugin / no external git
-host. One canon: PRODUCT_SPEC **3.40** + MASTER_CONTEXT. Do not invent
-extra product.
+**Shipped this session (nord):** TZ **3.41** tab **Тестовый граф**
+`#/graph-test` — product requirements in functional §6.5.1 / terms /
+acceptance; technical contract in MASTER (Pixi.js + d3-force, same
+`GET /api/graph/*`, no new API, no 3.39 cog on the test tab). Canon
+`#/graph` stays Cytoscape/fCoSE. Not deployed.
+
+**Accepted product TZ 3.40** (owner 2026-09-21) plus this **3.41** test
+tab (owner asked 2026-09-22). Ingest remains **3.37** plugin / no external git
+host. One canon: PRODUCT_SPEC **3.41** + MASTER_CONTEXT. Do not invent
+extra product. Do not treat Pixi as the rhizome canvas.
 
 **This wave (TZ hygiene, not a product bump):** owner superseded
 ADR-003 / ADR-007 / ADR-008 / ADR-009 (and ADR-004 remains superseded
@@ -93,8 +99,10 @@ host; plugin writes the store) / **3.35** (plugin ingest; not Wikipedia
 as a product; leftover git host unfinished) is TZ-only, not this overlay.
 
 Product model TZ **3.34** (history + `/contribution`: who proposed which
-edit, volume; accepter is not the text author) is TZ-only, not this
-overlay.
+edit, volume; accepter is not the text author) **shipped** on this overlay
+2026-09-21: `GET /api/cards/{path}/revisions` names proposer, optional
+accepter, lines/bytes; `#/contribution` lists `edits[]` (path, volume,
+state). Alembic `0025`. Not production.
 
 **Also on rhizome-test:** TZ **3.32** Card Merge file-menu — show
 «Предложить в ризому» for `user` / unknown capabilities; hide only known

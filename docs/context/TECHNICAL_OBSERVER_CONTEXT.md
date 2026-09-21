@@ -1,7 +1,8 @@
 # GraphNotes — канонический контекст Technical Observer
 
 Статус: ACTIVE
-Updated: 2026-09-21 (PRODUCT_SPEC **3.40 accepted**: graph settings panel chrome as
+Updated: 2026-09-22 (PRODUCT_SPEC **3.41**: `#/graph-test` Pixi+d3-force test
+tab; canon `#/graph` Cytoscape. **3.40 accepted**: graph settings panel chrome as
 Obsidian. **3.39**: `#/graph` Obsidian-like
 settings cog, `localStorage` `graphnotes-graph-settings`. **3.38**: `#/user` has no personal-git
 connect; four tabs; leftover `/api/personal/connect` is HTTP 410. **3.37**: living canon does not name an
@@ -379,7 +380,9 @@ personal layer has nothing to offer. GraphNotes does not keep a second
 canonical clone of personal Markdown.
 
 Shared-graph UI uses **fCoSE** (`cytoscape-fcose`), not core `cose`. Layout
-coordinates remain UI-only. TZ **3.39** adds the Obsidian-like settings
+coordinates remain UI-only. TZ **3.41** adds a **test** tab `#/graph-test`
+(`PixiGraphView.tsx`, `pixi.js` + `d3-force`) on the same Graph API; do not
+treat it as the rhizome canvas or drop Cytoscape. TZ **3.39** adds the Obsidian-like settings
 panel on `#/graph` (`frontend/src/graphSettings.ts`, `GraphSettingsPanel.tsx`):
 tag nodes are synthesized client-side (`gn-tag:` ids; not Graph API);
 orphans hide `isolated` notes; groups paint `node[groupColor]`; display and
@@ -581,6 +584,8 @@ Observer проверяет diff на:
   the native wikidiff2 helper from the backend image without a 503
   (TZ 3.03 / ADR-018: native helper shipped 2026-09-21; `php-cli` /
   `php-wikidiff2` leave this path only);
+- treating `#/graph-test` (Pixi + d3-force) as the rhizome canvas or
+  dropping Cytoscape on `#/graph` (TZ 3.41 is a test tab);
 - remounting the «Мой граф» tab or treating `#/my_graph` as a separate
   canvas (TZ 3.00: `/graph` is the rhizome by default);
 - invite map (`GET /api/graph/invites`, `#/invites`) visible to non-admin

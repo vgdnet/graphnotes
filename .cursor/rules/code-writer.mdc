@@ -7,9 +7,9 @@ alwaysApply: false
 # Code Writer
 
 Follow `docs/context/MASTER_CONTEXT.md` and `docs/product/PRODUCT_SPEC.md`
-last accepted. Owner 2026-09-21: last named accepted product is **TZ 3.40**
-(graph settings chrome as Obsidian; ingest remains **3.37** plugin;
-GitHub is not product knowledge).
+last accepted. Last accepted product is **TZ 3.41** (`#/graph-test` Pixi
+probe; canon canvas stays `#/graph` Cytoscape). Ingest remains **3.37**
+plugin. GitHub is not product knowledge.
 
 Technical TZ / runtime architecture is coordinated by the technical agent.
 Do not invent a second stack.

@@ -1,7 +1,7 @@
 # GraphNotes ADRs — index, not a second spec
 
 **Не читай superseded ADR как канон.** Живой принятый продукт —
-`docs/product/PRODUCT_SPEC.md` **3.40** (что) +
+`docs/product/PRODUCT_SPEC.md` **3.41** (что) +
 `docs/context/MASTER_CONTEXT.md` (как). Чат не спецификация. Полный
 текст ADR сюда не копируется.
 
