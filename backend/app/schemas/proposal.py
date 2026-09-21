@@ -13,6 +13,22 @@ class ProposalDecisionRequest(BaseModel):
     reason: str = Field(default="", max_length=255)
 
 
+class ProposalResolveFile(BaseModel):
+    path: str
+    source: str
+
+
+class ProposalResolveRequest(BaseModel):
+    files: list[ProposalResolveFile] = Field(min_length=1, max_length=50)
+    reason: str = Field(default="", max_length=255)
+
+
+class ProposalWorkFileResponse(BaseModel):
+    path: str
+    before: str = ""
+    body: str = ""
+
+
 class ProposalAuthor(BaseModel):
     id: str
     username: str
@@ -52,3 +68,5 @@ class ProposalResponse(BaseModel):
 
 class ProposalListResponse(BaseModel):
     proposals: list[ProposalResponse]
+    editorial_queue_mode: str = "none"
+    has_editorial_grants: bool = False

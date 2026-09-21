@@ -14,6 +14,7 @@ class DifferItem(BaseModel):
 
 class DifferResponse(BaseModel):
     differences: list[DifferItem] = Field(default_factory=list)
+    inbound: list[DifferItem] = Field(default_factory=list)
 
 
 class DifferSide(BaseModel):

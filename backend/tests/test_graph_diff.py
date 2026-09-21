@@ -124,7 +124,7 @@ async def test_graph_diff_author_editor_and_hidden_fields(
     await _admin(admin, session_factory, "diff-admin")
 
     author = await _second("efimov")
-    await _connect_pair(author, "vgdnet/guide_psy")
+    await _connect_pair(author, "vgdnet/guide_psy", github)
     created = await author.post("/proposals", json={"paths": ["already.md", "card.md"]})
     assert created.status_code == 200
     proposal_id = created.json()["id"]
@@ -179,7 +179,7 @@ async def test_graph_diff_stale_incomplete_and_type_change(
     )
     await _admin(admin, session_factory, "stale-admin")
     author = await _second("writer")
-    await _connect_pair(author, "vgdnet/guide_psy")
+    await _connect_pair(author, "vgdnet/guide_psy", github)
     created = await author.post("/proposals", json={"paths": ["card.md"]})
     assert created.status_code == 200
     proposal_id = created.json()["id"]
@@ -206,14 +206,13 @@ async def test_graph_diff_stale_incomplete_and_type_change(
         return await original_get(owner, name, path, ref)
 
     monkeypatch.setattr(github, "get_file", boom)
-    incomplete = await author.get("/graph/diff", params={"proposal_id": proposal_id, "limit": 3})
-    assert incomplete.status_code == 200
-    body = incomplete.json()
-    assert body["complete"] is False
+    monkeypatch.setattr(github, "get_repository", boom)
+    still = await author.get("/graph/diff", params={"proposal_id": proposal_id, "limit": 3})
+    assert still.status_code == 200
+    body = still.json()
+    assert body["complete"] is True
     assert body["empty"] is False
-    assert body["nodes"] == []
-    assert body["changes"][0]["kind"] == "incomplete"
-    _assert_hidden(incomplete.text)
+    _assert_hidden(still.text)
 
     async with session_factory() as database:
         proposal = await database.get(Proposal, UUID(proposal_id))

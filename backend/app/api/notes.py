@@ -72,7 +72,7 @@ async def installation_start_card(database: DatabaseSession) -> StartCardRespons
 @router.get("/shared/notes", response_model=NoteListResponse)
 async def shared_notes(database: DatabaseSession) -> NoteListResponse:
     try:
-        payload = await list_shared_notes(database, _client())
+        payload = await list_shared_notes(database)
     except IngestError as exc:
         _raise(exc)
     return NoteListResponse.model_validate(payload)
@@ -114,7 +114,7 @@ async def add_shared_note_comment(
             user=user,
             path=note_path,
             body=payload.body,
-            client=_client(),
+            client=None,
         )
     except CommentError as exc:
         raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
@@ -146,7 +146,7 @@ async def shared_note(
     database: DatabaseSession,
 ) -> NoteDetail:
     try:
-        payload = await get_shared_note(database, note_path, _client())
+        payload = await get_shared_note(database, note_path)
     except IngestError as exc:
         _raise(exc)
     return NoteDetail.model_validate(payload)
@@ -203,7 +203,7 @@ async def rhizome_card(
         if user is None:
             raise HTTPException(status_code=401, detail="authentication required")
         try:
-            payload = await get_proposal_card(database, user, proposal_id, path, _client())
+            payload = await get_proposal_card(database, user, proposal_id, path, None)
         except ProposalError as exc:
             raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
         return NoteDetail.model_validate(payload)
@@ -212,13 +212,13 @@ async def rhizome_card(
             raise HTTPException(status_code=401, detail="authentication required")
         try:
             payload = await get_personal_note(
-                database, user, path, _client(), owner_id=owner_id
+                database, user, path, owner_id=owner_id
             )
         except IngestError as exc:
             _raise(exc)
         return NoteDetail.model_validate(payload)
     try:
-        payload = await get_shared_note(database, path, _client())
+        payload = await get_shared_note(database, path)
     except IngestError as exc:
         _raise(exc)
     return NoteDetail.model_validate(payload)
@@ -230,7 +230,7 @@ async def personal_notes(
     database: DatabaseSession,
 ) -> NoteListResponse:
     try:
-        payload = await list_personal_notes(database, user, _client())
+        payload = await list_personal_notes(database, user)
     except IngestError as exc:
         _raise(exc)
     return NoteListResponse.model_validate(payload)
@@ -243,7 +243,7 @@ async def personal_note(
     database: DatabaseSession,
 ) -> NoteDetail:
     try:
-        payload = await get_personal_note(database, user, note_path, _client())
+        payload = await get_personal_note(database, user, note_path)
     except IngestError as exc:
         _raise(exc)
     return NoteDetail.model_validate(payload)
@@ -263,7 +263,7 @@ async def write_personal_note(
             path=note_path,
             source=payload.source,
             expected_hash=payload.expected_hash,
-            client=_client(),
+            client=None,
         )
     except IngestError as exc:
         _raise(exc)
@@ -337,7 +337,7 @@ async def import_md(
             filename=file.filename or "upload.md",
             data=data,
             expected_sha=expected_sha or None,
-            client=_client(),
+            client=None,
         )
     except IngestError as exc:
         _raise(exc)

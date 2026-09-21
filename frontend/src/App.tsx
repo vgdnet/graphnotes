@@ -11,12 +11,19 @@ import type { GraphDiffResponse } from "./GraphDiffView";
 import { CardHistory } from "./CardHistory";
 import { MarkdownBody } from "./MarkdownBody";
 import { CardSearch } from "./CardSearch";
-import { cardApiUrl, cardFilePath, cardHash, cardSearchHash, differFileApiUrl, isOwnPersonalCard, missingNotePath, missingNoteTitle } from "./cardRoute";
+import { cardApiUrl, cardFilePath, cardHash, cardSearchHash, isOwnPersonalCard, missingNotePath, missingNoteTitle } from "./cardRoute";
 import { parseAppRoute, personCardHash, routeToView, viewHash, type ShellView } from "./appRoute";
 import { AuthPanel, type AuthMode } from "./AuthPanel";
 import { ActorLink, InviteAttribution, PersonCardPage } from "./PersonCard";
 import { AdminPanel } from "./AdminPanel";
 import { ThemeSwitcher } from "./ThemeSwitcher";
+import {
+  contributionIsEmpty,
+  RHIZOME_LEAD,
+  RHIZOME_TITLE,
+  roleLabel,
+  ruNotes,
+} from "./labels";
 import {
   DEFAULT_MAIL_CODE_TTL_MINUTES,
   mailCodeExpired,
@@ -31,9 +38,9 @@ import {
   type ThemeName,
 } from "./theme";
 
-type HealthState = "checking" | "online" | "offline";
+type HealthState = "checking" | "online" | "degraded" | "offline";
 type QueueTab = "new" | "in_progress" | "rejected";
-type SettingsBlock = "profile" | "git" | "contract" | "integrations";
+type SettingsBlock = "profile" | "contract" | "integrations" | "invite";
 
 type User = {
   id: string;
@@ -46,6 +53,7 @@ type User = {
   telegram_public: boolean;
   notify_queue_email: boolean;
   notify_queue_telegram: boolean;
+  notify_card_changes: boolean;
   website: string | null;
   role: "user" | "editor" | "admin";
   is_active: boolean;
@@ -161,24 +169,12 @@ type DifferItem = {
   updated_at?: string | null;
 };
 
-type DifferSide = {
-  layer: string;
-  path: string;
-  body: string;
-  author?: { username: string; display_name: string } | null;
-  updated_at?: string | null;
+type DifferResponse = { differences: DifferItem[]; inbound?: DifferItem[] };
+type ProposalListResponse = {
+  proposals: Proposal[];
+  editorial_queue_mode?: "all" | "granted" | "none";
+  has_editorial_grants?: boolean;
 };
-
-type DifferFile = {
-  path: string;
-  title: string;
-  kind: string;
-  incoming: DifferSide;
-  current: DifferSide;
-};
-
-type DifferResponse = { differences: DifferItem[] };
-type ProposalListResponse = { proposals: Proposal[] };
 
 type ContributionState = "personal" | "proposed" | "accepted";
 type ContributionNode = {
@@ -295,6 +291,10 @@ function proposalCardTitle(path: string, body: string): string {
   return path;
 }
 
+function proposalIsDecidable(status: string): boolean {
+  return status === "open" || status === "conflicted" || status === "failed" || status === "changes_requested";
+}
+
 function proposalStatusLabel(status: string): string {
   switch (status) {
     case "open":
@@ -339,18 +339,6 @@ function reviewActionLabel(action: string): string {
   }
 }
 
-function sharedLabel(status: RepositoryStatus | null): string {
-  if (!status?.connected) return "Общая ризома ещё не подключена.";
-  if (status.has_content) return "Общая ризома доступна.";
-  return "Общая ризома подключена, заметок пока нет.";
-}
-
-function personalLabel(status: RepositoryStatus | null): string {
-  if (!status?.connected) return "Личный git не связан — можно загрузить .md в локальный склад.";
-  if (status.has_content) return `Связан git ${status.owner}/${status.name}. Файлы копируются в локальный склад.`;
-  return `Git ${status.owner}/${status.name} связан, коммитов пока нет.`;
-}
-
 function AuthorContractCopy({ contract }: { contract: AuthorContract | null }) {
   const copy = contract ?? AUTHOR_CONTRACT_FALLBACK;
   return (
@@ -393,7 +381,12 @@ async function readError(response: Response): Promise<string> {
   try {
     const body = (await response.json()) as { detail?: unknown };
     const formatted = formatDetail(body.detail);
-    if (formatted) return formatted;
+    if (formatted) {
+      if (/github rate limit/i.test(formatted)) {
+        return "Сверка временно недоступна. Повторите позже.";
+      }
+      return formatted;
+    }
   } catch {
     // HTML 413 from nginx, plaintext 500, or a non-object body.
   }
@@ -403,6 +396,9 @@ async function readError(response: Response): Promise<string> {
 
 export function App() {
   const [health, setHealth] = useState<HealthState>("checking");
+  const [sessionLost, setSessionLost] = useState(false);
+  const [graphLoadError, setGraphLoadError] = useState("");
+  const [statusFailed, setStatusFailed] = useState(false);
   const [user, setUser] = useState<User | null>(null);
   const [authChecking, setAuthChecking] = useState(true);
   const [view, setView] = useState<ShellView>(() => routeToView(parseAppRoute(window.location.hash)));
@@ -430,15 +426,14 @@ export function App() {
   const [personalNotes, setPersonalNotes] = useState<NoteProjection[]>([]);
   const [personalRevision, setPersonalRevision] = useState<string | null>(null);
   const [differences, setDifferences] = useState<DifferItem[]>([]);
+  const [inbound, setInbound] = useState<DifferItem[]>([]);
   const [differLoading, setDifferLoading] = useState(false);
-  const [differFile, setDifferFile] = useState<DifferFile | null>(null);
-  const [differFilePath, setDifferFilePath] = useState<string | null>(null);
-  const [differFileLoading, setDifferFileLoading] = useState(false);
-  const differFileAbort = useRef<AbortController | null>(null);
   const [proposedPaths, setProposedPaths] = useState<string[]>([]);
   const [proposals, setProposals] = useState<Proposal[]>([]);
+  const [editorialQueueMode, setEditorialQueueMode] = useState<"all" | "granted" | "none" | undefined>(undefined);
   const [queueTab, setQueueTab] = useState<QueueTab>("new");
   const [openProposal, setOpenProposal] = useState<Proposal | null>(null);
+  const [openProposalCard, setOpenProposalCard] = useState<string | null>(null);
   const [proposalDiff, setProposalDiff] = useState<GraphDiffResponse | null>(null);
   const [proposalDiffLoading, setProposalDiffLoading] = useState(false);
   const [decisionReason, setDecisionReason] = useState("");
@@ -484,6 +479,10 @@ export function App() {
   }
 
   useEffect(() => {
+    document.title = view === "about" ? `О программе · ${RHIZOME_TITLE}` : RHIZOME_TITLE;
+  }, [view]);
+
+  useEffect(() => {
     const onHash = () => setLocationHash(window.location.hash);
     window.addEventListener("hashchange", onHash);
     return () => window.removeEventListener("hashchange", onHash);
@@ -506,14 +505,23 @@ export function App() {
 
     void fetch("/api/users/me", { signal: controller.signal })
       .then(async (response) => {
-        if (response.status === 401) return null;
-        if (!response.ok) throw new Error(await readError(response));
+        if (response.status === 401) {
+          setSessionLost(false);
+          return null;
+        }
+        if (!response.ok) {
+          setSessionLost(true);
+          return undefined;
+        }
+        setSessionLost(false);
         return (await response.json()) as User;
       })
-      .then(setUser)
+      .then((next) => {
+        if (next !== undefined) setUser(next);
+      })
       .catch((requestError: unknown) => {
         if (!(requestError instanceof DOMException && requestError.name === "AbortError")) {
-          setError(requestError instanceof Error ? requestError.message : "Ошибка соединения");
+          setSessionLost(true);
         }
       })
       .finally(() => setAuthChecking(false));
@@ -523,10 +531,14 @@ export function App() {
         if (!response.ok) throw new Error(await readError(response));
         return (await response.json()) as RepositoryStatusResponse;
       })
-      .then(setRepository)
+      .then((body) => {
+        setRepository(body);
+        setStatusFailed(false);
+      })
       .catch((requestError: unknown) => {
         if (!(requestError instanceof DOMException && requestError.name === "AbortError")) {
-          setError(requestError instanceof Error ? requestError.message : "Ошибка соединения");
+          setRepository(null);
+          setStatusFailed(true);
         }
       });
 
@@ -553,23 +565,40 @@ export function App() {
   }, []);
 
   useEffect(() => {
-    if (authChecking) return;
+    if (!sessionLost) return;
+    const id = window.setInterval(() => {
+      void fetch("/api/users/me")
+        .then(async (response) => {
+          if (response.status === 401) {
+            setUser(null);
+            setSessionLost(false);
+            return;
+          }
+          if (!response.ok) return;
+          setSessionLost(false);
+          setUser((await response.json()) as User);
+        })
+        .catch(() => undefined);
+    }, 8000);
+    return () => window.clearInterval(id);
+  }, [sessionLost]);
+
+  useEffect(() => {
     const controller = new AbortController();
     void fetch("/api/repository/status", { signal: controller.signal })
       .then(async (response) => {
         if (!response.ok) throw new Error(await readError(response));
         return (await response.json()) as RepositoryStatusResponse;
       })
-      .then(setRepository)
-      .catch(() => undefined);
+      .then((body) => {
+        setRepository(body);
+        setStatusFailed(false);
+      })
+      .catch(() => setStatusFailed(true));
     return () => controller.abort();
-  }, [authChecking, user?.id, view === "offer"]);
+  }, [authChecking, user?.id]);
 
   useEffect(() => {
-    if (!repository?.shared.connected) {
-      setSharedNotes([]);
-      return;
-    }
     const controller = new AbortController();
     void fetch("/api/shared/notes", { signal: controller.signal })
       .then(async (response) => {
@@ -579,7 +608,7 @@ export function App() {
       .then((body) => setSharedNotes(body.notes))
       .catch(() => undefined);
     return () => controller.abort();
-  }, [repository?.shared.connected, repository?.shared.updated_at]);
+  }, [repository?.shared.updated_at]);
 
   useEffect(() => {
     if (!user) {
@@ -602,8 +631,11 @@ export function App() {
   }, [user, repository?.personal?.connected, repository?.personal?.updated_at, uploadStamp]);
 
   useEffect(() => {
-    if (!user?.is_author || !repository?.shared.connected || view !== "offer") {
-      if (!user?.is_author || !repository?.shared.connected) setDifferences([]);
+    if (!user?.is_author || view !== "differ") {
+      if (!user?.is_author) {
+        setDifferences([]);
+        setInbound([]);
+      }
       setDifferLoading(false);
       return;
     }
@@ -616,9 +648,7 @@ export function App() {
       })
       .then((body) => {
         setDifferences(body.differences);
-        setDifferFile(null);
-        setDifferFilePath(null);
-        setDifferFileLoading(false);
+        setInbound(body.inbound ?? []);
       })
       .catch((requestError: unknown) => {
         if (requestError instanceof DOMException && requestError.name === "AbortError") return;
@@ -631,11 +661,6 @@ export function App() {
     return () => controller.abort();
   }, [
     user?.is_author,
-    repository?.shared.connected,
-    repository?.shared.updated_at,
-    repository?.shared.index_status,
-    repository?.personal?.connected,
-    repository?.personal?.updated_at,
     uploadStamp,
     view,
   ]);
@@ -659,6 +684,7 @@ export function App() {
   useEffect(() => {
     if (!user) {
       setProposals([]);
+      setEditorialQueueMode(undefined);
       return;
     }
     const controller = new AbortController();
@@ -667,7 +693,10 @@ export function App() {
         if (!response.ok) throw new Error(await readError(response));
         return (await response.json()) as ProposalListResponse;
       })
-      .then((body) => setProposals(body.proposals))
+      .then((body) => {
+        setProposals(body.proposals);
+        setEditorialQueueMode(body.editorial_queue_mode);
+      })
       .catch(() => undefined);
     return () => controller.abort();
   }, [user, repository?.shared.updated_at]);
@@ -702,10 +731,6 @@ export function App() {
   ]);
 
   useEffect(() => {
-    if (!repository?.shared.connected) {
-      setSharedGraph(null);
-      return;
-    }
     const routeNow = parseAppRoute(locationHash);
     const viewingCard = routeNow.kind === "card" ? routeNow.path : null;
     const cardIsPersonal = Boolean(viewingCard && isOwnPersonalCard(viewingCard));
@@ -724,19 +749,27 @@ export function App() {
         ? `/api/graph/personal?${params}`
         : `/api/graph/personal-overlay?${params}`;
     setGraphLoading(true);
-    setSharedGraph(null);
+    setGraphLoadError("");
     void fetch(path, { signal: controller.signal })
       .then(async (response) => {
         if (!response.ok) throw new Error(await readError(response));
         return (await response.json()) as GraphResponse;
       })
-      .then(setSharedGraph)
-      .catch(() => undefined)
-      .finally(() => setGraphLoading(false));
+      .then((body) => {
+        setSharedGraph(body);
+        setGraphLoadError("");
+      })
+      .catch((requestError: unknown) => {
+        if (requestError instanceof DOMException && requestError.name === "AbortError") return;
+        setSharedGraph(null);
+        setGraphLoadError("Не удалось загрузить ризому.");
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setGraphLoading(false);
+      });
     return () => controller.abort();
   }, [
     user,
-    repository?.shared.connected,
     repository?.shared.updated_at,
     repository?.shared.index_status,
     repository?.personal?.connected,
@@ -890,6 +923,7 @@ export function App() {
   useEffect(() => {
     if (personUnknown) {
       setPersonCard(null);
+      setError("Пользователь не найден");
       return;
     }
     if (!personLogin) {
@@ -953,7 +987,8 @@ export function App() {
       return;
     }
     if (route.kind === "person_unknown") {
-      goHash(viewHash("graph"));
+      setView("person");
+      setError("Пользователь не найден");
       return;
     }
     setView(routeToView(route));
@@ -1035,61 +1070,6 @@ export function App() {
     }
   }
 
-  async function connectShared() {
-    setSubmitting(true);
-    setError("");
-    try {
-      const response = await fetch("/api/repository/connect", { method: "POST" });
-      if (!response.ok) throw new Error(await readError(response));
-      setRepository(await response.json() as RepositoryStatusResponse);
-    } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "Ошибка соединения");
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
-  async function connectPersonal(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const formElement = event.currentTarget;
-    setSubmitting(true);
-    setError("");
-    const repositoryRef = String(new FormData(formElement).get("repository") || "");
-    try {
-      const response = await fetch("/api/personal/connect", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ repository: repositoryRef }),
-      });
-      if (!response.ok) throw new Error(await readError(response));
-      setRepository(await response.json() as RepositoryStatusResponse);
-      formElement.reset();
-    } catch (requestError) {
-      const message = requestError instanceof Error ? requestError.message : "Ошибка соединения";
-      setError(message);
-      if (message.toLowerCase().includes("author")) {
-        setSettingsBlock("contract");
-        goHash(viewHash("user"));
-      }
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
-  async function disconnectPersonal() {
-    setSubmitting(true);
-    setError("");
-    try {
-      const response = await fetch("/api/personal/connect", { method: "DELETE" });
-      if (!response.ok) throw new Error(await readError(response));
-      setRepository((await response.json()) as RepositoryStatusResponse);
-    } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "Ошибка соединения");
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
   async function saveProfile(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
@@ -1108,6 +1088,9 @@ export function App() {
       if (user?.role === "editor" || user?.role === "admin") {
         profileBody.notify_queue_email = form.get("notifyQueueEmail") === "on";
         profileBody.notify_queue_telegram = form.get("notifyQueueTelegram") === "on";
+      }
+      if (user?.is_author) {
+        profileBody.notify_card_changes = form.get("notifyCardChanges") === "on";
       }
       const response = await fetch("/api/users/me", {
         method: "PATCH",
@@ -1216,7 +1199,7 @@ export function App() {
   }, [view, settingsBlock, user]);
 
   useEffect(() => {
-    if (view !== "settings" || settingsBlock !== "profile" || !user) return;
+    if (view !== "settings" || settingsBlock !== "invite" || !user) return;
     void loadPendingInvites();
   }, [view, settingsBlock, user]);
 
@@ -1233,31 +1216,30 @@ export function App() {
       return;
     }
     setError("");
-    goHash(viewHash("offer"));
+    goHash(viewHash("differ"));
   }
 
-  async function openDifferFile(path: string) {
+  async function acceptInbound(path: string) {
+    setSubmitting(true);
     setError("");
-    setDifferFilePath(path);
-    setDifferFileLoading(true);
-    differFileAbort.current?.abort();
-    const controller = new AbortController();
-    differFileAbort.current = controller;
     try {
-      const response = await fetch(differFileApiUrl(path), { signal: controller.signal });
+      const response = await fetch(`/api/differ/inbound/${path.split("/").map(encodeURIComponent).join("/")}/accept`, {
+        method: "POST",
+      });
       if (!response.ok) throw new Error(await readError(response));
-      setDifferFile((await response.json()) as DifferFile);
+      const body = (await response.json()) as DifferResponse;
+      setDifferences(body.differences);
+      setInbound(body.inbound ?? []);
+      setUploadStamp((value) => value + 1);
     } catch (requestError) {
-      if (requestError instanceof DOMException && requestError.name === "AbortError") return;
-      setDifferFile(null);
-      setError(requestError instanceof Error ? requestError.message : "Не удалось открыть сверку");
+      setError(requestError instanceof Error ? requestError.message : "Не удалось принять карточку");
     } finally {
-      if (!controller.signal.aborted) setDifferFileLoading(false);
+      setSubmitting(false);
     }
   }
 
   async function proposeSelected() {
-    if (proposedPaths.length === 0) return;
+    if (user?.role !== "user" || proposedPaths.length === 0) return;
     setSubmitting(true);
     setError("");
     try {
@@ -1273,11 +1255,15 @@ export function App() {
       setProposedPaths([]);
       const listed = await fetch("/api/proposals");
       if (listed.ok) {
-        setProposals(((await listed.json()) as ProposalListResponse).proposals);
+        const body = (await listed.json()) as ProposalListResponse;
+        setProposals(body.proposals);
+        setEditorialQueueMode(body.editorial_queue_mode);
       }
       const differ = await fetch("/api/differ");
       if (differ.ok) {
-        setDifferences(((await differ.json()) as DifferResponse).differences);
+        const body = (await differ.json()) as DifferResponse;
+        setDifferences(body.differences);
+        setInbound(body.inbound ?? []);
       }
       setUploadStamp((value) => value + 1);
     } catch (requestError) {
@@ -1312,13 +1298,26 @@ export function App() {
     try {
       const response = await fetch(`/api/proposals/${id}`);
       if (!response.ok) throw new Error(await readError(response));
-      setOpenProposal((await response.json()) as Proposal);
+      const detail = (await response.json()) as Proposal;
+      setOpenProposal(detail);
+      setOpenProposalCard(detail.diff[0]?.path ?? null);
       await loadProposalGraphDiff(id);
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "Ошибка соединения");
     } finally {
       setSubmitting(false);
     }
+  }
+
+  function toggleProposalDetail(id: string) {
+    if (openProposal?.id === id) {
+      setOpenProposal(null);
+      setOpenProposalCard(null);
+      setProposalDiff(null);
+      setDecisionReason("");
+      return;
+    }
+    void openProposalDetail(id);
   }
 
   async function decideProposal(id: string, action: "approve" | "reject" | "request-changes" | "rollback") {
@@ -1334,13 +1333,16 @@ export function App() {
       if (!response.ok) throw new Error(await readError(response));
       const updated = (await response.json()) as Proposal;
       setOpenProposal(action === "approve" ? null : updated);
+      if (action === "approve") setOpenProposalCard(null);
       if (action === "reject") setQueueTab("rejected");
       if (action === "request-changes") setQueueTab("in_progress");
       setDecisionReason("");
       await loadProposalGraphDiff(id);
       const listed = await fetch("/api/proposals");
       if (listed.ok) {
-        setProposals(((await listed.json()) as ProposalListResponse).proposals);
+        const body = (await listed.json()) as ProposalListResponse;
+        setProposals(body.proposals);
+        setEditorialQueueMode(body.editorial_queue_mode);
       }
       const status = await fetch("/api/repository/status");
       if (status.ok) {
@@ -1348,7 +1350,9 @@ export function App() {
       }
       const differ = await fetch("/api/differ");
       if (differ.ok) {
-        setDifferences(((await differ.json()) as DifferResponse).differences);
+        const body = (await differ.json()) as DifferResponse;
+        setDifferences(body.differences);
+        setInbound(body.inbound ?? []);
       }
       const mine = await fetch("/api/contributions/me");
       if (mine.ok) {
@@ -1762,6 +1766,16 @@ export function App() {
   }
 
   const canReview = user?.role === "editor" || user?.role === "admin";
+  const canProposeToRhizome = user?.role === "user";
+  const queueEmptyHint = canReview && editorialQueueMode === "none"
+    ? "Нет грантов"
+    : queueTab === "new"
+      ? (canReview
+        ? "Нет новых предложений: редактор их ещё не трогал."
+        : "Нет предложений, которые редактор ещё не смотрел.")
+      : queueTab === "in_progress"
+        ? "Нет возвращённых на доработку."
+        : "Нет отклонённых предложений.";
   const scopedProposals = view === "offer"
     ? proposals.filter((item) => item.author.id === user?.id)
     : proposals;
@@ -1791,24 +1805,58 @@ export function App() {
     goHash(viewHash("about"));
   }
 
+  function openJoin() {
+    setError("");
+    setAuthNote("Новая учётка только по ссылке из письма-приглашения.");
+    setMode("login");
+    setAuthOpen(true);
+    goHash("#/auth");
+  }
+
+  const dataBroken = Boolean(graphLoadError || statusFailed);
+  const chromeHealth: HealthState =
+    health === "checking" || health === "offline" ? health : dataBroken ? "degraded" : "online";
+  const healthCaption =
+    chromeHealth === "online"
+      ? "Система доступна"
+      : chromeHealth === "checking"
+        ? "Проверка"
+        : chromeHealth === "degraded"
+          ? "Данные не загрузились"
+          : "Нет связи";
+
   const legalAboutPanel = (
     <section className="notes-panel" aria-labelledby="about-heading">
       <div>
         <h2 id="about-heading">О программе</h2>
         <div className="about-credits">
           <p>
-            Ризома - Мария Надршина (
-            <a href="https://t.me/unconsciousjourney" target="_blank" rel="noreferrer">
-              https://t.me/unconsciousjourney
-            </a>
-            )
+            <strong>Ризома психоанализа</strong> — {RHIZOME_LEAD}
           </p>
           <p>
-            GraphNotes Юрий Ефимов (
-            <a href="https://t.me/guide_psy" target="_blank" rel="noreferrer">
-              https://t.me/guide_psy
+            Карточки соединены в общий граф — ризому, по которой можно двигаться от узла к узлу.
+            База никогда не будет закончена и бесконечно обновляется: каждый автор ведёт свой слой
+            заметок и предлагает их в общую ризому.
+          </p>
+          <p>
+            Главный редактор ризомы — Мария Надршина. Следить за обновлениями можно в{" "}
+            <a href="https://t.me/unconsciousjourney" target="_blank" rel="noreferrer">
+              телеграм-канале
             </a>
-            )
+            .
+          </p>
+          <p>
+            Сайт работает на GraphNotes — движке для совместных баз знаний. Автор и разработчик
+            GraphNotes — Юрий Ефимов (
+            <a href="https://t.me/guide_psy" target="_blank" rel="noreferrer">
+              @guide_psy
+            </a>
+            ).
+          </p>
+          <p>
+            <button className="button button--primary" type="button" onClick={() => openJoin()}>
+              Стать автором
+            </button>
           </p>
         </div>
       </div>
@@ -1847,6 +1895,11 @@ export function App() {
           >
             Поиск
           </button>
+          {user?.is_author && (
+            <button className={view === "differ" ? "button button--quiet tab--active" : "button button--quiet"} type="button" onClick={() => goHash(viewHash("differ"))}>
+              Сверка
+            </button>
+          )}
           {user && (
             <button className={view === "offer" ? "button button--quiet tab--active" : "button button--quiet"} type="button" onClick={() => goHash(viewHash("offer"))}>
               Предложения
@@ -1882,19 +1935,21 @@ export function App() {
               <span className="whoami__meta">@{user.username}</span>
             </button>
           ) : (
-            <button className="button button--primary" type="button" onClick={() => { setMode("login"); setAuthOpen(true); goHash("#/auth"); }}>
+            <button className="button button--primary" type="button" onClick={() => { setMode("login"); setError(""); setAuthOpen(true); goHash("#/auth"); }}>
               Войти
             </button>
           )}
-          <div className={`status status--${health}`} role="status">
+          <div className={`status status--${chromeHealth}`} role="status">
             <span className="status__dot" aria-hidden="true" />
-            {health === "online" ? "Система доступна" : health === "checking" ? "Проверка" : "Нет связи"}
+            {sessionLost ? "Связь потеряна" : healthCaption}
           </div>
         </div>
       </header>
 
       {authChecking ? (
-        <section className="loading" aria-live="polite">Загружаем вашу ризому…</section>
+        <section className="loading" aria-live="polite">
+          <p>Загружаем ризому…</p>
+        </section>
       ) : user ? (
         <>
           {view === "search" && (
@@ -1939,7 +1994,7 @@ export function App() {
                     <CardHistory cardPath={cardPath ?? openNote.path} />
                     {openNote && !openNote.path.startsWith("personal:") && !openNote.path.startsWith("proposal:") ? (
                     <div>
-                      <p className="admin-panel__hint">Комментарии: любой вошедший; editor принимает.</p>
+                      <p className="admin-panel__hint">Комментарии: любой вошедший; редактор принимает.</p>
                       <ul className="note-list">
                         {noteComments.map((item) => (
                           <li key={item.id}>
@@ -1983,7 +2038,7 @@ export function App() {
                 {openNote && stackedPersonal && user.is_author && (
                   <p className="admin-panel__hint">
                     <button className="auth-link" type="button" onClick={() => openDiffer()}>
-                      Сравнить в Предложениях
+                      Сравнить в Сверке
                     </button>
                   </p>
                 )}
@@ -2008,8 +2063,7 @@ export function App() {
               <p className="admin-panel__hint" role="status">Загружаем карточку…</p>
             )}
             </div>
-            {repository?.shared.connected && (
-              <aside className="card-workspace__graph" aria-label="Локальный граф карточки">
+            <aside className="card-workspace__graph" aria-label="Локальный граф карточки">
                 <p className="eyebrow">Рядом</p>
                 <h3>Граф</h3>
                 <GraphView
@@ -2026,7 +2080,6 @@ export function App() {
                   theme={theme}
                 />
               </aside>
-            )}
           </section>
           )}
           {view === "settings" && (
@@ -2039,7 +2092,7 @@ export function App() {
                 <strong>{user.username}</strong>
               </p>
               <p className="admin-panel__hint">
-                Здесь имя, почта, контакты, свой git, договор автора и токены плагина Obsidian. Это не граф и не очередь.
+                Здесь имя, почта, контакты, договор автора, токены плагина Obsidian и приглашение человека. Это не граф и не очередь.
               </p>
             </div>
             <div className="appearance-row">
@@ -2049,9 +2102,9 @@ export function App() {
             {error && <p className="form-error" role="alert">{error}</p>}
             <div className="tabs tabs--four" role="tablist" aria-label="Блоки настроек">
               <button className={settingsBlock === "profile" ? "tab tab--active" : "tab"} type="button" onClick={() => setSettingsBlock("profile")}>Личные данные</button>
-              <button className={settingsBlock === "git" ? "tab tab--active" : "tab"} type="button" onClick={() => setSettingsBlock("git")}>Свой git</button>
               <button className={settingsBlock === "contract" ? "tab tab--active" : "tab"} type="button" onClick={() => setSettingsBlock("contract")}>Договор автора</button>
               <button className={settingsBlock === "integrations" ? "tab tab--active" : "tab"} type="button" onClick={() => setSettingsBlock("integrations")}>Obsidian</button>
+              <button className={settingsBlock === "invite" ? "tab tab--active" : "tab"} type="button" onClick={() => setSettingsBlock("invite")}>Пригласить пользователя</button>
             </div>
             {settingsBlock === "profile" && (
               <form className="connect-form" onSubmit={(event) => void saveProfile(event)}>
@@ -2100,6 +2153,12 @@ export function App() {
                     </label>
                   </>
                 )}
+                {user.is_author && (
+                  <label className="contract-check">
+                    <input name="notifyCardChanges" type="checkbox" defaultChecked={user.notify_card_changes} />
+                    <span>Получать уведомления об изменениях в карточках, которые вы правили</span>
+                  </label>
+                )}
                 <label>
                   Сайт <span className="optional">необязательно</span>
                   <input name="website" defaultValue={user.website ?? ""} maxLength={300} />
@@ -2107,7 +2166,7 @@ export function App() {
                 <button className="button button--primary" type="submit" disabled={submitting}>Сохранить</button>
               </form>
             )}
-            {settingsBlock === "profile" && (
+            {settingsBlock === "invite" && (
               <form className="connect-form" onSubmit={(event) => void sendInvite(event)}>
                 <p className="admin-panel__hint">
                   Пригласить человека: укажите почту, сервер пришлёт ссылку. Учётка появится, когда человек откроет письмо.
@@ -2131,62 +2190,6 @@ export function App() {
                   </ul>
                 )}
               </form>
-            )}
-            {settingsBlock === "git" && (
-              <div className="settings-stack">
-                {repository?.personal?.connected ? (
-                  <>
-                    <p className="admin-panel__hint">
-                      Связан git{" "}
-                      {repository.personal.owner && repository.personal.name ? (
-                        <a
-                          className="git-ref"
-                          href={`https://github.com/${repository.personal.owner}/${repository.personal.name}`}
-                          target="_blank"
-                          rel="noreferrer"
-                        >
-                          {repository.personal.owner}/{repository.personal.name}
-                        </a>
-                      ) : (
-                        "репозиторий"
-                      )}
-                      . Git копирует `.md` в локальный склад. Загрузка файлов тоже пишет туда.
-                    </p>
-                    <p className="admin-panel__hint">
-                      Отключение git не стирает уже скопированные файлы.
-                    </p>
-                    <div className="settings-actions">
-                      <button className="button button--danger" type="button" disabled={submitting} onClick={() => void disconnectPersonal()}>
-                        Отключить git
-                      </button>
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <p className="admin-panel__hint">{personalLabel(null)}</p>
-                    {user.is_author ? (
-                      <form className="connect-form" onSubmit={(event) => void connectPersonal(event)}>
-                        <label>
-                          Свой git
-                          <input name="repository" placeholder="владелец/имя" maxLength={200} required />
-                        </label>
-                        <div className="settings-actions">
-                          <button className="button button--primary" type="submit" disabled={submitting}>Связать личный git</button>
-                        </div>
-                      </form>
-                    ) : (
-                      <p className="admin-panel__hint">Подключение git как вклад требует договор автора.</p>
-                    )}
-                  </>
-                )}
-                {user.role === "admin" && (
-                  <div className="settings-actions">
-                    <button className="button button--quiet" type="button" onClick={() => void connectShared()} disabled={submitting}>
-                      Подключить общую ризому
-                    </button>
-                  </div>
-                )}
-              </div>
             )}
             {settingsBlock === "contract" && (
               user.is_author ? (
@@ -2299,18 +2302,21 @@ export function App() {
             </div>
           </section>
           )}
-          {view === "offer" && repository?.shared.connected && user?.is_author && (
+          {view === "differ" && user?.is_author && (
             <section className="notes-panel" aria-labelledby="differ-heading">
               <div>
-                <p className="eyebrow">Предложения</p>
-                <h2 id="differ-heading">Сверка</h2>
+                <p className="eyebrow">Сверка</p>
+                <h2 id="differ-heading">Личное и ризома</h2>
                 <p className="admin-panel__hint">
-                  Differ — внутренняя сверка, не отдельный раздел. Сейчас: личное → общая
-                  (чего в ризоме ещё нет или что отличается). Другие направления —
-                  тоже через предложения, не отдельной вкладкой. Git не обязателен.
+                  {canProposeToRhizome
+                    ? "В ризому — отметить отличающиеся карточки и предложить. Из ризомы — чужие правки по карточкам, которые вы уже отдавали."
+                    : "Из ризомы — чужие правки по карточкам, которые вы уже отдавали. Предложить в очередь с этой учётки нельзя."}
                 </p>
               </div>
               {error && <p className="form-error" role="alert">{error}</p>}
+              {canProposeToRhizome && (
+                <>
+              <h3>В ризому</h3>
               {differLoading ? (
                 <p className="admin-panel__hint" role="status">Сравниваем личный слой с общей ризомой…</p>
               ) : differences.length === 0 ? (
@@ -2323,14 +2329,6 @@ export function App() {
                         <button className="note-link" type="button" onClick={() => void openPersonalNote(item.path)}>
                           <strong>{item.title}</strong>
                           <small>{item.path} · {differKindLabel(item.kind)}</small>
-                        </button>
-                        <button
-                          className="button button--quiet"
-                          type="button"
-                          aria-pressed={differFilePath === item.path}
-                          onClick={() => void openDifferFile(item.path)}
-                        >
-                          Текст сверки
                         </button>
                         <input
                           type="checkbox"
@@ -2349,29 +2347,6 @@ export function App() {
                   ))}
                 </ul>
               )}
-              {(differFileLoading || differFile) && (
-                <div className="differ-file" aria-live="polite">
-                  <p className="admin-panel__hint">
-                    Слева общая, справа личное. Та же пара, что в плагине Card Merge.
-                    Чекбоксы выбирают, что предложить в очередь.
-                    {differFile ? ` Сейчас: ${differFile.path}.` : ""}
-                  </p>
-                  {differFileLoading && !differFile ? (
-                    <p className="admin-panel__hint" role="status">Открываем текст сверки…</p>
-                  ) : differFile ? (
-                    <div className="differ-file__panes">
-                      <section>
-                        <h3>В общей</h3>
-                        <pre>{differFile.incoming.body || "— карточки в ризоме нет —"}</pre>
-                      </section>
-                      <section>
-                        <h3>В личном{differFile.current.author ? ` · ${differFile.current.author.display_name}` : ""}</h3>
-                        <pre>{differFile.current.body}</pre>
-                      </section>
-                    </div>
-                  ) : null}
-                </div>
-              )}
               <button
                 className="button button--primary"
                 type="button"
@@ -2380,6 +2355,33 @@ export function App() {
               >
                 Предложить в общую
               </button>
+                </>
+              )}
+              <h3>Из ризомы</h3>
+              {inbound.length === 0 ? (
+                <p className="admin-panel__hint">Нет входящих правок по вашим карточкам.</p>
+              ) : (
+                <ul className="note-list">
+                  {inbound.map((item) => (
+                    <li key={`in-${item.path}`}>
+                      <div className="note-pick">
+                        <button className="note-link" type="button" onClick={() => void openPersonalNote(item.path)}>
+                          <strong>{item.title}</strong>
+                          <small>{item.path} · чужие правки в общей</small>
+                        </button>
+                        <button
+                          className="button button--quiet"
+                          type="button"
+                          disabled={submitting}
+                          onClick={() => void acceptInbound(item.path)}
+                        >
+                          Принять в своё
+                        </button>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
               {uploadEvents.length > 0 && (
                 <div>
                   <p className="admin-panel__hint">История загрузок в личный слой — в GraphNotes, не в git log.</p>
@@ -2464,7 +2466,7 @@ export function App() {
                 <h2 id="contrib-heading">Мой вклад</h2>
                 <p className="admin-panel__hint">
                   Пустой список отличающихся не стирает принятое. Состояния: только в личном слое, предложено, принято в общую.
-                  Карточка — след вклада в GraphNotes, не профиль GitHub.
+                  Карточка — след вклада в GraphNotes.
                 </p>
               </div>
               {userCard && (
@@ -2473,7 +2475,7 @@ export function App() {
                   <div>
                     <strong>{userCard.user.display_name}</strong>
                     <span>
-                      @{userCard.user.username} · {userCard.user.role}
+                      @{userCard.user.username} · {roleLabel(userCard.user.role)}
                       {userCard.user.is_author ? " · автор" : ""}
                       {userCard.self && userCard.closed_count != null ? ` · закрыто ${userCard.closed_count}` : ""}
                     </span>
@@ -2483,7 +2485,7 @@ export function App() {
                     />
                   </div>
                   <p className="admin-panel__hint">
-                    Принято в общую: {userCard.stats.accepted} заметок, {userCard.stats.links_accepted} связей.
+                    Принято в общую: {ruNotes(userCard.stats.accepted)}, {userCard.stats.links_accepted} связей.
                     {userCard.user.website ? ` · ${userCard.user.website}` : ""}
                     {userCard.user.phone ? ` · ${userCard.user.phone}` : ""}
                     {userCard.user.telegram ? ` · ${userCard.user.telegram}` : ""}
@@ -2572,7 +2574,7 @@ export function App() {
                   )}
                 </div>
               )}
-              {!contributions || contributions.notes.length === 0 ? (
+              {contributionIsEmpty(contributions) || !contributions ? (
                 <p className="admin-panel__hint">Пока нет заметок в личном слое и принятого вклада.</p>
               ) : (
                 <ul className="note-list">
@@ -2602,8 +2604,8 @@ export function App() {
               <h2 id="proposals-heading">{view === "queue" ? "Очередь предложений" : "Мои предложения"}</h2>
               <p className="admin-panel__hint">
                 {view === "queue"
-                  ? "Очередь editor’а: сначала текст карточек и связи, потом ризома. Отклонённые и возвращённые остаются с комментарием."
-                  : "Ваши заявки в ризому. Возврат и отклонение приходят с комментарием редактора."}
+                  ? "Откройте одну заявку. Внутри — одна карточка с текстом. Кнопки под карточкой решают всю заявку. Потом связи и ризома."
+                  : "Ваши заявки в ризому. Откройте одну — внутри одна карточка с текстом. Возврат и отклонение приходят с комментарием редактора."}
               </p>
             </div>
             <div className="tabs tabs--three" role="tablist" aria-label="Папки очереди">
@@ -2636,130 +2638,139 @@ export function App() {
               </button>
             </div>
             {queuedOnTab.length === 0 ? (
-              <p className="admin-panel__hint">
-                {queueTab === "new" && (canReview
-                  ? "Нет новых предложений: редактор их ещё не трогал."
-                  : "Нет предложений, которые редактор ещё не смотрел.")}
-                {queueTab === "in_progress" && "Нет возвращённых на доработку."}
-                {queueTab === "rejected" && "Нет отклонённых предложений."}
-              </p>
+              <p className="admin-panel__hint">{queueEmptyHint}</p>
             ) : (
               <ul className="proposal-list">
-                {queuedOnTab.map((item) => (
-                  <li key={item.id}>
-                    <button className="proposal-row" type="button" onClick={() => void openProposalDetail(item.id)}>
-                      <strong>{item.summary}</strong>
-                      <span>{item.author.display_name} · {proposalStatusLabel(item.status)}</span>
-                      {item.reason && (queueTab === "in_progress" || queueTab === "rejected") && (
-                        <small>Комментарий редактора: {item.reason}</small>
-                      )}
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
-            {openProposal && proposalQueueTab(openProposal.status) === queueTab && (
-              <article className="proposal-detail">
-                <h3>{openProposal.summary}</h3>
-                <p className="admin-panel__hint">
-                  <a className="person-link" href={personCardHash(openProposal.author.username)}>
-                    {openProposal.author.display_name}
-                  </a>
-                  {" · "}{proposalStatusLabel(openProposal.status)}
-                </p>
-                {openProposal.reason && (openProposal.status === "rejected" || openProposal.status === "changes_requested") && (
-                  <p className="proposal-comment" role="status">
-                    Комментарий редактора: {openProposal.reason}
-                  </p>
-                )}
-                <div className="proposal-text">
-                  <h4>Текст и связи</h4>
-                  {openProposal.diff.length === 0 ? (
-                    <p className="admin-panel__hint">В предложении нет файлов.</p>
-                  ) : (
-                    openProposal.diff.map((item) => (
-                      <article className="proposal-card" key={item.path}>
-                        <h5>{proposalCardTitle(item.path, item.body || "")}</h5>
-                        <p className="admin-panel__hint">
-                          {item.path}
-                          {openProposal.added.includes(item.path) ? " · новая карточка" : ""}
-                          {openProposal.changed.includes(item.path) ? " · изменение текста" : ""}
-                        </p>
-                        {item.html || (item.rows && item.rows.length > 0) ? (
-                          <WikiDiffTable
-                            html={item.html}
-                            rows={item.rows}
-                            added={openProposal.added.includes(item.path)}
-                          />
-                        ) : item.body ? (
-                          <MarkdownBody
-                            body={item.body}
-                            note={{
-                              links: proposedLinks.filter((edge) => edge.source === item.path && !edge.unresolved).map((edge) => edge.target),
-                              unresolved_links: proposedLinks.filter((edge) => edge.source === item.path && edge.unresolved).map((edge) => edge.target),
-                            }}
-                            cardPath={`proposal:${openProposal.id}:${item.path}`}
-                            signedIn
-                            onCreateMissing={(path) => void createMissingCard(path)}
-                          />
-                        ) : (
-                          <pre className="proposal-diff">{item.diff || item.path}</pre>
+                {queuedOnTab.map((item) => {
+                  const expanded = openProposal?.id === item.id;
+                  const canDecide = Boolean(canReview && user && item.author.id !== user.id && proposalIsDecidable(expanded ? openProposal.status : item.status));
+                  return (
+                    <li key={item.id} className={expanded ? "proposal-item proposal-item--open" : "proposal-item"}>
+                      <button
+                        className={expanded ? "proposal-row proposal-row--open" : "proposal-row"}
+                        type="button"
+                        aria-expanded={expanded}
+                        onClick={() => toggleProposalDetail(item.id)}
+                      >
+                        <strong>{item.summary}</strong>
+                        <span>{item.author.display_name} · {proposalStatusLabel(item.status)}</span>
+                        {item.reason && (queueTab === "in_progress" || queueTab === "rejected") && (
+                          <small>Комментарий редактора: {item.reason}</small>
                         )}
-                      </article>
-                    ))
-                  )}
-                  {proposedLinks.length > 0 && (
-                    <div>
-                      <h5>Связи</h5>
-                      <ul className="note-list">
-                        {proposedLinks.map((edge) => (
-                          <li key={`${edge.source}-${edge.target}-${edge.type}`}>
-                            <span className="note-link">
-                              <strong>{edge.source} → {edge.target}</strong>
-                              <small>{edge.type}{edge.unresolved ? " · нет заметки" : ""}</small>
-                            </span>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-                </div>
-                <div className="proposal-rhizome">
-                  <h4>Ризома</h4>
-                  <GraphDiffView diff={proposalDiff} loading={proposalDiffLoading} theme={theme} />
-                </div>
-                {canReview && openProposal.author.id !== user.id && (
-                  <div className="proposal-actions">
-                    <label>
-                      Комментарий автору
-                      <input
-                        value={decisionReason}
-                        onChange={(event) => setDecisionReason(event.target.value)}
-                        maxLength={255}
-                        placeholder="обязателен, чтобы вернуть или отклонить"
-                      />
-                    </label>
-                    {(openProposal.status === "open" || openProposal.status === "conflicted" || openProposal.status === "failed" || openProposal.status === "changes_requested") && (
-                      <>
-                        <button className="button button--primary" type="button" disabled={submitting} onClick={() => void decideProposal(openProposal.id, "approve")}>
-                          Принять
-                        </button>
-                        <button className="button button--danger" type="button" disabled={submitting || decisionReason.trim().length === 0} onClick={() => void decideProposal(openProposal.id, "reject")}>
-                          Отклонить
-                        </button>
-                        <button className="button button--quiet" type="button" disabled={submitting || decisionReason.trim().length === 0} onClick={() => void decideProposal(openProposal.id, "request-changes")}>
-                          Вернуть
-                        </button>
-                      </>
-                    )}
-                    {openProposal.status === "published" && (
-                      <button className="button button--danger" type="button" disabled={submitting || decisionReason.trim().length === 0} onClick={() => void decideProposal(openProposal.id, "rollback")}>
-                        Откатить
                       </button>
-                    )}
-                  </div>
-                )}
-              </article>
+                      {expanded && openProposal && (
+                        <article className="proposal-detail">
+                          <p className="admin-panel__hint">
+                            <a className="person-link" href={personCardHash(openProposal.author.username)}>
+                              {openProposal.author.display_name}
+                            </a>
+                            {" · "}{proposalStatusLabel(openProposal.status)}
+                          </p>
+                          {openProposal.reason && (openProposal.status === "rejected" || openProposal.status === "changes_requested") && (
+                            <p className="proposal-comment" role="status">
+                              Комментарий редактора: {openProposal.reason}
+                            </p>
+                          )}
+                          {canDecide && (
+                            <label className="proposal-reason">
+                              Комментарий автору
+                              <input
+                                value={decisionReason}
+                                onChange={(event) => setDecisionReason(event.target.value)}
+                                maxLength={255}
+                                placeholder="обязателен, чтобы отклонить или доработать"
+                              />
+                            </label>
+                          )}
+                          <div className="proposal-text">
+                            <h4>Текст и связи</h4>
+                            {openProposal.diff.length === 0 ? (
+                              <p className="admin-panel__hint">В предложении нет файлов.</p>
+                            ) : (
+                              openProposal.diff.map((file) => {
+                                const cardOpen = openProposalCard === file.path;
+                                return (
+                                  <article className={cardOpen ? "proposal-card proposal-card--open" : "proposal-card"} key={file.path}>
+                                    <button
+                                      className="proposal-card__toggle"
+                                      type="button"
+                                      aria-expanded={cardOpen}
+                                      onClick={() => setOpenProposalCard(cardOpen ? null : file.path)}
+                                    >
+                                      <strong>{proposalCardTitle(file.path, file.body || "")}</strong>
+                                      <small>
+                                        {file.path}
+                                        {openProposal.added.includes(file.path) ? " · новая карточка" : ""}
+                                        {openProposal.changed.includes(file.path) ? " · изменение текста" : ""}
+                                      </small>
+                                    </button>
+                                    {cardOpen && (
+                                      <div className="proposal-card__body">
+                                        {file.html || (file.rows && file.rows.length > 0) ? (
+                                          <WikiDiffTable
+                                            html={file.html}
+                                            rows={file.rows}
+                                            added={openProposal.added.includes(file.path)}
+                                          />
+                                        ) : file.body ? (
+                                          <MarkdownBody
+                                            body={file.body}
+                                            note={{
+                                              links: proposedLinks.filter((edge) => edge.source === file.path && !edge.unresolved).map((edge) => edge.target),
+                                              unresolved_links: proposedLinks.filter((edge) => edge.source === file.path && edge.unresolved).map((edge) => edge.target),
+                                            }}
+                                            cardPath={`proposal:${openProposal.id}:${file.path}`}
+                                            signedIn
+                                            onCreateMissing={(path) => void createMissingCard(path)}
+                                          />
+                                        ) : (
+                                          <pre className="proposal-diff">{file.diff || file.path}</pre>
+                                        )}
+                                      </div>
+                                    )}
+                                    {canDecide && (
+                                      <div className="proposal-actions">
+                                        <button className="button button--primary" type="button" disabled={submitting} onClick={() => void decideProposal(openProposal.id, "approve")}>
+                                          Принять
+                                        </button>
+                                        <button className="button button--danger" type="button" disabled={submitting || decisionReason.trim().length === 0} onClick={() => void decideProposal(openProposal.id, "reject")}>
+                                          Отклонить
+                                        </button>
+                                        <button className="button button--quiet" type="button" disabled={submitting || decisionReason.trim().length === 0} onClick={() => void decideProposal(openProposal.id, "request-changes")}>
+                                          Доработать
+                                        </button>
+                                      </div>
+                                    )}
+                                  </article>
+                                );
+                              })
+                            )}
+                            {proposedLinks.length > 0 && (
+                              <div>
+                                <h5>Связи</h5>
+                                <ul className="note-list">
+                                  {proposedLinks.map((edge) => (
+                                    <li key={`${edge.source}-${edge.target}-${edge.type}`}>
+                                      <span className="note-link">
+                                        <strong>{edge.source} → {edge.target}</strong>
+                                        <small>{edge.type}{edge.unresolved ? " · нет заметки" : ""}</small>
+                                      </span>
+                                    </li>
+                                  ))}
+                                </ul>
+                              </div>
+                            )}
+                          </div>
+                          <div className="proposal-rhizome">
+                            <h4>Ризома</h4>
+                            <GraphDiffView diff={proposalDiff} loading={proposalDiffLoading} theme={theme} />
+                          </div>
+                        </article>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
             )}
           </section>
           )}
@@ -2777,16 +2788,17 @@ export function App() {
               <InviteGraph graph={inviteGraph} loading={inviteGraphLoading} />
             </section>
           )}
-          {view === "graph" && repository?.shared.connected && (
+          {view === "graph" && (
             <section className="notes-panel notes-panel--graph" aria-labelledby="graph-heading">
               <div>
                 <p className="eyebrow">Граф</p>
-                <h2 id="graph-heading">{graphLayer === "personal" ? "Ваша личная ризома" : "Общая ризома"}</h2>
+                <h2 id="graph-heading">{graphLayer === "personal" ? "Ваша личная ризома" : RHIZOME_TITLE}</h2>
                 <p className="admin-panel__hint">
                   {graphLayer === "personal"
                     ? "Полный личный склад. По умолчанию на «Граф» — ризома; этот слой — фильтр на том же холсте, не отдельная вкладка."
                     : "По умолчанию — граф ризомы. Клик по узлу или ссылке открывает карточку; сбоку будет её локальный граф. Координаты раскладки — только отображение, не знание."}
                 </p>
+                {graphLoadError ? <p className="form-error" role="alert">{graphLoadError}</p> : null}
               </div>
               <div className="graph-actions">
                 {user.role === "admin" && (
@@ -2823,7 +2835,6 @@ export function App() {
                 setAuthOpen(true);
                 goHash(viewHash("graph"));
               }}
-              onConnectShared={connectShared}
             />
           )}
           {view === "about" && legalAboutPanel}
@@ -2902,8 +2913,7 @@ export function App() {
               <p className="admin-panel__hint" role="status">Загружаем карточку…</p>
             )}
             </div>
-            {repository?.shared.connected && (
-              <aside className="card-workspace__graph" aria-label="Локальный граф карточки">
+            <aside className="card-workspace__graph" aria-label="Локальный граф карточки">
                 <p className="eyebrow">Рядом</p>
                 <h3>Граф</h3>
                 <GraphView
@@ -2919,7 +2929,6 @@ export function App() {
                   theme={theme}
                 />
               </aside>
-            )}
           </section>
         )}
         {view === "person" && (
@@ -2931,14 +2940,21 @@ export function App() {
           />
         )}
         {view === "about" && legalAboutPanel}
-        {view !== "card" && view !== "search" && view !== "about" && view !== "person" && view !== "invites" && repository?.shared.connected && (
+        {view !== "card" && view !== "search" && view !== "about" && view !== "person" && view !== "invites" && !authOpen && (
           <section className="notes-panel notes-panel--graph" aria-labelledby="public-graph-heading">
             <div>
               <p className="eyebrow">Граф</p>
-              <h2 id="public-graph-heading">Общая ризома</h2>
-              <p className="admin-panel__hint">
-                Публичный граф: клик по узлу или ссылке открывает карточку.
-              </p>
+              <h2 id="public-graph-heading">{RHIZOME_TITLE}</h2>
+              <p className="admin-panel__hint">{RHIZOME_LEAD}</p>
+              {graphLoadError ? (
+                <p className="form-error" role="alert">
+                  {graphLoadError} Обновите страницу или зайдите позже.
+                </p>
+              ) : (
+                <p className="admin-panel__hint">
+                  Публичный граф: клик по узлу или ссылке открывает карточку.
+                </p>
+              )}
             </div>
             <GraphView
               graph={sharedGraph}

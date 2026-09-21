@@ -347,13 +347,19 @@ async def test_notify_prefs_default_off_and_admin_toggle(
     me = await admin.get("/users/me")
     assert me.json()["notify_queue_email"] is False
     assert me.json()["notify_queue_telegram"] is False
+    assert me.json()["notify_card_changes"] is False
     patched = await admin.patch(
         "/users/me",
-        json={"notify_queue_email": True, "notify_queue_telegram": True},
+        json={
+            "notify_queue_email": True,
+            "notify_queue_telegram": True,
+            "notify_card_changes": True,
+        },
     )
     assert patched.status_code == 200
     assert patched.json()["notify_queue_email"] is True
     assert patched.json()["notify_queue_telegram"] is True
+    assert patched.json()["notify_card_changes"] is True
 
     created = await admin.post(
         "/admin/users",
@@ -367,13 +373,15 @@ async def test_notify_prefs_default_off_and_admin_toggle(
     )
     editor_id = created.json()["id"]
     assert created.json()["notify_queue_email"] is False
+    assert created.json()["notify_card_changes"] is False
     toggled = await admin.patch(
         f"/admin/users/{editor_id}",
-        json={"notify_queue_email": True},
+        json={"notify_queue_email": True, "notify_card_changes": True},
     )
     assert toggled.status_code == 200
     assert toggled.json()["notify_queue_email"] is True
     assert toggled.json()["notify_queue_telegram"] is False
+    assert toggled.json()["notify_card_changes"] is True
     operator = await admin.get("/admin/operator")
     assert operator.json()["telegram"]["configured"] is False
 

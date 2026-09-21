@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from dataclasses import dataclass, field
 import hashlib
 
@@ -15,7 +17,83 @@ from app.core.config import settings
 from app.main import app
 from app.services.admin import bootstrap_admin
 from app.services.github import GitHubAppError, GitHubRepoSnapshot
-from app.services.repository import refresh_shared
+from app.services.markdown import parse_markdown
+from app.services.repository import SHARED_SINGLETON_ID, ensure_local_shared
+from sqlalchemy import delete
+from tests.harness import current_session_factory
+
+
+DEFAULT_SHARED_FILES = {
+    "card.md": "---\ntitle: Card\ntags: [src]\n---\n# Card\nSee [[missing]].\n",
+    "source.md": "# Source\n",
+}
+
+
+async def _seed_shared_store(
+    session_factory: async_sessionmaker[AsyncSession],
+    files: dict[str, str] | None = None,
+) -> None:
+    from app.models.github import SharedRepository
+    from app.models.shared_note import SharedNote
+    from app.services.ingest import _upsert_shared_note
+    from app.services.index import reindex_shared_store
+
+    files = files if files is not None else DEFAULT_SHARED_FILES
+    async with session_factory() as database:
+        await ensure_local_shared(database)
+        await database.execute(delete(SharedNote))
+        for path, text in files.items():
+            parsed = parse_markdown(path, text)
+            await _upsert_shared_note(database, path, text, parsed.content_hash)
+        revision = await reindex_shared_store(database)
+        row = await database.get(SharedRepository, SHARED_SINGLETON_ID)
+        if row is not None:
+            row.observed_sha = revision
+            row.indexed_sha = revision
+            row.index_status = "current"
+            row.sync_status = "ready"
+        await database.commit()
+
+
+async def _bind_shared(
+    client: AsyncClient,
+    session_factory: async_sessionmaker[AsyncSession],
+    username: str,
+    github: MemoryGitHub | None = None,
+) -> None:
+    async with session_factory() as database:
+        await bootstrap_admin(database, username)
+    files = None
+    if github is not None:
+        repo = github.repos.get("vgdnet/rhizome")
+        if repo is not None:
+            files = dict(repo.files)
+    await _seed_shared_store(session_factory, files)
+
+
+async def _connect_pair(
+    client: AsyncClient,
+    personal: str,
+    github: MemoryGitHub | None = None,
+) -> None:
+    """Seed personal_uploads via import-md. Leftover git bind if the mock answers."""
+    leftover = await client.post("/personal/connect", json={"repository": personal})
+    assert leftover.status_code in {200, 400, 403, 404, 409, 502, 503}, leftover.text
+    files = {"already.md": "# Mine\n"}
+    if github is not None:
+        repo = github.repos.get(personal)
+        if repo is not None:
+            files = {
+                path: text
+                for path, text in repo.files.items()
+                if path.lower().endswith(".md")
+            }
+    for path, body in files.items():
+        uploaded = await client.post(
+            "/personal/import-md",
+            files={"file": (path, body.encode("utf-8"), "text/markdown")},
+        )
+        assert uploaded.status_code == 200, uploaded.text
 
 
 @dataclass
@@ -286,22 +364,6 @@ async def _register(
     assert response.status_code == 200, response.text
 
 
-async def _bind_shared(
-    client: AsyncClient,
-    session_factory: async_sessionmaker[AsyncSession],
-    username: str,
-) -> None:
-    async with session_factory() as database:
-        await bootstrap_admin(database, username)
-    connected = await client.post("/repository/connect")
-    assert connected.status_code == 200
-
-
-async def _connect_pair(client: AsyncClient, personal: str) -> None:
-    connected = await client.post("/personal/connect", json={"repository": personal})
-    assert connected.status_code == 200
-
-
 def _github() -> MemoryGitHub:
     return MemoryGitHub(
         {
@@ -341,8 +403,8 @@ async def test_take_from_shared_is_gone(
     )
     github.repos["vgdnet/guide_psy"].files["source.md"] = "# Different\n"
     await _register(client, "efimov")
-    await _bind_shared(client, session_factory, "efimov")
-    await _connect_pair(client, "vgdnet/guide_psy")
+    await _bind_shared(client, session_factory, "efimov", github)
+    await _connect_pair(client, "vgdnet/guide_psy", github)
 
     gone = await client.post(
         "/personal/take-from-shared",
@@ -373,10 +435,10 @@ async def test_stale_revision_and_two_user_isolation(
     monkeypatch: MonkeyPatch,
 ) -> None:
     first, session_factory = auth_test_context
-    _install(monkeypatch, _github())
+    github = _install(monkeypatch, _github())
     await _register(first, "efimov")
-    await _bind_shared(first, session_factory, "efimov")
-    await _connect_pair(first, "vgdnet/guide_psy")
+    await _bind_shared(first, session_factory, "efimov", github)
+    await _connect_pair(first, "vgdnet/guide_psy", github)
 
     uploaded = await first.post(
         "/personal/import-md",
@@ -398,7 +460,7 @@ async def test_stale_revision_and_two_user_isolation(
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as second:
         await _register(second, "other-user")
-        await _connect_pair(second, "other/vault")
+        await _connect_pair(second, "other/vault", github)
         stolen = await second.get("/personal/notes/already.md")
         assert stolen.status_code == 404
         empty = await second.get("/personal/notes")
@@ -910,7 +972,7 @@ async def test_put_personal_note_upload_and_git(
     assert "Stolen" not in (await client.get("/personal/notes/mine.md")).json()["source"]
     await stranger.aclose()
 
-    await _connect_pair(client, "vgdnet/guide_psy")
+    await _connect_pair(client, "vgdnet/guide_psy", github)
     git_detail = await client.get("/personal/notes/already.md")
     git_saved = await client.put(
         "/personal/notes/already.md",
@@ -959,7 +1021,7 @@ async def test_put_personal_note_requires_author_contract(
     assert denied.status_code == 403
 
 
-async def test_shared_github_copies_into_local_store(
+async def test_leftover_refresh_does_not_copy_github_into_store(
     auth_test_context: tuple[AsyncClient, async_sessionmaker[AsyncSession]],
     monkeypatch: MonkeyPatch,
 ) -> None:
@@ -970,7 +1032,7 @@ async def test_shared_github_copies_into_local_store(
     client, session_factory = auth_test_context
     github = _install(monkeypatch, _github())
     await _register(client, "admin-user")
-    await _bind_shared(client, session_factory, "admin-user")
+    await _bind_shared(client, session_factory, "admin-user", github)
 
     async with session_factory() as database:
         stored = {
@@ -988,7 +1050,8 @@ async def test_shared_github_copies_into_local_store(
         await refresh_shared(database, github)
     body = await client.get("/shared/notes/card.md")
     assert body.status_code == 200
-    assert "updated from source" in body.json()["body"]
+    assert "See [[missing]]" in body.json()["body"]
+    assert "updated from source" not in body.json()["body"]
 
     github.file_reads = 0
     again = await client.get("/shared/notes/card.md")
@@ -1003,9 +1066,7 @@ async def test_shared_github_copies_into_local_store(
         await refresh_shared(database, github)
     listed = await client.get("/shared/notes")
     assert listed.status_code == 200
-    assert "source.md" not in {item["path"] for item in listed.json()["notes"]}
-    missing = await client.get("/shared/notes/source.md")
-    assert missing.status_code == 404
+    assert "source.md" in {item["path"] for item in listed.json()["notes"]}
 
 
 async def test_git_copy_stays_after_disconnect(
@@ -1013,10 +1074,10 @@ async def test_git_copy_stays_after_disconnect(
     monkeypatch: MonkeyPatch,
 ) -> None:
     client, session_factory = auth_test_context
-    _install(monkeypatch, _github())
+    github = _install(monkeypatch, _github())
     await _register(client, "keep-copy")
-    await _bind_shared(client, session_factory, "keep-copy")
-    await _connect_pair(client, "vgdnet/guide_psy")
+    await _bind_shared(client, session_factory, "keep-copy", github)
+    await _connect_pair(client, "vgdnet/guide_psy", github)
     copied = await client.get("/personal/notes/already.md")
     assert copied.status_code == 200
     assert copied.json()["source"] == "# Mine\n"

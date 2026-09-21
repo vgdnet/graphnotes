@@ -3,7 +3,14 @@
 The shared rhizome is shown as a Cytoscape.js graph with the **fCoSE** layout
 (`cytoscape-fcose`). Layout coordinates are UI state only and are not stored
 as knowledge. Ordinary edges use haystack; overlay / unresolved / locked edges
-stay directed. Hover highlights the closed neighborhood.
+stay directed. Hover highlights the closed neighborhood. TZ **3.39**: the
+`#/graph` page has an Obsidian-like settings cog (`graphSettings.ts`). Tag
+nodes are client-side (`gn-tag:`). Orphans hide isolated notes. Groups
+recolor matching nodes. Display (arrows, text fade, node size, link
+thickness) and forces (gravity, repulsion, elasticity, ideal length) update
+the stylesheet and fCoSE options. Prefs: `localStorage`
+`graphnotes-graph-settings`. The aside local graph on a card page does not
+open that panel.
 
 `GET /api/graph/shared` is readable without login. Logged-in users get
 `GET /api/graph/personal-overlay`: the same bounded shared page plus **ваша

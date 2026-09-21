@@ -336,14 +336,9 @@ async def get_contributions_me(
     *,
     user: User,
     client: GitHubAppClient | None = None,
-    refresh: bool = True,
+    refresh: bool = False,
 ) -> dict[str, object]:
-    if refresh and client is not None:
-        await refresh_shared(database, client)
-        await refresh_personal(database, user.id, client)
-        await ensure_shared_current(database, client)
-        await ensure_personal_current(database, user.id, client)
-        await reconcile_proposals(database, client)
+    del client, refresh  # leftover git refresh; stats read local stores
 
     personal = await database.scalar(
         select(PersonalRepository).where(PersonalRepository.user_id == user.id)
@@ -576,13 +571,12 @@ async def get_user_card(
     *,
     target: User,
     viewer: User | None,
-    client: GitHubAppClient | None = None,
 ) -> dict[str, object]:
     body = await get_contributions_me(
         database,
         user=target,
-        client=client,
-        refresh=viewer is not None and viewer.id == target.id,
+        client=None,
+        refresh=False,
     )
     accepted = [note for note in body["notes"] if note["state"] == "accepted"]
     is_self = viewer is not None and viewer.id == target.id

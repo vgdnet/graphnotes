@@ -7,6 +7,7 @@ export type ShellView =
   | "settings"
   | "queue"
   | "offer"
+  | "differ"
   | "contribution"
   | "person"
   | "admin"
@@ -24,6 +25,7 @@ export type AppRoute =
   | { kind: "person"; login: string }
   | { kind: "person_unknown" }
   | { kind: "offer" }
+  | { kind: "differ" }
   | { kind: "queue" }
   | { kind: "contribution" }
   | { kind: "admin" }
@@ -36,6 +38,7 @@ const VIEW_HASH: Record<Exclude<AppRoute["kind"], "card" | "start_card" | "auth"
   search: "#/search",
   user: "#/user",
   offer: "#/offer",
+  differ: "#/differ",
   queue: "#/queue",
   contribution: "#/contribution",
   admin: "#/admin",
@@ -56,6 +59,12 @@ export function personCardHash(login: string): string {
   return `#/users/${value}`;
 }
 
+export function hashFromPathname(pathname: string): string | null {
+  const trimmed = (pathname.startsWith("/") ? pathname : `/${pathname}`).replace(/\/+$/, "") || "/";
+  if (PERSON_UUID.test(trimmed) || PERSON_LOGIN.test(trimmed)) return `#${trimmed}`;
+  return null;
+}
+
 export function parseAppRoute(hash: string): AppRoute {
   const raw = hash.startsWith("#") ? hash.slice(1) : hash;
   const value = raw.startsWith("/") ? raw : `/${raw}`;
@@ -70,7 +79,7 @@ export function parseAppRoute(hash: string): AppRoute {
   if (value === "/offer") return { kind: "offer" };
   if (value === "/queue") return { kind: "queue" };
   if (value === "/contribution") return { kind: "contribution" };
-  if (value === "/differ") return { kind: "offer" };
+  if (value === "/differ") return { kind: "differ" };
   if (value === "/admin") return { kind: "admin" };
   if (value === "/about") return { kind: "about" };
   if (value === "/auth" || value.startsWith("/auth")) {
@@ -99,6 +108,8 @@ export function routeToView(route: AppRoute): ShellView {
       return "settings";
     case "offer":
       return "offer";
+    case "differ":
+      return "differ";
     case "queue":
       return "queue";
     case "contribution":

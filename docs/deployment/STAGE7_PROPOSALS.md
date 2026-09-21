@@ -12,8 +12,8 @@ only in shared and were never in this caller's personal store are not
 outbound Differ results.
 
 The user selects outbound rows and creates a proposal from the store pair.
-Leftover GitHub merge-out on `POST /proposals` must not block the offer on
-rate limit. Connected personal git is not rewritten. Store Markdown is not
+Leftover merge-out on `POST /proposals` must not block the offer.
+Connected personal git is not rewritten. Store Markdown is not
 a write into published shared until an editor accepts (`POST /resolve`
 writes `shared_notes`; leftover `/approve` merge-out is not the live
 offer path). After accept and index catch-up, those paths leave **outbound**
@@ -23,9 +23,9 @@ were in this caller's accepted proposals and now differ. It is not a merge
 editor. `#/offer` is my proposals only. Shipped `GET /api/differ` is
 `{differences, inbound}` path/hash metadata. `POST /api/differ/inbound/{path}/accept`
 copies published shared into the caller's personal store for a watched
-inbound path. Leftover «Свой git» connect/disconnect in Settings is not
-canon ingest (TZ **3.35** / **3.37**). While leftover git is connected,
-Settings may hide the bind field; disconnect must not wipe copied store
+inbound path. Leftover `POST`/`DELETE /api/personal/connect` is not
+canon ingest and is **not** on `#/user` (TZ **3.38**). Disconnect of leftover
+git, if an operator still calls the API, must not wipe copied store
 files. Leftover poller/webhook may still copy `.md` in; they are not on
 the Differ list path.
 
@@ -50,7 +50,7 @@ alternate canon. `GET /api/proposals/{id}` file diffs include `html`,
 `rows` parsed from the table. Missing engine is HTTP 503, not `difflib`.
 There is no inline/unified toggle. Author Differ stays a path-checkbox list.
 Reject, return and rollback require a
-reason the author can read. GitHub pull-request URLs, branch names and SHAs
+reason the author can read. Pull-request URLs, branch names and SHAs
 stay out of public JSON.
 
 `GET /api/contributions/me` returns derived author counts: cards (`notes`),

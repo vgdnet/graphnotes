@@ -1,4 +1,5 @@
 import { personCardHash } from "./appRoute";
+import { roleLabel } from "./labels";
 
 export type PersonAchievements = {
   accepted_notes: number;
@@ -130,7 +131,7 @@ export function PersonCardPage({
           <div>
             <strong>{card.user.display_name}</strong>
             <span>
-              @{card.user.username} · {card.user.role}
+              @{card.user.username} · {roleLabel(card.user.role)}
               {card.user.is_author ? " · автор" : ""}
             </span>
             <InviteAttribution
@@ -144,6 +145,28 @@ export function PersonCardPage({
                   .join(" · ")}
               </p>
             ) : null}
+          </div>
+          <div className="stat-grid" aria-label="Статистика">
+            <div className="stat-card">
+              <strong>{card.achievements.proposals}</strong>
+              <span>Предложений</span>
+            </div>
+            <div className="stat-card">
+              <strong>{card.achievements.created}</strong>
+              <span>Создано в ризоме</span>
+            </div>
+            <div className="stat-card">
+              <strong>{card.achievements.edits}</strong>
+              <span>Правок в ризоме</span>
+            </div>
+            <div className="stat-card">
+              <strong>{card.achievements.accepted_notes}</strong>
+              <span>Принято в общую</span>
+            </div>
+            <div className="stat-card">
+              <strong>{card.achievements.accepted_links}</strong>
+              <span>Связей принято в общую</span>
+            </div>
           </div>
           <div className="stat-grid" aria-label="Карточка пользователя">
             <div className="stat-card">
@@ -165,10 +188,6 @@ export function PersonCardPage({
             <div className="stat-card">
               <strong>{formatStoreBytes(card.store?.proposed_edit_bytes ?? 0)}</strong>
               <span>Объём предложенных правок</span>
-            </div>
-            <div className="stat-card">
-              <strong>{card.achievements.accepted_notes}</strong>
-              <span>Принято в общую</span>
             </div>
           </div>
           {card.notes.length > 0 ? (

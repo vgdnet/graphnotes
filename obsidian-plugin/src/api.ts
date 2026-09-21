@@ -1,5 +1,11 @@
 import type { Operation, RemoteFile } from './core';
 import { safePath } from './core';
+import {
+  parseCreatedProposal,
+  parseDifferOffers,
+  parseOpenProposalPaths,
+  type DifferOffer,
+} from './offer';
 import { transport, type Transport, type WireResponse } from './transport';
 
 export interface Limits {
@@ -13,14 +19,25 @@ export interface Limits {
 }
 export interface Capabilities {
   protocol_version: string;
-  user: { id: string; username: string; display_name?: string };
+  user: { id: string; username: string; display_name?: string; role?: string };
   write_allowed: boolean;
   write_block_reason: string | null;
+  can_see_queue?: boolean;
+  can_propose_to_rhizome?: boolean;
   scopes: string[];
   supported_extensions: string[];
   limits: Limits;
   quota?: { personal_max_bytes?: number; personal_used_bytes?: number; personal_remaining_bytes?: number };
   links: { personal_graph: string; differ: string };
+}
+
+/** Context-menu / offer: show for `user`, explicit true, or unknown. Hide only known editor/admin. */
+export function canProposeToRhizome(role: string, flag?: boolean): boolean {
+  if (flag === true) return true;
+  const known = role.trim().toLowerCase();
+  if (known === 'user') return true;
+  if (known === 'editor' || known === 'admin') return false;
+  return true;
 }
 export interface Transfer {
   transfer_id: string;
@@ -145,6 +162,16 @@ export class Api {
   constructor(readonly origin: string, private readonly token: string, private readonly signal: AbortSignal, private readonly send: Transport = transport) {}
 
   private async exchange(path: string, method = 'GET', json?: unknown, bytes?: Uint8Array, key?: string): Promise<WireResponse> {
+    return this.exchangeAt(`/api/integrations/obsidian/v1${path}`, method, json, bytes, key);
+  }
+
+  private async exchangeAt(
+    urlPath: string,
+    method = 'GET',
+    json?: unknown,
+    bytes?: Uint8Array,
+    key?: string,
+  ): Promise<WireResponse> {
     if (!this.token.trim()) throw new Error('Введите токен в настройках плагина.');
     const body = bytes ?? (json === undefined ? undefined : new TextEncoder().encode(JSON.stringify(json)));
     const headers: Record<string, string> = { Authorization: `Bearer ${this.token}`, Accept: 'application/json' };
@@ -153,13 +180,13 @@ export class Api {
       headers['Content-Length'] = String(body.byteLength);
     }
     if (key) headers['Idempotency-Key'] = key;
-    const response = await this.send(`${this.origin}/api/integrations/obsidian/v1${path}`, method, headers, body, this.signal);
+    const response = await this.send(`${this.origin}${urlPath}`, method, headers, body, this.signal);
     if (response.status < 200 || response.status >= 300) {
       let code = 'http_error', message = `Ошибка API (${response.status}).`;
       try {
         const parsed = JSON.parse(new TextDecoder().decode(response.bytes));
-        code = parsed.error?.code ?? code;
-        message = parsed.error?.message ?? message;
+        code = parsed.error?.code ?? (typeof parsed.detail === 'string' ? parsed.detail : code);
+        message = parsed.error?.message ?? (typeof parsed.detail === 'string' ? parsed.detail : message);
       } catch { /* Do not expose raw server pages. */ }
       const raw = header(response.headers, 'retry-after');
       const seconds = Number(raw);
@@ -180,7 +207,27 @@ export class Api {
     catch { throw new Error('API вернул не JSON. Проверьте адрес сервера.'); }
   }
 
+  private async siteJson(path: string, method = 'GET', body?: unknown): Promise<unknown> {
+    const bytes = (await this.exchangeAt(`/api${path}`, method, body)).bytes;
+    if (!bytes.byteLength) return {};
+    try { return JSON.parse(new TextDecoder().decode(bytes)); }
+    catch { throw new Error('API вернул не JSON. Проверьте адрес сервера.'); }
+  }
+
   async capabilities(): Promise<Capabilities> { return parseCapabilities(await this.json('/capabilities')); }
+
+  async differOffers(): Promise<DifferOffer[]> {
+    return parseDifferOffers(await this.siteJson('/differ?include_inbound=false'));
+  }
+
+  async queuedOfferPaths(): Promise<Set<string>> {
+    return parseOpenProposalPaths(await this.siteJson('/proposals'));
+  }
+
+  async propose(paths: string[], summary = ''): Promise<{ id: string; paths: string[] }> {
+    if (!paths.length) throw new Error('Выберите карточку, чтобы предложить её в ризому.');
+    return parseCreatedProposal(await this.siteJson('/proposals', 'POST', { paths, summary }));
+  }
 
   async manifest(limit = 200): Promise<RemoteFile[]> {
     let cursor: string | null = null;

@@ -11,7 +11,13 @@ from app.models.audit_event import AuditEvent
 from app.models.auth_session import AuthSession
 from app.models.github import SharedRepository
 from app.models.user import User, UserRole
+from app.models.access_grant import AccessGrant
 from app.schemas.admin import (
+    AdminEditorTagsUpdate,
+    AdminGrantCatalogResponse,
+    AdminGrantCreate,
+    AdminGrantItem,
+    AdminGrantListResponse,
     AdminMailTestRequest,
     AdminMailTestResponse,
     AdminOperatorResponse,
@@ -30,6 +36,15 @@ from app.services.audit import record_audit_event
 from app.services.auth import hash_password
 from app.core.config import settings
 from app.services.contributions import list_admin_contributions
+from app.services.grants import (
+    GrantError,
+    create_grant,
+    delete_grant,
+    grant_catalog,
+    grants_by_user_ids,
+    list_grants,
+    replace_tag_grants,
+)
 from app.services.installation import (
     resolve_public_base_url,
     resolve_start_card_path,
@@ -80,6 +95,7 @@ def _admin_user_item(
     user: User,
     session_count: int,
     inviter_username: str | None = None,
+    grants: list[AccessGrant] | None = None,
 ) -> AdminUserItem:
     payload = UserResponse.model_validate(user).model_dump()
     payload["session_count"] = session_count
@@ -87,6 +103,10 @@ def _admin_user_item(
     payload["invited_at"] = user.invited_at or (
         user.created_at if user.invited_by_id is not None else None
     )
+    payload["grants"] = [
+        {"id": row.id, "kind": row.kind, "value": row.value}
+        for row in (grants or [])
+    ]
     return AdminUserItem.model_validate(payload)
 
 
@@ -143,12 +163,16 @@ async def list_users(
                 await database.scalars(select(User).where(User.id.in_(inviter_ids)))
             ).all()
             inviter_names = {row.id: row.username for row in inviters}
+        grant_map = await grants_by_user_ids(database, [user.id for user in users])
+    else:
+        grant_map = {}
     return AdminUserListResponse(
         users=[
             _admin_user_item(
                 user,
                 session_counts.get(user.id, 0),
                 inviter_names.get(user.invited_by_id) if user.invited_by_id else None,
+                grant_map.get(user.id, []),
             )
             for user in users
         ],
@@ -286,6 +310,12 @@ async def update_user(
     ):
         target.notify_queue_telegram = payload.notify_queue_telegram
         notify_changed["telegram"] = payload.notify_queue_telegram
+    if (
+        payload.notify_card_changes is not None
+        and payload.notify_card_changes != target.notify_card_changes
+    ):
+        target.notify_card_changes = payload.notify_card_changes
+        notify_changed["card_changes"] = payload.notify_card_changes
     if notify_changed:
         record_audit_event(
             database,
@@ -299,6 +329,158 @@ async def update_user(
     await database.commit()
     await database.refresh(target)
     return target
+
+
+@router.patch("/users/{user_id}/editor-tags", response_model=UserResponse)
+async def update_editor_tags(
+    user_id: uuid.UUID,
+    payload: AdminEditorTagsUpdate,
+    admin: CurrentAdmin,
+    database: DatabaseSession,
+) -> User:
+    target = await database.get(User, user_id)
+    if target is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="user not found",
+        )
+    previous = list(target.editor_tags or [])
+    try:
+        tags = await replace_tag_grants(
+            database, user=target, tags=payload.tags, actor_id=admin.id
+        )
+    except GrantError as exc:
+        raise HTTPException(status_code=exc.status, detail=exc.detail) from exc
+    record_audit_event(
+        database,
+        action="admin.user_editor_tags_changed",
+        actor_user_id=admin.id,
+        target_user_id=target.id,
+        subject_username=target.username,
+        details={"from": previous, "to": tags},
+    )
+    await database.commit()
+    await database.refresh(target)
+    return target
+
+
+@router.get("/grants", response_model=AdminGrantListResponse)
+async def admin_list_grants(
+    _: CurrentAdmin,
+    database: DatabaseSession,
+    user_id: Annotated[uuid.UUID | None, Query()] = None,
+    kind: Annotated[str | None, Query(pattern="^(path|tag|prefix)$")] = None,
+    value: Annotated[str | None, Query(max_length=180)] = None,
+    limit: Annotated[int, Query(ge=1, le=400)] = 200,
+    offset: Annotated[int, Query(ge=0)] = 0,
+) -> AdminGrantListResponse:
+    rows, total = await list_grants(
+        database, user_id=user_id, kind=kind, value=value, limit=limit, offset=offset
+    )
+    names: dict[uuid.UUID, str] = {}
+    if rows:
+        owners = (
+            await database.scalars(
+                select(User).where(User.id.in_({row.user_id for row in rows}))
+            )
+        ).all()
+        names = {item.id: item.username for item in owners}
+    return AdminGrantListResponse(
+        grants=[
+            AdminGrantItem(
+                id=row.id,
+                user_id=row.user_id,
+                username=names.get(row.user_id),
+                kind=row.kind,
+                value=row.value,
+                created_by=row.created_by,
+                created_at=row.created_at,
+            )
+            for row in rows
+        ],
+        total=total,
+    )
+
+
+@router.get("/grants/catalog", response_model=AdminGrantCatalogResponse)
+async def admin_grant_catalog(
+    _: CurrentAdmin,
+    database: DatabaseSession,
+    q: Annotated[str | None, Query(max_length=80)] = None,
+    tag: Annotated[str | None, Query(max_length=80)] = None,
+    limit: Annotated[int, Query(ge=1, le=200)] = 80,
+) -> AdminGrantCatalogResponse:
+    payload = await grant_catalog(database, q=q, tag=tag, limit=limit)
+    return AdminGrantCatalogResponse.model_validate(payload)
+
+
+@router.post("/grants", response_model=AdminGrantItem, status_code=status.HTTP_201_CREATED)
+async def admin_create_grant(
+    payload: AdminGrantCreate,
+    admin: CurrentAdmin,
+    database: DatabaseSession,
+) -> AdminGrantItem:
+    target = await database.get(User, payload.user_id)
+    if target is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="user not found")
+    try:
+        row = await create_grant(
+            database,
+            user=target,
+            kind=payload.kind,
+            value=payload.value,
+            actor_id=admin.id,
+        )
+    except GrantError as exc:
+        await database.rollback()
+        raise HTTPException(status_code=exc.status, detail=exc.detail) from exc
+    record_audit_event(
+        database,
+        action="admin.grant_created",
+        actor_user_id=admin.id,
+        target_user_id=target.id,
+        subject_username=target.username,
+        details={"kind": row.kind, "value": row.value},
+    )
+    await database.commit()
+    await database.refresh(row)
+    return AdminGrantItem(
+        id=row.id,
+        user_id=row.user_id,
+        username=target.username,
+        kind=row.kind,
+        value=row.value,
+        created_by=row.created_by,
+        created_at=row.created_at,
+    )
+
+
+@router.delete("/grants/{grant_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def admin_delete_grant(
+    grant_id: uuid.UUID,
+    admin: CurrentAdmin,
+    database: DatabaseSession,
+) -> None:
+    row = await database.get(AccessGrant, grant_id)
+    if row is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="grant not found")
+    owner = await database.get(User, row.user_id)
+    kind, value = row.kind, row.value
+    owner_id = row.user_id
+    username = owner.username if owner else None
+    if owner is not None:
+        await delete_grant(database, row, owner)
+    else:
+        await database.delete(row)
+    record_audit_event(
+        database,
+        action="admin.grant_deleted",
+        actor_user_id=admin.id,
+        target_user_id=owner_id,
+        subject_username=username,
+        details={"kind": kind, "value": value},
+    )
+    await database.commit()
 
 
 @router.post("/users/{user_id}/password", response_model=UserResponse)

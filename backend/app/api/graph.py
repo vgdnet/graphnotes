@@ -12,7 +12,6 @@ from app.models.personal_upload import PersonalUpload
 from app.schemas.graph import GraphDiffResponse, GraphResponse, RebuildRequest
 from app.schemas.invites import InviteGraphResponse
 from app.schemas.search import SearchResponse
-from app.services.github import GitHubAppClient
 from app.services.invites import list_invite_graph
 from app.services.graph_diff import proposal_graph_diff
 from app.services.index import (
@@ -31,10 +30,6 @@ from app.services.repository import SHARED_SINGLETON_ID
 from app.services.search import search_visible_cards
 
 router = APIRouter(tags=["graph"])
-
-
-def _client() -> GitHubAppClient:
-    return GitHubAppClient()
 
 
 def _raise(error: IndexerError) -> None:
@@ -209,7 +204,6 @@ async def graph_diff(
             database,
             user,
             proposal_id,
-            _client(),
             limit=_limit(limit),
         )
     except ProposalError as exc:
@@ -223,9 +217,8 @@ async def rebuild_index(
     admin: CurrentAdmin,
     database: DatabaseSession,
 ) -> GraphResponse:
-    client = _client()
     try:
-        await rebuild_derived_indexes(database, client, actor_user_id=admin.id)
+        await rebuild_derived_indexes(database, actor_user_id=admin.id)
         if payload.target == "shared":
             return await shared_graph(database)
         return await personal_graph(admin, database)

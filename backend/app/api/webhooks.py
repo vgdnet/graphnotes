@@ -69,14 +69,9 @@ async def github_webhook(
     await database.flush()
 
     if x_github_event == "push":
-        try:
-            payload = json.loads(body.decode("utf-8"))
-        except json.JSONDecodeError as exc:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="invalid webhook payload",
-            ) from exc
-        await _refresh_from_push(database, payload)
+        # Leftover GitHub knowledge webhook (TZ 3.37). Record delivery only.
+        # Do not copy-in or rebuild from GitHub — that would overwrite stores.
+        pass
 
     await database.commit()
     return {"status": "accepted"}

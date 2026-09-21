@@ -15,4 +15,11 @@
 .graphnotes-publisher pre { white-space: pre-wrap; overflow-wrap: anywhere; }
 .gn-sidebar { padding: 8px 12px; }
 .gn-sidebar .gn-muted { color: var(--text-muted); font-size: var(--font-small); }
+.gn-sidebar .gn-error { color: var(--text-error); }
 .gn-sidebar .gn-write { width: 100%; margin-top: 8px; }
+.gn-sidebar h5 { margin: 16px 0 4px; }
+.gn-sidebar .gn-offer-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0; }
+.gn-sidebar .gn-offer-list { margin-top: 8px; }
+.gn-sidebar .gn-offer { display: flex; align-items: flex-start; gap: 8px; padding: 8px 0; border-top: 1px solid var(--background-modifier-border); }
+.gn-sidebar .gn-offer-meta { flex: 1; overflow-wrap: anywhere; }
+.gn-sidebar .gn-offer button { flex-shrink: 0; }

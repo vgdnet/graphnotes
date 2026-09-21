@@ -21,6 +21,8 @@ from app.models.proposal import Proposal
 from app.models.card_revision import CardRevision
 from app.models.rhizome_event import RhizomeEvent
 from app.models.invite import Invite
+from app.models.inbound_notice import InboundNotice
+from app.models.access_grant import AccessGrant, GrantKind
 from app.models.user import User, UserRole
 
 __all__ = [
@@ -28,6 +30,7 @@ __all__ = [
     "AuthSession",
     "EmailToken",
     "Invite",
+    "InboundNotice",
     "InstallationSetting",
     "CardRevision",
     "ClosedPath",
@@ -52,6 +55,8 @@ __all__ = [
     "SyncJob",
     "Tag",
     "UploadEvent",
+    "AccessGrant",
+    "GrantKind",
     "User",
     "UserRole",
 ]

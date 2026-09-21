@@ -8,7 +8,7 @@ from app.models.audit_event import AuditEvent
 from app.services.admin import bootstrap_admin
 from app.services.author_contract import AUTHOR_CONTRACT_REQUIRED, AUTHOR_CONTRACT_VERSION
 from tests.test_ingest import _github, _install, _register
-from tests.test_proposals import _admin, _second
+from tests.test_proposals import _admin, _grant_write, _second
 
 
 def _assert_no_secrets_or_shas(payload: str) -> None:
@@ -127,6 +127,7 @@ async def test_contribute_requires_author_contract(
     assert (
         await admin.patch(f"/admin/users/{editor_id}", json={"role": "editor"})
     ).status_code == 200
+    await _grant_write(admin, editor_id, "fresh.md")
     editor_me = await editor.get("/users/me")
     assert editor_me.status_code == 200
     assert editor_me.json()["role"] == "editor"

@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import { InviteAttribution } from "./PersonCard";
+import { AdminGrants } from "./AdminGrants";
+import { formatAdminRights, type AdminGrantSummary } from "./adminRights";
 
 export type AdminRole = "user" | "editor" | "admin";
 
@@ -13,7 +15,10 @@ export type AdminUser = {
   telegram: string | null;
   notify_queue_email: boolean;
   notify_queue_telegram: boolean;
+  notify_card_changes: boolean;
   role: AdminRole;
+  editor_tags?: string[];
+  grants?: AdminGrantSummary[];
   is_active: boolean;
   is_author: boolean;
   email_verified_at: string | null;
@@ -60,7 +65,7 @@ type OperatorStatus = {
   mail_code_ttl_minutes?: number;
 };
 
-type AdminSection = "users" | "journal" | "operator";
+type AdminSection = "users" | "journal" | "operator" | "grants";
 
 const ACTION_LABELS: Record<string, string> = {
   "admin.user_role_changed": "смена роли",
@@ -82,6 +87,9 @@ const ACTION_LABELS: Record<string, string> = {
   "auth.password_reset": "сброс пароля по почте",
   "admin.public_base_url_changed": "публичный адрес сайта",
   "admin.start_card_changed": "стартовая карточка",
+  "admin.user_editor_tags_changed": "теги очереди",
+  "admin.grant_created": "выдача доступа",
+  "admin.grant_deleted": "снятие доступа",
   "admin.user_notify_changed": "уведомления очереди",
   "notify.queue_sent": "письмо о новых правках",
   "notify.queue_failed": "ошибка уведомления очереди",
@@ -116,7 +124,6 @@ type AdminPanelProps = {
   onSubmitting: (value: boolean) => void;
   onCurrentUserUpdated: (user: AdminUser) => void;
   onSignedOut: () => void;
-  onConnectShared: () => Promise<void>;
 };
 
 export function AdminPanel({
@@ -127,7 +134,6 @@ export function AdminPanel({
   onSubmitting,
   onCurrentUserUpdated,
   onSignedOut,
-  onConnectShared,
 }: AdminPanelProps) {
   const [section, setSection] = useState<AdminSection>("users");
   const [users, setUsers] = useState<AdminUser[]>([]);
@@ -141,6 +147,7 @@ export function AdminPanel({
   const [roleFilter, setRoleFilter] = useState<"" | AdminRole>("");
   const [activeFilter, setActiveFilter] = useState<"" | "true" | "false">("");
   const [passwordDrafts, setPasswordDrafts] = useState<Record<string, string>>({});
+  const [tagDrafts, setTagDrafts] = useState<Record<string, string>>({});
   const [auditAction, setAuditAction] = useState("");
   const [auditActor, setAuditActor] = useState("");
   const [auditQuery, setAuditQuery] = useState("");
@@ -210,7 +217,7 @@ export function AdminPanel({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  async function updateManagedUser(managedUser: AdminUser, change: { role?: AdminRole; is_active?: boolean; notify_queue_email?: boolean; notify_queue_telegram?: boolean }) {
+  async function updateManagedUser(managedUser: AdminUser, change: { role?: AdminRole; is_active?: boolean; notify_queue_email?: boolean; notify_queue_telegram?: boolean; notify_card_changes?: boolean }) {
     onSubmitting(true);
     onError("");
     try {
@@ -223,13 +230,49 @@ export function AdminPanel({
       const updated = (await response.json()) as AdminUser;
       setUsers((items) => items.map((item) => (
         item.id === updated.id
-          ? { ...item, ...updated, session_count: change.is_active === false ? 0 : item.session_count }
+          ? {
+            ...item,
+            ...updated,
+            session_count: change.is_active === false ? 0 : item.session_count,
+            grants: updated.grants ?? item.grants,
+          }
           : item
       )));
       if (updated.id === currentUserId) {
         if (!updated.is_active) onSignedOut();
         else onCurrentUserUpdated(updated);
       }
+      await loadJournal();
+    } catch (requestError) {
+      onError(requestError instanceof Error ? requestError.message : "Ошибка соединения");
+    } finally {
+      onSubmitting(false);
+    }
+  }
+
+  async function saveEditorTags(managedUser: AdminUser) {
+    const raw = tagDrafts[managedUser.id] ?? (managedUser.editor_tags || []).join(", ");
+    const tags = raw
+      .split(",")
+      .map((item) => item.trim())
+      .filter(Boolean);
+    onSubmitting(true);
+    onError("");
+    try {
+      const response = await fetch(`/api/admin/users/${managedUser.id}/editor-tags`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tags }),
+      });
+      if (!response.ok) throw new Error(await readError(response));
+      const updated = (await response.json()) as AdminUser;
+      setUsers((items) => items.map((item) => (
+        item.id === updated.id
+          ? { ...item, ...updated, session_count: item.session_count, grants: updated.grants ?? item.grants }
+          : item
+      )));
+      setTagDrafts((drafts) => ({ ...drafts, [managedUser.id]: (updated.editor_tags || []).join(", ") }));
+      await loadUsers();
       await loadJournal();
     } catch (requestError) {
       onError(requestError instanceof Error ? requestError.message : "Ошибка соединения");
@@ -400,6 +443,9 @@ export function AdminPanel({
           <button className={section === "users" ? "tab tab--active" : "tab"} type="button" onClick={() => setSection("users")}>
             Пользователи
           </button>
+          <button className={section === "grants" ? "tab tab--active" : "tab"} type="button" onClick={() => setSection("grants")}>
+            Доступы
+          </button>
           <button className={section === "journal" ? "tab tab--active" : "tab"} type="button" onClick={() => setSection("journal")}>
             Журнал
           </button>
@@ -423,8 +469,8 @@ export function AdminPanel({
             }}
           >
             <label>
-              Поиск
-              <input value={userQuery} onChange={(event) => setUserQuery(event.target.value)} placeholder="логин, почта, имя" />
+              Поиск по нику
+              <input value={userQuery} onChange={(event) => setUserQuery(event.target.value)} placeholder="ник, логин, почта, имя" />
             </label>
             <label>
               Роль
@@ -488,6 +534,7 @@ export function AdminPanel({
                       invitedAt={managedUser.invited_at}
                       inviterUsername={managedUser.inviter_username}
                     />
+                    <p className="user-row__rights">{formatAdminRights(managedUser)}</p>
                   </div>
                   <label>
                     Роль
@@ -529,6 +576,32 @@ export function AdminPanel({
                     </p>
                   )}
                   {(managedUser.role === "editor" || managedUser.role === "admin") && (
+                    <form
+                      className="user-row__password"
+                      onSubmit={(event) => {
+                        event.preventDefault();
+                        void saveEditorTags(managedUser);
+                      }}
+                    >
+                      <label>
+                        Теги очереди (пусто = нет гранта)
+                        <input
+                          type="text"
+                          value={tagDrafts[managedUser.id] ?? (managedUser.editor_tags || []).join(", ")}
+                          disabled={submitting}
+                          placeholder="psy, clinic"
+                          onChange={(event) => setTagDrafts((drafts) => ({
+                            ...drafts,
+                            [managedUser.id]: event.target.value,
+                          }))}
+                        />
+                      </label>
+                      <button className="button button--quiet" disabled={submitting} type="submit">
+                        Сохранить теги
+                      </button>
+                    </form>
+                  )}
+                  {(managedUser.role === "editor" || managedUser.role === "admin") && (
                     <div className="settings-actions">
                       <label className="contract-check">
                         <input
@@ -547,6 +620,19 @@ export function AdminPanel({
                           onChange={(event) => void updateManagedUser(managedUser, { notify_queue_telegram: event.target.checked })}
                         />
                         <span>Telegram о новых правках</span>
+                      </label>
+                    </div>
+                  )}
+                  {managedUser.is_author && (
+                    <div className="settings-actions">
+                      <label className="contract-check">
+                        <input
+                          type="checkbox"
+                          checked={managedUser.notify_card_changes}
+                          disabled={submitting}
+                          onChange={(event) => void updateManagedUser(managedUser, { notify_card_changes: event.target.checked })}
+                        />
+                        <span>Уведомления об изменениях в карточках, которые правили</span>
                       </label>
                     </div>
                   )}
@@ -581,6 +667,20 @@ export function AdminPanel({
             })}
           </div>
         </div>
+      )}
+
+      {section === "grants" && (
+        <AdminGrants
+          users={users}
+          submitting={submitting}
+          onError={onError}
+          onSubmitting={onSubmitting}
+          onChanged={() => {
+            void loadUsers().catch((requestError: unknown) => {
+              onError(requestError instanceof Error ? requestError.message : "Ошибка соединения");
+            });
+          }}
+        />
       )}
 
       {section === "journal" && (
@@ -688,9 +788,6 @@ export function AdminPanel({
             </div>
           </form>
           <div className="settings-actions">
-            <button className="button button--quiet" type="button" onClick={() => void onConnectShared()} disabled={submitting}>
-              Подключить общую ризому
-            </button>
             <button className="button button--quiet" type="button" onClick={() => void rebuildIndex()} disabled={submitting}>
               Пересобрать индекс
             </button>

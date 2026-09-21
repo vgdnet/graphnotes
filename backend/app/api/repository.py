@@ -44,7 +44,7 @@ async def repository_status(
     database: DatabaseSession,
     user: OptionalUser,
 ) -> RepositoryStatusResponse:
-    """Last stored connector status. Copy-in is webhook / poller / connect / rebuild."""
+    """Last stored connector status. No GitHub live-pull (TZ 3.37)."""
     shared = await database.get(SharedRepository, SHARED_SINGLETON_ID)
     personal = None
     if user is not None:
@@ -66,7 +66,6 @@ async def connect_shared(
         shared = await connect_shared_repository(
             database,
             admin=admin,
-            client=_client(),
         )
     except RepositoryBindError as exc:
         raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc

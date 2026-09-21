@@ -82,7 +82,7 @@ events at the start of `onload` (before `loadData`). Explorer title may
 omit `.md`; still treat `extension === 'md'`. Click: transfer **this path** into personal (same as «Передать
 правки», not the whole vault), then `POST /api/proposals` for that path
 if it is new or differs; notices for created / already queued / already
-in sync / error. Do not `GET /differ` for the bulk list. Do not GitHub.
+in sync / error. Do not `GET /differ` for the bulk list.
 Canon client `obsidian-card-merge/` 0.1.1.
 TZ **3.26**: one Obsidian plugin is canon (3.09
 withdrawn). Queue from API is an editor capability in the same client;
@@ -195,10 +195,10 @@ list. FastAPI paths have no `/api`; Nginx strips it.
 
 | Browser / plugin | FastAPI |
 | --- | --- |
-| `GET /api/differ` | `GET /differ` (site Сверка; offer list, TZ 3.31 hashes, **no GitHub**; `?include_inbound=false`) |
+| `GET /api/differ` | `GET /differ` (site Сверка; offer list, TZ 3.31 hashes; `?include_inbound=false`) |
 | `GET /api/differ/files/{path}` | `GET /differ/files/{path}` (leftover pair; local stores) |
-| `POST /api/proposals` | `POST /proposals` (TZ 3.20: cookie or Bearer, that user; compare local; leftover GitHub branch does not block on rate limit) |
-| `GET /api/proposals` | `GET /proposals` (TZ 3.10 editor queue; offer queued mark; **no GitHub reconcile**) |
+| `POST /api/proposals` | `POST /proposals` (TZ 3.20: cookie or Bearer, that user; compare local; leftover merge-out does not block) |
+| `GET /api/proposals` | `GET /proposals` (TZ 3.10 editor queue; offer queued mark) |
 | `GET /api/proposals/{id}` | `GET /proposals/{id}` (website `/queue` wikidiff2) |
 | `GET /api/proposals/{id}/files/{path}` | `GET /proposals/{id}/files/{path}` (TZ 3.12 pair) |
 | `POST /api/proposals/{id}/resolve` | `POST /proposals/{id}/resolve` (TZ 3.12 publish) |

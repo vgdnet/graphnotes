@@ -16,14 +16,17 @@ from app.services.github import GitHubAppError
 from app.services.index import rebuild_shared
 from app.services.repository import refresh_shared
 from sqlalchemy import func, select
-from tests.test_ingest import MemoryGitHub, MemoryRepo, _connect_pair, _github, _install, _register
+from tests.test_ingest import MemoryGitHub, MemoryRepo, _connect_pair, _github, _install, _register, _seed_shared_store
 
 
 def _install_graph(monkeypatch: MonkeyPatch, github: MemoryGitHub) -> MemoryGitHub:
     _install(monkeypatch, github)
-    monkeypatch.setattr(graph_api, "_client", lambda: github)
-    monkeypatch.setattr(notes_api, "_client", lambda: github)
-    monkeypatch.setattr(repository_api, "_client", lambda: github)
+    if hasattr(graph_api, "_client"):
+        monkeypatch.setattr(graph_api, "_client", lambda: github)
+    if hasattr(notes_api, "_client"):
+        monkeypatch.setattr(notes_api, "_client", lambda: github)
+    if hasattr(repository_api, "_client"):
+        monkeypatch.setattr(repository_api, "_client", lambda: github)
     return github
 
 
@@ -46,7 +49,7 @@ async def test_shared_graph_rebuild_is_deterministic(
     await _register(client, "admin-user")
     async with session_factory() as database:
         await bootstrap_admin(database, "admin-user")
-    assert (await client.post("/repository/connect")).status_code == 200
+    await _seed_shared_store(session_factory, dict(github.repos["vgdnet/rhizome"].files))
 
     first = await client.get("/graph/shared")
     assert first.status_code == 200
@@ -89,9 +92,10 @@ async def test_personal_isolation_and_obsidian_sha_refresh(
     async with session_factory() as database:
         await bootstrap_admin(database, "efimov")
     assert (await first.post("/repository/connect")).status_code == 200
+    await _seed_shared_store(session_factory, dict(github.repos["vgdnet/rhizome"].files))
     github.repos["vgdnet/guide_psy"].files["card.md"] = github.repos["vgdnet/rhizome"].files["card.md"]
     github.repos["vgdnet/guide_psy"].sha = "with-card"
-    await _connect_pair(first, "vgdnet/guide_psy")
+    await _connect_pair(first, "vgdnet/guide_psy", github)
 
     mine = await first.get("/graph/personal")
     assert mine.status_code == 200
@@ -99,15 +103,18 @@ async def test_personal_isolation_and_obsidian_sha_refresh(
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as second:
         await _register(second, "other-user")
-        await _connect_pair(second, "other/vault")
+        await _connect_pair(second, "other/vault", github)
         other = await second.get("/graph/personal")
         assert other.status_code == 200
         assert other.json()["nodes"] == []
         stolen = await second.get("/graph/personal")
         assert "card.md" not in {node["path"] for node in stolen.json()["nodes"]}
 
-    github.repos["vgdnet/guide_psy"].files["from-obsidian.md"] = "# From Obsidian\nLinked to [[card]].\n"
-    github.repos["vgdnet/guide_psy"].sha = "obsidian-sha"
+    uploaded = await first.post(
+        "/personal/import-md",
+        files={"file": ("from-obsidian.md", b"# From Obsidian\nLinked to [[card]].\n", "text/markdown")},
+    )
+    assert uploaded.status_code == 200
     rebuilt = await first.post("/index/rebuild", json={"target": "personal"})
     assert rebuilt.status_code == 200
     refreshed = await first.get("/graph/personal")
@@ -141,7 +148,7 @@ async def test_graph_bounds_and_user_cannot_rebuild(
     assert denied.status_code == 403
     async with session_factory() as database:
         await bootstrap_admin(database, "plain")
-    assert (await client.post("/repository/connect")).status_code == 200
+    await _seed_shared_store(session_factory, dict(github.repos["vgdnet/rhizome"].files))
     bounded = await client.get("/graph/shared", params={"limit": 10})
     assert bounded.status_code == 200
     real_nodes = [node for node in bounded.json()["nodes"] if not node["unresolved"]]
@@ -153,11 +160,13 @@ async def _admin_connect(
     client: AsyncClient,
     session_factory: async_sessionmaker[AsyncSession],
     username: str = "admin-user",
+    github: MemoryGitHub | None = None,
 ) -> None:
     await _register(client, username)
     async with session_factory() as database:
         await bootstrap_admin(database, username)
-    assert (await client.post("/repository/connect")).status_code == 200
+    files = dict(github.repos["vgdnet/rhizome"].files) if github is not None else None
+    await _seed_shared_store(session_factory, files)
 
 
 async def test_incremental_rebuild_matches_full_and_reads_fewer_files(
@@ -166,20 +175,19 @@ async def test_incremental_rebuild_matches_full_and_reads_fewer_files(
 ) -> None:
     client, session_factory = auth_test_context
     github = _install_graph(monkeypatch, _github())
-    await _admin_connect(client, session_factory)
+    await _admin_connect(client, session_factory, github=github)
     assert (await client.get("/graph/shared")).status_code == 200
 
     github.repos["vgdnet/rhizome"].files["card.md"] = (
         "---\ntitle: Card\ntags: [src]\n---\n# Card\nSee [[source]].\n"
     )
-    github.repos["vgdnet/rhizome"].sha = "shared-sha-2"
+    await _seed_shared_store(session_factory, dict(github.repos["vgdnet/rhizome"].files))
     async with session_factory() as database:
-        await refresh_shared(database, github)
-        await rebuild_shared(database, github, paths={"card.md"})
+        await rebuild_shared(database)
     incremental = await client.get("/graph/shared")
     async with session_factory() as database:
         github.file_reads = 0
-        await rebuild_shared(database, github)
+        await rebuild_shared(database)
         full_reads = github.file_reads
     full = await client.get("/graph/shared")
     assert incremental.status_code == 200
@@ -201,7 +209,7 @@ async def test_unresolved_delete_rename_self_and_duplicate_links(
     github = _install_graph(monkeypatch, _github())
     github.repos["vgdnet/rhizome"].files["source.md"] = "# Source\nSee [[card]].\n"
     github.repos["vgdnet/rhizome"].files["loop.md"] = "# Loop\n[[loop]] [[loop]] [[card]] [[card]]\n"
-    await _admin_connect(client, session_factory)
+    await _admin_connect(client, session_factory, github=github)
     first = await client.get("/graph/shared")
     assert first.status_code == 200
     assert any(edge["unresolved"] for edge in first.json()["edges"])
@@ -214,21 +222,21 @@ async def test_unresolved_delete_rename_self_and_duplicate_links(
     assert len(loop_edges) == 2
 
     github.repos["vgdnet/rhizome"].files["missing.md"] = "# Missing\n"
-    github.repos["vgdnet/rhizome"].sha = "sha-resolved"
+    await _seed_shared_store(session_factory, dict(github.repos["vgdnet/rhizome"].files))
     assert (await client.post("/index/rebuild", json={"target": "shared"})).status_code == 200
     resolved = await client.get("/graph/shared")
     assert "missing.md" in {node["path"] for node in resolved.json()["nodes"]}
     assert not any(edge["target"] == "unresolved:missing" for edge in resolved.json()["edges"])
 
     del github.repos["vgdnet/rhizome"].files["source.md"]
-    github.repos["vgdnet/rhizome"].sha = "sha-deleted"
+    await _seed_shared_store(session_factory, dict(github.repos["vgdnet/rhizome"].files))
     assert (await client.post("/index/rebuild", json={"target": "shared"})).status_code == 200
     deleted = await client.get("/graph/shared")
     assert "source.md" not in {node["path"] for node in deleted.json()["nodes"]}
 
     card = github.repos["vgdnet/rhizome"].files.pop("card.md")
     github.repos["vgdnet/rhizome"].files["notes/card.md"] = card
-    github.repos["vgdnet/rhizome"].sha = "sha-renamed"
+    await _seed_shared_store(session_factory, dict(github.repos["vgdnet/rhizome"].files))
     assert (await client.post("/index/rebuild", json={"target": "shared"})).status_code == 200
     renamed = await client.get("/graph/shared")
     paths = {node["path"] for node in renamed.json()["nodes"]}
@@ -250,7 +258,7 @@ async def test_folder_note_graphnotes_is_not_unresolved(
         "Это сайт для отображения вашей динами прироста грибницы.\n"
     )
     github.repos["vgdnet/rhizome"].files["Читай меня.md"] = "See [[GraphNotes]]\n"
-    await _admin_connect(client, session_factory)
+    await _admin_connect(client, session_factory, github=github)
     body = (await client.get("/graph/shared")).json()
     paths = {node["path"] for node in body["nodes"]}
     assert "GraphNotes/GraphNotes.md" in paths
@@ -260,6 +268,30 @@ async def test_folder_note_graphnotes_is_not_unresolved(
         and edge["target"] == "GraphNotes/GraphNotes.md"
         and not edge["unresolved"]
         for edge in body["edges"]
+    )
+
+
+async def test_local_graph_of_hanging_card_shows_incoming_links(
+    auth_test_context: tuple[AsyncClient, async_sessionmaker[AsyncSession]],
+    monkeypatch: MonkeyPatch,
+) -> None:
+    client, session_factory = auth_test_context
+    github = _install_graph(monkeypatch, _github())
+    github.repos["vgdnet/rhizome"].files["ogden 2005.md"] = (
+        "# ogden 2005\nSee [[Неувиденные сны]].\n"
+    )
+    await _admin_connect(client, session_factory, github=github)
+    empty = await client.get("/graph/shared", params={"center": "Неувиденные сны.md", "depth": 1})
+    assert empty.status_code == 200
+    paths = {node["path"] for node in empty.json()["nodes"]}
+    assert "ogden 2005.md" in paths
+    assert any(
+        node["path"].startswith("unresolved:") and "Неувиденные сны" in node["title"]
+        for node in empty.json()["nodes"]
+    )
+    assert any(
+        edge["source"] == "ogden 2005.md" and edge["unresolved"]
+        for edge in empty.json()["edges"]
     )
 
 
@@ -286,7 +318,7 @@ async def test_neighborhood_empty_error_proposal_isolation_and_public_read(
             }
         ),
     )
-    await _admin_connect(client, session_factory, "graph-admin")
+    await _admin_connect(client, session_factory, "graph-admin", github=github)
     neighborhood = await client.get("/graph/shared", params={"center": "b.md", "depth": 1, "limit": 50})
     assert neighborhood.status_code == 200
     nearby = {node["path"] for node in neighborhood.json()["nodes"] if not node["unresolved"]}
@@ -364,7 +396,7 @@ async def test_empty_shared_graph_and_query_baseline(
             }
         ),
     )
-    await _admin_connect(client, session_factory, "empty-admin")
+    await _admin_connect(client, session_factory, "empty-admin", github=github)
     empty = await client.get("/graph/shared")
     assert empty.status_code == 200
     assert empty.json()["nodes"] == []
@@ -372,7 +404,7 @@ async def test_empty_shared_graph_and_query_baseline(
     assert empty.json()["index_status"] in {"current", "empty"}
 
     github.repos["vgdnet/rhizome"].files = {f"n{i:03d}.md": f"# N{i}\n" for i in range(80)}
-    github.repos["vgdnet/rhizome"].sha = "scale-sha"
+    await _seed_shared_store(session_factory, dict(github.repos["vgdnet/rhizome"].files))
     assert (await client.post("/index/rebuild", json={"target": "shared"})).status_code == 200
     started = time.perf_counter()
     scaled = await client.get("/graph/shared", params={"limit": 20})
@@ -391,11 +423,10 @@ async def test_personal_overlay_isolation_shared_read_and_xss_inert(
     client, session_factory = auth_test_context
     github = _install_graph(monkeypatch, _github())
     github.repos["vgdnet/rhizome"].files["xss.md"] = "# <script>alert(1)</script>\n<img src=x>\n"
-    await _admin_connect(client, session_factory, "efimov")
-    await _connect_pair(client, "vgdnet/guide_psy")
+    await _admin_connect(client, session_factory, "efimov", github=github)
     github.repos["vgdnet/guide_psy"].files["card.md"] = github.repos["vgdnet/rhizome"].files["card.md"]
     github.repos["vgdnet/guide_psy"].files["mine.md"] = "# Mine\nSee [[card]].\n"
-    github.repos["vgdnet/guide_psy"].sha = "overlay-sha"
+    await _connect_pair(client, "vgdnet/guide_psy", github)
     assert (await client.post("/index/rebuild", json={"target": "personal"})).status_code == 200
 
     overlay = await client.get("/graph/personal-overlay")
@@ -455,7 +486,7 @@ async def test_personal_overlay_isolation_shared_read_and_xss_inert(
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as second:
         await _register(second, "other-user")
-        await _connect_pair(second, "other/vault")
+        await _connect_pair(second, "other/vault", github)
         stolen = await second.get(
             "/graph/personal-overlay",
             params={"user_id": me.json()["id"]},
@@ -472,8 +503,8 @@ async def test_overlay_from_uploads_without_git(
     monkeypatch: MonkeyPatch,
 ) -> None:
     client, session_factory = auth_test_context
-    _install_graph(monkeypatch, _github())
-    await _admin_connect(client, session_factory, "overlay-admin")
+    github = _install_graph(monkeypatch, _github())
+    await _admin_connect(client, session_factory, "overlay-admin", github=github)
 
     author = AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver")
     await _register(author, "upload-overlay")

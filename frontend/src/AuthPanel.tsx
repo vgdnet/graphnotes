@@ -114,10 +114,6 @@ export function AuthPanel({
                   <button className="auth-link" type="button" onClick={() => onLoginByMail(true)}>
                     Войти письмом
                   </button>
-                  {" · "}
-                  <button className="auth-link" type="button" onClick={() => switchMode("reset")}>
-                    Не помню пароль
-                  </button>
                 </p>
               )}
             </>
@@ -259,17 +255,11 @@ export function AuthPanel({
                         ? "Войти по коду"
                         : "Войти"}
           </button>
+          {mode !== "login" && (
           <p className="hint auth-switch">
-            {mode !== "login" && (
-              <button className="auth-link" type="button" onClick={() => switchMode("login")}>Вход</button>
-            )}
-            {mailConfigured && mode !== "reset" && (
-              <>
-                {mode !== "login" ? " · " : ""}
-                <button className="auth-link" type="button" onClick={() => switchMode("reset")}>Не помню пароль</button>
-              </>
-            )}
+            <button className="auth-link" type="button" onClick={() => switchMode("login")}>Вход</button>
           </p>
+          )}
           <button className="button button--quiet" type="button" onClick={onClose}>К графу</button>
         </form>
       </div>

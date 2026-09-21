@@ -2,7 +2,22 @@
 
 Updated: 2026-09-21
 
-**Shipped this session (nord → rhizome-test):** TZ **3.36** guest chrome
+**Shipped this session (nord):** TZ **3.39** Obsidian-like graph settings
+on `#/graph` (cog: Tags, Orphans, groups + color, display sliders, force
+sliders). Browser `localStorage` `graphnotes-graph-settings`. Card aside
+local graph has no panel. Not production; rhizome-test overlay pending
+this same delivery.
+
+**Previously on rhizome-test:** TZ **3.38** cabinet
+`#/user` has **no** personal-git connect
+(`http://172.16.13.14:8080/#/user`). Four tabs: Личные данные, Договор
+автора, Obsidian, Пригласить пользователя. Removed «Свой git», the
+sentence «Личный git не связан — можно загрузить .md в локальный склад.»,
+and the connect/disconnect GitHub form. Website `.md`/ZIP upload stays
+off (TZ 2.96). Leftover `/api/personal/connect` is not called from the
+cabinet. Overlay deploy frontend only. Not production.
+
+**Also on rhizome-test:** TZ **3.36** guest chrome
 on `http://172.16.13.14:8080`. Graph page names the rhizome and says when
 load failed; health is not green on `/api/health` alone; `/users/me` 5xx
 keeps the session; search empty/searching/none/error; hanging-card local
@@ -20,7 +35,6 @@ tags (click lists cards with that tag). Reuses `GET /api/admin/users?q=`
 Product model TZ **3.37** (living canon does not name an external git
 host; plugin writes the store) / **3.35** (plugin ingest; not Wikipedia
 as a product; leftover git host unfinished) is TZ-only, not this overlay.
-Source-code delivery `nord → GitHub → rhizome-test` stays ADR-006.
 
 Product model TZ **3.34** (history + `/contribution`: who proposed which
 edit, volume; accepter is not the text author) is TZ-only, not this
@@ -37,10 +51,10 @@ and `/home/efimov/obsidian/guide_psy/.obsidian/plugins/graphnotes-card-merge/`
 
 **Also on rhizome-test:** TZ **3.31** — offer list / `GET /api/differ`
 is path+hash metadata from `personal_uploads` ↔ `shared_notes` (no bodies,
-no wikidiff2, **no GitHub API**, no git copy-in on sidebar open or `#/differ`
+no wikidiff2, no live remote API, no git copy-in on sidebar open or `#/differ`
 list). Plugin `user` calls `GET /api/differ?include_inbound=false`.
-`GET /api/proposals` queued mark does not reconcile GitHub. Leftover
-GitHub branch on `POST /proposals` does not block the offer on rate limit.
+`GET /api/proposals` queued mark does not reconcile an external git host. Leftover
+merge-out on `POST /proposals` does not block the offer.
 30s Notice stays as fallback.
 Same `dist/graphnotes-card-merge` build, do not overwrite `data.json`:
 `/home/efimov/obsidian/rhizome/.obsidian/plugins/graphnotes-card-merge/`
@@ -190,23 +204,25 @@ link. TZ 2.65: personal ZIP ingest accepts **10 000** files
 ~120-file vaults succeed. Zip-bomb size/ratio guards unchanged (2 MiB / 8 MiB /
 256 KiB). TZ 2.64: publisher navigation — graph node and wikilink open
 the card; card page has a side local graph; guests read published shared
-cards. TZ 2.63: GitHub is copy-in only. Local stores hold `.md`
+cards. TZ 2.63 (historical): local stores hold `.md`
 (`personal_uploads`, `shared_notes`); PostgreSQL `note_index` is the
 search/graph index, not a second canon. Personal export (if any) is
 from the store, not synthesized from the index. Shared is not a product ZIP.
 TZ 2.62: personal working copy is always the GraphNotes local
 store. **Superseded as ingest canon by TZ 3.35 / 3.37** (plugin writes
-the store). Leftover: connectors copy `.md` in. Differ
-compares the local store to the shared rhizome. Leftover copy-in on git
-connect/refresh is unfinished vs 3.37. In-app save of the website editor is **off** (TZ 2.93); plugin / leftover ZIP /
-copy-in stay on the local store (no write-back to git).
+the store). Leftover: personal git **bind** API (no copy-in). Differ
+compares the local store to the shared rhizome. Copy-in on git
+connect/refresh/rebuild/webhook/poller is **closed** vs 3.37 (leftover
+functions remain unused). In-app save of the website editor is **off** (TZ 2.93); plugin / leftover ZIP /
+stay on the local store (no write-back to git).
 Disconnect keeps copied files (no `drop_personal_layer`). Alembic
 `0017_obsidian_integration` (tokens, transfers, personal assets,
 `object_version`). ADR-008 leftover «no hosted vault» vs hosted store.
 Website in-app edit is **off** until reverse download / reverse sync
 (`#/card/personal:{path}` remains preview; hash may be `personal%3A`).
 TZ 2.54: `[[wikilink]]` inherits the open card layer (personal stays personal).
-Published shared working copies live in `shared_notes` after copy-in (TZ 2.63).
+Published shared working copies live in `shared_notes` (TZ 2.63 historical
+copy-in leftover; ingest is plugin, TZ **3.35** / **3.37**).
 Current implementation stage is Stage 8. ADR-009: Differ outbound is
 personal → published shared; TZ 3.13 inbound is shipped on `#/differ`
 (`GET /api/differ` + `POST /differ/inbound/{path}/accept`). ADR-009
@@ -251,12 +267,12 @@ Primary authoring environment: `nord`
 Target integration environment: `rhizome-test` (`172.16.13.14`)
 Production deployment target: `rhizome`
 Canonical repository: `https://github.com/vgdnet/graphnotes` (public)
-Delivery path: `nord -> GitHub -> rhizome-test -> approved revision -> rhizome`
+Delivery path: `nord -> canonical source remote -> rhizome-test -> approved revision -> rhizome`
 
 Accepted project decisions:
 - canonical software license: GNU Affero General Public License v3.0 (`AGPL-3.0`)
 - card/note content offered to the shared rhizome: WTFPL (TZ 2.44; no second LICENSE file)
-- GitHub is the canonical source delivery mechanism
+- the public git remote is the canonical source delivery mechanism
 - `rhizome-test` normally consumes candidate revisions read-only
 - `rhizome` Git access is read-only and must not use push-capable credentials
 - SSH/rsync is fallback/bootstrap only
@@ -274,7 +290,7 @@ Implemented locally on `nord` as of 2026-08-17:
 - loopback-only host bindings for frontend/backend and no PostgreSQL host port
 - Git-primary deployment instructions, SSH/rsync fallback instructions and an Nginx location example
 - canonical AGPL-3.0 license and license ADR
-- GitHub delivery/read-only production security ADR
+- production git-readonly delivery security ADR
 - canonical `rhizome-test` Compose overlay with configurable frontend LAN bind
 - versioned `rhizome-test` boot unit that waits for the configured LAN address
   and repairs the frontend port bindings without exposing `0.0.0.0`
@@ -282,7 +298,7 @@ Implemented locally on `nord` as of 2026-08-17:
 Stage 1 integration results on `rhizome-test`:
 - initial integration revision: `5c9ec1b`
 - boot-race fix tested revision: `aad3eb0766b6952e9d9c87cbf2d98c0f5812fbad`
-- PASS: clean clone from the public GitHub repository
+- PASS: clean clone from the public source remote
 - PASS: canonical public remote
   `https://github.com/vgdnet/graphnotes.git` resolves the tested Stage 1 branch
 - PASS: `docker compose config` validated
@@ -349,7 +365,7 @@ Expected components:
 Explicitly out of scope:
 - registration/login implementation
 - Telegram
-- GitHub product integration
+- leftover git-host product integration
 - Markdown import/parser
 - graph engine/UI
 - PR/merge workflow
@@ -386,8 +402,8 @@ See `docs/stages/STAGE2_COMPLETED.md`.
 
 Production deployment to `rhizome` remains deferred.
 
-## Stage 3 - GitHub Integration
-Status: DONE
+## Stage 3 - historical git connector
+Status: DONE (leftover vs TZ **3.35** / **3.37**: ingest is the plugin)
 Branch: `feature/03-github-integration`
 Completed: 2026-08-19
 Tested integration revision: `d8322d425cd97b157d6f7214f2e859e227f8fd87`
@@ -500,7 +516,7 @@ TZ 2.5–2.7 on this branch (not merged to main; production
   role-scoped search with layer on hits; password reset + queue notify
   (SMTP 587 STARTTLS). Named in PRODUCT_SPEC 2.50 / MASTER_CONTEXT
 - TZ 2.42–2.46: git XOR hint in Settings (not Differ); connected-git
-  Settings chrome (no connect field, GitHub link, disconnect wipes
+  Settings chrome (no connect field, leftover remote link, disconnect wipes
   personal index); author-contract copy `2026-09-05` (WTFPL cards,
   AGPL-3.0 software); SMTP register opens no session until confirm
   (`#/auth/confirm?token=`); Differ chrome **Отличающиеся**
@@ -549,13 +565,15 @@ TZ 2.5–2.7 on this branch (not merged to main; production
   `/offer` = my proposals; `/queue` = editor queue; `/contribution` = Мой вклад.
   TZ 3.00 removed `/my_graph`. 2.57 person-card /
   combined-queue inferences withdrawn.
-- TZ 2.61–2.63 shipped on this branch: git/shared GitHub copy `.md` into
+- TZ 2.61–2.63 shipped on this branch (superseded as ingest by TZ **3.35** /
+  **3.37**): leftover git copy `.md` into
   `personal_uploads` / `shared_notes`; Differ and cards read the copies;
   disconnect keeps the personal store; search/graph still use `note_index`.
-  Leftover: GitHub App merge/rollback live-read of proposal branches.
-  Closed this wave: GET Differ / repository status / graph / search /
-  cards / comments / contributions no longer live-pull GitHub (copy-in
-  is webhook / poller / connect / `POST /index/rebuild`).
+  Leftover: personal git bind API (no copy-in); unused merge-out
+  (`reconcile_proposals` / `merge_branch`). Closed this wave: GET Differ /
+  repository status / graph / search / cards / comments / contributions /
+  `POST /proposals` / `POST /index/rebuild` / webhook live disk / poller
+  do not copy-in or live-pull GitHub. Admin «Подключить общую ризому» gone.
   Live on `rhizome-test` 2026-09-11: SHA `10586d6fd178cbbcba58d8306225eb238e80e9b0`,
   Alembic `0016_shared_notes`. Production `rhizome` not deployed.
 - TZ 2.65: personal ZIP file-count cap is **10 000** (was 100). A ~120-file
@@ -629,7 +647,7 @@ TZ 2.5–2.7 on this branch (not merged to main; production
   `integration_token_access` (only `/integrations/obsidian/v1` does);
   `/differ` and `/proposals` errors stay `{detail}`, not the v1
   `{error:{code,…}}` envelope;
-- leftover: `AGENTS.md` is gitignored — clones from GitHub do not have
+- leftover: `AGENTS.md` is gitignored — clones of the source remote do not have
   it; one canon is still `PRODUCT_SPEC` + `MASTER_CONTEXT` + ADRs
   (TZ 3.05);
 - leftover: promote invite wave (TZ 2.85–2.87 / 2.89) to production

@@ -74,11 +74,14 @@ async def test_encoded_personal_card_unicode_path(
     github = _install_graph(monkeypatch, _github())
     await _admin(admin, session_factory, "unicode-card-admin")
     note_path = "вариант Б — конспекты/Паранойя (Б).md"
-    github.repos["vgdnet/guide_psy"].files[note_path] = (
-        "# Паранойя (Б)\n\n#inline-tag\nSee [[already]].\n"
+    saved = await admin.put(
+        f"/personal/notes/{note_path}",
+        json={
+            "source": "# Паранойя (Б)\n\n#inline-tag\nSee [[already]].\n",
+            "expected_hash": "",
+        },
     )
-    github.repos["vgdnet/guide_psy"].sha = "unicode-personal-card"
-    await _connect_pair(admin, "vgdnet/guide_psy")
+    assert saved.status_code == 200, saved.text
 
     prefixed = f"personal:{note_path}"
     guest = AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver")
@@ -120,7 +123,7 @@ async def test_rebuild_drops_deleted_personal_from_search_cards_and_comments(
     await _admin(admin, session_factory, "rebuild-search-admin")
 
     author = await _second("vault-owner")
-    await _connect_pair(author, "vgdnet/guide_psy")
+    await _connect_pair(author, "vgdnet/guide_psy", github)
 
     found = await author.get("/search", params={"q": "аддик"})
     assert found.status_code == 200
@@ -173,7 +176,7 @@ async def test_search_rebuilds_personal_when_git_sha_moves(
     github.repos["vgdnet/guide_psy"].sha = "search-before"
     await _admin(admin, session_factory, "search-sha-admin")
     author = await _second("search-sha-owner")
-    await _connect_pair(author, "vgdnet/guide_psy")
+    await _connect_pair(author, "vgdnet/guide_psy", github)
 
     assert f"personal:{gone}" in {
         item["path"]
@@ -204,7 +207,7 @@ async def test_search_overlay_excludes_unlinked_personal(
     github.repos["vgdnet/guide_psy"].sha = "layer-search-sha"
     await _admin(admin, session_factory, "layer-search-admin")
     author = await _second("layer-search-owner")
-    await _connect_pair(author, "vgdnet/guide_psy")
+    await _connect_pair(author, "vgdnet/guide_psy", github)
 
     overlay = await author.get("/search", params={"q": "Alone", "layer": "overlay"})
     assert overlay.status_code == 200
@@ -238,7 +241,7 @@ async def test_visible_search_scopes_by_role_and_marks_layer(
     monkeypatch: MonkeyPatch,
 ) -> None:
     from tests.test_ingest import _connect_pair
-    from tests.test_proposals import _second
+    from tests.test_proposals import _grant_write, _second
 
     admin, session_factory = auth_test_context
     github = _install_graph(monkeypatch, _github())
@@ -247,7 +250,7 @@ async def test_visible_search_scopes_by_role_and_marks_layer(
     github.repos["vgdnet/guide_psy"].sha = "visible-search-sha"
     await _admin(admin, session_factory, "visible-search-admin")
     author = await _second("visible-search-owner")
-    await _connect_pair(author, "vgdnet/guide_psy")
+    await _connect_pair(author, "vgdnet/guide_psy", github)
 
     own = await author.get("/search", params={"q": "Alone"})
     assert own.status_code == 200
@@ -280,6 +283,7 @@ async def test_visible_search_scopes_by_role_and_marks_layer(
     users = await admin.get("/admin/users")
     editor_id = next(item["id"] for item in users.json()["users"] if item["username"] == "visible-editor")
     assert (await admin.patch(f"/admin/users/{editor_id}", json={"role": "editor"})).status_code == 200
+    await _grant_write(admin, editor_id, "offer.md")
 
     reviewed = await editor.get("/search", params={"q": "Offer"})
     assert reviewed.status_code == 200

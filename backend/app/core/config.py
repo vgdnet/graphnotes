@@ -35,7 +35,7 @@ class Settings(BaseSettings):
     graph_page_max: int = 200
     graph_diff_timeout_seconds: float = 30.0
     graph_diff_cache_max: int = 20
-    personal_sync_interval_seconds: int = 300
+    personal_sync_interval_seconds: int = 0
     integration_markdown_max_bytes: int = 1_048_576
     integration_attachment_max_bytes: int = 26_214_400
     integration_batch_max_operations: int = 500

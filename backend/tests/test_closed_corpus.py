@@ -3,6 +3,7 @@ from pytest import MonkeyPatch
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.main import app
+from app.services.index import rebuild_shared
 from tests.test_ingest import _github, _install, _register
 from tests.test_proposals import _admin, _second
 
@@ -19,8 +20,10 @@ async def test_closed_path_stays_out_of_differ_and_hides_body(
     monkeypatch: MonkeyPatch,
 ) -> None:
     admin, session_factory = auth_test_context
-    _install(monkeypatch, _github())
+    github = _install(monkeypatch, _github())
     await _admin(admin, session_factory, "closed-admin")
+    async with session_factory() as database:
+        await rebuild_shared(database)
 
     author = await _second("keeper")
     uploaded = await author.post(

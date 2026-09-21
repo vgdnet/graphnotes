@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import { cardApiUrl, cardHash, cardSearchHash, canonicalCardHash, differFileApiUrl, parseCardRoute, pathFromCardHash, isOwnPersonalCard, canShowCardEditButton, normalizeCardPath, qualifyCardPath, wikiCardHash, missingNotePath, missingNoteTitle } from "../test-out/cardRoute.js";
-import { parseAppRoute, routeToView, viewHash, personCardHash } from "../test-out/appRoute.js";
+import { parseAppRoute, routeToView, viewHash, personCardHash, hashFromPathname } from "../test-out/appRoute.js";
 import { renderBlocks } from "../test-out/markdownRender.js";
 
 const UNICODE_PATH = "personal:вариант Б — конспекты/Паранойя (Б).md";
@@ -16,8 +16,9 @@ test("empty #/card/ is legacy search; #/card is the start card", () => {
   assert.deepEqual(parseAppRoute("#/card"), { kind: "start_card" });
   assert.deepEqual(parseAppRoute("#/search"), { kind: "search" });
   assert.equal(routeToView(parseAppRoute("#/offer")), "offer");
-  assert.equal(routeToView(parseAppRoute("#/differ")), "offer");
-  assert.equal(parseAppRoute("#/differ").kind, "offer");
+  assert.equal(routeToView(parseAppRoute("#/differ")), "differ");
+  assert.equal(parseAppRoute("#/differ").kind, "differ");
+  assert.equal(viewHash("differ"), "#/differ");
   assert.equal(routeToView(parseAppRoute("#/queue")), "queue");
   assert.equal(routeToView(parseAppRoute("#/user")), "settings");
   assert.equal(routeToView(parseAppRoute("#/my_graph")), "graph");
@@ -38,6 +39,18 @@ test("empty #/card/ is legacy search; #/card is the start card", () => {
   assert.equal(personCardHash("efimov"), "#/users/efimov");
   assert.equal(personCardHash("@Efimov"), "#/users/efimov");
   assert.equal(personCardHash("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"), "#/graph");
+  assert.equal(hashFromPathname("/users/efimov"), "#/users/efimov");
+  assert.equal(hashFromPathname("/users/efimov/"), "#/users/efimov");
+  assert.equal(hashFromPathname("/"), null);
+  assert.equal(hashFromPathname("/graph"), null);
+  assert.deepEqual(parseAppRoute(hashFromPathname("/users/efimov")), {
+    kind: "person",
+    login: "efimov",
+  });
+  assert.equal(
+    parseAppRoute(hashFromPathname("/users/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")).kind,
+    "person_unknown",
+  );
   assert.equal(differFileApiUrl("fresh.md"), "/api/differ/files/fresh.md");
   assert.equal(
     differFileApiUrl("Темы/Память.md"),
@@ -150,4 +163,15 @@ test("hashtags and hash-only lines do not hang the markdown renderer", () => {
   assert.match(html, /<h1>/);
   assert.match(html, /#inline-tag/);
   assert.match(html, /plain/);
+});
+
+test("underscore italics render as emphasis", () => {
+  const html = renderBlocks(
+    "in _The International Journal of Psychoanalysis, 86_ the paper",
+    emptyNote,
+    [],
+    cardHash,
+  );
+  assert.match(html, /<em>The International Journal of Psychoanalysis, 86<\/em>/);
+  assert.doesNotMatch(html, /_The International/);
 });

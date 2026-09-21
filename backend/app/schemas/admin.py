@@ -6,6 +6,7 @@ from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator, mo
 
 from app.models.user import UserRole
 from app.schemas.auth import UserResponse, normalize_username
+from app.services.grants import normalize_tag_list
 
 
 class AdminUserUpdate(BaseModel):
@@ -13,6 +14,7 @@ class AdminUserUpdate(BaseModel):
     is_active: bool | None = None
     notify_queue_email: bool | None = None
     notify_queue_telegram: bool | None = None
+    notify_card_changes: bool | None = None
 
     @model_validator(mode="after")
     def require_change(self) -> "AdminUserUpdate":
@@ -21,9 +23,19 @@ class AdminUserUpdate(BaseModel):
             and self.is_active is None
             and self.notify_queue_email is None
             and self.notify_queue_telegram is None
+            and self.notify_card_changes is None
         ):
             raise ValueError("a user field to update must be provided")
         return self
+
+
+class AdminEditorTagsUpdate(BaseModel):
+    tags: list[str] = Field(default_factory=list)
+
+    @field_validator("tags")
+    @classmethod
+    def normalize_tags(cls, value: list[str]) -> list[str]:
+        return normalize_tag_list(value)
 
 
 class AdminPasswordSet(BaseModel):
@@ -57,10 +69,17 @@ class AdminUserCreate(BaseModel):
         return str(value).casefold()
 
 
+class AdminUserGrantItem(BaseModel):
+    id: uuid.UUID
+    kind: str
+    value: str
+
+
 class AdminUserItem(UserResponse):
     session_count: int = 0
     invited_at: datetime | None = None
     inviter_username: str | None = None
+    grants: list[AdminUserGrantItem] = Field(default_factory=list)
 
 
 class AdminUserListResponse(BaseModel):
@@ -127,4 +146,38 @@ class AdminSessionRevokeResponse(BaseModel):
     user_id: uuid.UUID
 
 
-AdminSection = Literal["users", "journal", "operator"]
+AdminSection = Literal["users", "journal", "operator", "grants"]
+
+
+class AdminGrantCreate(BaseModel):
+    user_id: uuid.UUID
+    kind: Literal["path", "tag", "prefix"]
+    value: str = Field(min_length=1, max_length=180)
+
+
+class AdminGrantItem(BaseModel):
+    id: uuid.UUID
+    user_id: uuid.UUID
+    username: str | None = None
+    kind: str
+    value: str
+    created_by: uuid.UUID | None = None
+    created_at: datetime | None = None
+
+
+class AdminGrantListResponse(BaseModel):
+    grants: list[AdminGrantItem]
+    total: int = 0
+
+
+class AdminCatalogCard(BaseModel):
+    path: str
+    title: str
+
+
+class AdminGrantCatalogResponse(BaseModel):
+    paths: list[str]
+    tags: list[str]
+    prefixes: list[str]
+    cards: list[AdminCatalogCard] = Field(default_factory=list)
+

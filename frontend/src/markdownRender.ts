@@ -88,7 +88,8 @@ function renderInline(
   return withMdLinks
     .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
     .replace(/__([^_]+)__/g, "<strong>$1</strong>")
-    .replace(/\*([^*]+)\*/g, "<em>$1</em>");
+    .replace(/\*([^*]+)\*/g, "<em>$1</em>")
+    .replace(/(^|[^A-Za-z0-9_])_([^_]+)_/g, "$1<em>$2</em>");
 }
 
 export function renderBlocks(

@@ -13,6 +13,7 @@ from app.services.github import GitHubAppClient, GitHubAppError, GitHubRepoSnaps
 OWNER_NAME_PATTERN = re.compile(r"^[A-Za-z0-9](?:[A-Za-z0-9._-]{0,38})$")
 REPO_NAME_PATTERN = re.compile(r"^[A-Za-z0-9._-]{1,100}$")
 SHARED_SINGLETON_ID = 1
+LOCAL_SHARED_NODE_ID = "local-shared"
 
 
 def published_sha(shared: SharedRepository | None) -> str | None:
@@ -111,42 +112,63 @@ def public_status(row: SharedRepository | PersonalRepository | None) -> dict[str
     }
 
 
+async def ensure_local_shared(database: AsyncSession) -> SharedRepository:
+    """Local shared binding. No GitHub. Ingest is plugin / grants / Differ."""
+    row = await database.get(SharedRepository, SHARED_SINGLETON_ID)
+    if row is not None:
+        if not row.observed_sha and not row.indexed_sha:
+            row.observed_sha = "empty"
+            row.indexed_sha = row.indexed_sha or "empty"
+            row.sync_status = "ready"
+            row.index_status = "current"
+            row.last_error = None
+        return row
+    row = SharedRepository(
+        id=SHARED_SINGLETON_ID,
+        github_node_id=LOCAL_SHARED_NODE_ID,
+        owner=settings.github_shared_owner or "local",
+        name=settings.github_shared_name or "rhizome",
+        default_branch="main",
+        html_url="",
+        observed_sha="empty",
+        indexed_sha="empty",
+        index_status="current",
+        sync_status="ready",
+        observed_at=datetime.now(UTC),
+    )
+    database.add(row)
+    await database.commit()
+    await database.refresh(row)
+    return row
+
+
 async def connect_shared_repository(
     database: AsyncSession,
     *,
     admin: User,
-    client: GitHubAppClient,
+    client: GitHubAppClient | None = None,
 ) -> SharedRepository:
-    owner = settings.github_shared_owner
-    name = settings.github_shared_name
-    try:
-        snapshot = await client.get_repository(owner, name)
-    except GitHubAppError as exc:
-        raise RepositoryBindError(
-            503 if exc.status in {"unavailable", "rate_limited"} else 400,
-            exc.message,
-        ) from exc
-
-    row = await database.get(SharedRepository, SHARED_SINGLETON_ID)
-    if row is None:
-        row = SharedRepository(id=SHARED_SINGLETON_ID)
-        database.add(row)
-    apply_snapshot(row, snapshot)
+    del client  # leftover GitHub App; shared is the local store (TZ 3.37)
+    row = await ensure_local_shared(database)
     record_audit_event(
         database,
         action="repository.shared_connected",
         actor_user_id=admin.id,
-        details={"owner": snapshot.owner, "name": snapshot.name},
+        details={"owner": row.owner, "name": row.name, "source": "local_store"},
     )
     await database.commit()
     await database.refresh(row)
-    from app.services.ingest import copy_shared_git_into_store
-
-    await copy_shared_git_into_store(database, client, row, previous_sha=None)
-    from app.services.index import IndexerError, ensure_shared_current
+    from app.services.index import IndexerError, reindex_shared_store
 
     try:
-        await ensure_shared_current(database, client)
+        revision = await reindex_shared_store(database)
+        row = await database.get(SharedRepository, SHARED_SINGLETON_ID) or row
+        row.observed_sha = revision
+        row.indexed_sha = revision
+        row.index_status = "current"
+        row.sync_status = "ready"
+        row.last_error = None
+        await database.commit()
         await database.refresh(row)
     except IndexerError:
         pass
@@ -202,16 +224,7 @@ async def connect_personal_repository(
     )
     await database.commit()
     await database.refresh(row)
-    from app.services.ingest import copy_git_into_personal_store
-
-    await copy_git_into_personal_store(database, user.id, client, row, previous_sha=None)
-    from app.services.index import IndexerError, ensure_personal_current
-
-    try:
-        await ensure_personal_current(database, user.id, client)
-        await database.refresh(row)
-    except IndexerError:
-        pass
+    # Leftover bind only (TZ 3.37). Do not copy git into personal_uploads.
     return row
 
 
@@ -237,69 +250,19 @@ async def disconnect_personal_repository(
     await database.commit()
 
 
-async def refresh_shared(database: AsyncSession, client: GitHubAppClient) -> SharedRepository | None:
-    row = await database.get(SharedRepository, SHARED_SINGLETON_ID)
-    if row is None:
-        return None
-    previous_sha = row.observed_sha
-    try:
-        snapshot = await client.get_repository(row.owner, row.name)
-        apply_snapshot(row, snapshot)
-    except GitHubAppError as exc:
-        apply_error(row, exc)
-    await database.commit()
-    await database.refresh(row)
-    from app.services.ingest import copy_shared_git_into_store
-
-    try:
-        await copy_shared_git_into_store(database, client, row, previous_sha=previous_sha)
-    except GitHubAppError as exc:
-        apply_error(row, exc)
-        await database.commit()
-        return row
-    from app.services.index import IndexerError, ensure_shared_current
-
-    try:
-        await ensure_shared_current(database, client)
-    except IndexerError:
-        pass
-    await database.refresh(row)
-    return row
+async def refresh_shared(database: AsyncSession, client: GitHubAppClient | None = None) -> SharedRepository | None:
+    """Leftover no-op. Must not copy GitHub into shared_notes."""
+    del client
+    return await database.get(SharedRepository, SHARED_SINGLETON_ID)
 
 
 async def refresh_personal(
     database: AsyncSession,
     user_id,
-    client: GitHubAppClient,
+    client: GitHubAppClient | None = None,
 ) -> PersonalRepository | None:
-    row = await database.scalar(
+    """Leftover no-op. Must not copy GitHub into personal_uploads."""
+    del client
+    return await database.scalar(
         select(PersonalRepository).where(PersonalRepository.user_id == user_id)
     )
-    if row is None:
-        return None
-    previous_sha = row.observed_sha
-    try:
-        snapshot = await client.get_repository(row.owner, row.name)
-        apply_snapshot(row, snapshot)
-    except GitHubAppError as exc:
-        apply_error(row, exc)
-    await database.commit()
-    await database.refresh(row)
-    from app.services.ingest import copy_git_into_personal_store
-
-    try:
-        await copy_git_into_personal_store(
-            database, user_id, client, row, previous_sha=previous_sha
-        )
-    except GitHubAppError as exc:
-        apply_error(row, exc)
-        await database.commit()
-        return row
-    from app.services.index import IndexerError, ensure_personal_current
-
-    try:
-        await ensure_personal_current(database, user_id, client)
-    except IndexerError:
-        pass
-    await database.refresh(row)
-    return row

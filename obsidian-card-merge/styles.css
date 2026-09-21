@@ -122,7 +122,78 @@
   text-align: left;
 }
 
-.gnm-queue-item small {
+.gnm-queue-item small,
+.gnm-queue-row small {
   color: var(--text-muted);
   font-size: var(--font-small);
+}
+
+.gnm-queue-row {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  margin: 0 0 12px;
+}
+
+.gnm-queue-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  width: 100%;
+}
+
+.gnm-debug-log {
+  display: block;
+  width: 100%;
+  min-height: 280px;
+  margin: 8px 0;
+  font-family: var(--font-monospace);
+  font-size: 12px;
+  line-height: 1.4;
+  white-space: pre;
+}
+
+.gn-sidebar .gn-write {
+  width: 100%;
+  margin-top: 8px;
+}
+
+.gn-sidebar h5,
+.gnm-queue h5 {
+  margin: 16px 0 4px;
+}
+
+.gn-sidebar .gn-offer-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 8px 0;
+}
+
+.gn-sidebar .gn-offer-list {
+  margin-top: 8px;
+}
+
+.gn-sidebar .gn-offer {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 0;
+  border-top: 1px solid var(--background-modifier-border);
+}
+
+.gn-sidebar .gn-offer-meta {
+  flex: 1;
+  overflow-wrap: anywhere;
+}
+
+.gn-sidebar .gn-offer button {
+  flex-shrink: 0;
+}
+
+.gnm-queue-section {
+  margin-top: 16px;
+  padding-top: 8px;
+  border-top: 1px solid var(--background-modifier-border);
 }

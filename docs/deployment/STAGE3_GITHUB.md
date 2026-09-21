@@ -1,6 +1,10 @@
-# Stage 3 GitHub App operations
+# Stage 3 leftover git-host operations
 
-The GitHub App private key never enters git. On `nord` it lives at
+**Not canon (TZ 3.35 / 3.37).** Knowledge ingest is the Obsidian plugin.
+This file is leftover runtime for an unfinished git-host App. Do not treat
+it as the product path.
+
+The App private key never enters git. On `nord` it lives at
 `.secrets/github-app.pem` (`chmod 600`).
 
 Compose mounts that file into the backend as

@@ -2,7 +2,7 @@ from httpx import AsyncClient
 from pytest import MonkeyPatch
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from tests.test_ingest import _github, _install
+from tests.test_ingest import _connect_pair, _github, _install
 from tests.test_proposals import _admin, _second
 
 
@@ -24,7 +24,7 @@ async def test_publication_feed_and_commenter_moderation(
     await _admin(admin, session_factory, "feed-admin")
 
     author = await _second("feeder")
-    await author.post("/personal/connect", json={"repository": "vgdnet/guide_psy"})
+    await _connect_pair(author, "vgdnet/guide_psy", github)
     created = await author.post("/proposals", json={"paths": ["already.md", "card.md"]})
     assert created.status_code == 200
     published = await admin.post(
@@ -86,7 +86,7 @@ async def test_personal_in_app_feed_does_not_mix_with_shared(
     await _admin(admin, session_factory, "feed-iso-admin")
 
     author = await _second("feed-iso-author")
-    await author.post("/personal/connect", json={"repository": "vgdnet/guide_psy"})
+    await _connect_pair(author, "vgdnet/guide_psy", github)
     created = await author.post("/proposals", json={"paths": ["already.md", "card.md"]})
     assert created.status_code == 200
     published = await admin.post(

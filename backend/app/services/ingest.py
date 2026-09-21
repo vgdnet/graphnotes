@@ -553,8 +553,9 @@ async def save_personal_note(
     path: str,
     source: str,
     expected_hash: str,
-    client: GitHubAppClient,
+    client: GitHubAppClient | None = None,
 ) -> dict[str, object]:
+    del client  # leftover git write; working copy is personal_uploads
     try:
         normalized = normalize_git_path(path)
     except PathError as exc:
@@ -576,11 +577,6 @@ async def save_personal_note(
     except ValueError as exc:
         raise IngestError(400, str(exc)) from exc
 
-    row = await _personal_or_none(database, user.id)
-    if row is not None:
-        await copy_git_into_personal_store(
-            database, user.id, client, row, previous_sha=row.observed_sha
-        )
     return await _save_personal_upload(
         database,
         user=user,
@@ -588,7 +584,6 @@ async def save_personal_note(
         source=source,
         parsed_hash=parsed.content_hash,
         expected_hash=expected_hash,
-        client=client,
     )
 
 
@@ -668,8 +663,10 @@ async def _save_personal_upload(
     source: str,
     parsed_hash: str,
     expected_hash: str,
-    client: GitHubAppClient,
+    client: GitHubAppClient | None = None,
 ) -> dict[str, object]:
+    del client
+    from app.services.index import reindex_personal_uploads
     upload = await database.scalar(
         select(PersonalUpload).where(
             PersonalUpload.user_id == user.id,
@@ -702,7 +699,12 @@ async def _save_personal_upload(
             details={"path": path, "source": "upload"},
         )
         await database.commit()
-        return await get_personal_note(database, user, path, client)
+        try:
+            await reindex_personal_uploads(database, user.id)
+            await database.commit()
+        except IndexerError:
+            pass
+        return await get_personal_note(database, user, path)
     if expected_hash != upload.content_hash:
         raise IngestError(409, "note changed, reload the card")
     if upload.body != source:
@@ -728,7 +730,12 @@ async def _save_personal_upload(
             details={"path": path, "source": "upload"},
         )
         await database.commit()
-    return await get_personal_note(database, user, path, client)
+    try:
+        await reindex_personal_uploads(database, user.id)
+        await database.commit()
+    except IndexerError:
+        pass
+    return await get_personal_note(database, user, path)
 
 
 async def get_shared_note(
@@ -858,6 +865,8 @@ async def _import_without_git(
                 actor_user_id=user.id,
                 before_text=before_text,
             )
+    from app.services.index import reindex_personal_uploads
+
     record_audit_event(
         database,
         action="notes.import_md",
@@ -872,6 +881,11 @@ async def _import_without_git(
         },
     )
     await database.commit()
+    try:
+        await reindex_personal_uploads(database, user.id)
+        await database.commit()
+    except IndexerError:
+        pass
     return {
         "accepted": accepted,
         "rejected": [],

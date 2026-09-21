@@ -149,6 +149,13 @@ async def test_differ_list_does_not_call_github(
     queued = await author.get("/proposals")
     assert queued.status_code == 200
     assert queued.json()["proposals"] == []
+    offered = await author.post("/proposals", json={"paths": ["fresh.md"], "summary": "from store"})
+    assert offered.status_code == 200
+    assert offered.json()["status"] == "open"
+    assert offered.json()["paths"] == ["fresh.md"]
+    queued_after = await author.get("/proposals")
+    assert queued_after.status_code == 200
+    assert queued_after.json()["proposals"][0]["id"] == offered.json()["id"]
     status = await author.get("/repository/status")
     assert status.status_code == 200
     assert status.json()["shared"]["connected"] is True

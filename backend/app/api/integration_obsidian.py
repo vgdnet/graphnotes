@@ -31,6 +31,17 @@ from app.services.obsidian_transfers import (
     remaining_blobs,
     transfer_public,
 )
+from app.services.git_paths import PathError, normalize_git_path
+from app.services.grants import (
+    GrantError,
+    file_headers,
+    granted_shared_notes,
+    require_write_grant,
+    write_shared_body,
+)
+from app.services.integration_paths import IntegrationPathError, normalize_integration_path
+import hashlib
+from urllib.parse import quote
 
 router = APIRouter(
     prefix="/integrations/obsidian/v1",
@@ -130,6 +141,96 @@ async def files_content(
     request_id = getattr(request.state, "request_id", "") or ""
     headers["X-Request-ID"] = request_id
     return FastAPIResponse(content=body, headers=headers)
+
+
+def _grant_error(exc: GrantError) -> IntegrationError:
+    code = "forbidden" if exc.status == 403 else "not_found" if exc.status == 404 else "invalid_request"
+    return IntegrationError(exc.status, code, exc.detail)
+
+
+@router.get("/granted")
+async def granted_manifest(
+    request: Request,
+    database: DatabaseSession,
+    auth: IntegrationAuth,
+) -> JSONResponse:
+    user, token = auth
+    require_scopes(token, "personal:read")
+    notes = await granted_shared_notes(database, user)
+    items = []
+    for note in notes:
+        payload = note.body.encode("utf-8")
+        digest = note.content_hash or hashlib.sha256(payload).hexdigest()
+        items.append(
+            {
+                "path": note.path,
+                "kind": "markdown",
+                "sha256": digest,
+                "version": digest,
+                "size": len(payload),
+            }
+        )
+    return _json({"items": items}, request=request)
+
+
+@router.get("/granted/files/content")
+async def granted_file_content(
+    request: Request,
+    database: DatabaseSession,
+    auth: IntegrationAuth,
+    path: str = Query(..., min_length=1),
+) -> FastAPIResponse:
+    user, token = auth
+    require_scopes(token, "personal:read")
+    try:
+        normalized = normalize_git_path(path)
+        note = await require_write_grant(database, user, normalized)
+    except PathError as exc:
+        raise IntegrationError(400, "invalid_path", "путь недопустим") from exc
+    except GrantError as exc:
+        raise _grant_error(exc) from exc
+    if note is None:
+        raise IntegrationError(404, "not_found", "файл не найден")
+    body, headers = file_headers(note)
+    request_id = getattr(request.state, "request_id", "") or ""
+    headers["X-Request-ID"] = request_id
+    headers["X-GraphNotes-Path"] = quote(note.path, safe="/")
+    return FastAPIResponse(content=body, headers=headers)
+
+
+@router.put("/granted/files")
+async def put_granted_file(
+    request: Request,
+    database: DatabaseSession,
+    auth: IntegrationAuth,
+    path: str = Query(..., min_length=1),
+) -> JSONResponse:
+    user, token = auth
+    require_scopes(token, "personal:read", "personal:write")
+    payload = await request.body()
+    try:
+        text = payload.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise IntegrationError(422, "invalid_utf8", "Markdown должен быть UTF-8") from exc
+    try:
+        note = await write_shared_body(database, user=user, path=path, body=text)
+    except PathError as exc:
+        raise IntegrationError(400, "invalid_path", "путь недопустим") from exc
+    except GrantError as exc:
+        raise _grant_error(exc) from exc
+    await database.commit()
+    body, _headers = file_headers(note)
+    digest = note.content_hash
+    return _json(
+        {
+            "path": note.path,
+            "kind": "markdown",
+            "sha256": digest,
+            "version": digest,
+            "size": len(body),
+        },
+        request=request,
+    )
 
 
 @router.post("/transfers")

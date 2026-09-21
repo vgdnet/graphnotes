@@ -13,6 +13,7 @@ from app.services.installation import resolve_public_base_url
 from app.services.mail import (
     MailDeliveryError,
     MailNotConfiguredError,
+    card_change_mail,
     queue_notify_mail,
     send_plaintext_mail,
     smtp_configured,
@@ -152,6 +153,55 @@ async def notify_new_proposal(
                 "telegramed": telegramed,
                 "failed": failed,
             },
+        )
+
+
+async def notify_card_changes(
+    database: AsyncSession,
+    *,
+    user: User,
+    paths: list[str],
+) -> None:
+    if not user.notify_card_changes or not paths:
+        return
+    emailed = 0
+    telegramed = 0
+    failed = 0
+    public_base = await resolve_public_base_url(database) if smtp_configured() else None
+    if smtp_configured():
+        subject, body = card_change_mail(user, paths=paths, public_base_url=public_base)
+        try:
+            await run_in_threadpool(
+                send_plaintext_mail,
+                to_address=user.email,
+                subject=subject,
+                body=body,
+            )
+            emailed += 1
+        except (MailNotConfiguredError, MailDeliveryError):
+            failed += 1
+    if telegram_configured() and user.telegram:
+        try:
+            await run_in_threadpool(
+                send_telegram_message,
+                chat_id=_telegram_chat_id(user.telegram),
+                text=(
+                    "В карточках, которые вы правили, появились новые правки.\n"
+                    f"Карточки: {', '.join(paths[:8])}\n"
+                    "Сверка: #/differ"
+                ),
+            )
+            telegramed += 1
+        except (TelegramNotConfiguredError, TelegramDeliveryError):
+            failed += 1
+    if emailed or telegramed or failed:
+        record_audit_event(
+            database,
+            action="notify.card_changes_sent" if (emailed or telegramed) else "notify.card_changes_failed",
+            actor_user_id=user.id,
+            target_user_id=user.id,
+            subject_username=user.username,
+            details={"paths": paths, "emailed": emailed, "telegramed": telegramed, "failed": failed},
         )
 
 

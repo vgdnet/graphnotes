@@ -2,7 +2,7 @@ import enum
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, CheckConstraint, DateTime, ForeignKey, String, Uuid, false, func
+from sqlalchemy import JSON, Boolean, CheckConstraint, DateTime, ForeignKey, String, Uuid, false, func, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -42,8 +42,14 @@ class User(Base):
     notify_queue_telegram: Mapped[bool] = mapped_column(
         Boolean, default=False, server_default=false()
     )
+    notify_card_changes: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default=false()
+    )
     website: Mapped[str | None] = mapped_column(String(300), nullable=True)
     role: Mapped[str] = mapped_column(String(16), default=UserRole.USER.value)
+    editor_tags: Mapped[list[str]] = mapped_column(
+        JSON, default=list, server_default=text("'[]'")
+    )
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     is_author: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
     author_contract_version: Mapped[str | None] = mapped_column(String(32), nullable=True)
@@ -86,3 +92,17 @@ class User(Base):
         back_populates="user",
         cascade="all, delete-orphan",
     )
+
+
+def can_see_queue(user: User) -> bool:
+    """Today's coarse queue gate: global editor/admin. Not a per-card ACL."""
+    return user.role in {UserRole.EDITOR.value, UserRole.ADMIN.value}
+
+
+def can_propose_to_rhizome(user: User) -> bool:
+    """Today's coarse offer gate: global `user` only.
+
+    Not a forever per-role ACL. Later the object is per-card (propose vs
+    write-shared vs moderate-queue). Paid content maker is still open.
+    """
+    return user.role == UserRole.USER.value

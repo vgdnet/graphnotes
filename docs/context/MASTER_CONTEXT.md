@@ -2,7 +2,12 @@
 
 Updated: 2026-09-21
 Status: canonical architecture baseline
-Aligned with PRODUCT_SPEC **3.37** (living canon does not name an external
+Aligned with PRODUCT_SPEC **3.39** (`#/graph` Obsidian-like graph
+settings: tags/orphans, groups, display, forces; browser `localStorage`) /
+**3.38** (`#/user` has no personal-git connect;
+working copy is GraphNotes store; plugin writes personal; leftover git
+copy-in API only) /
+**3.37** (living canon does not name an external
 git host: ingest is Markdown + Obsidian + plugin) /
 **3.36** (guest chrome: named rhizome + load
 error, health follows graph/status, 5xx session is not logout, search
@@ -230,8 +235,9 @@ local stores (personal `personal_uploads`, published shared `shared_notes`).
 **TZ 3.35 / 3.37:** ingest is the **Obsidian plugin**. Cards and Differ read
 local stores. Live-read of an external git remote on GET Differ / `#/differ`
 / plugin sidebar / `GET /repository/status` / graph / search / card /
-comments / contributions is **closed**. Leftover unfinished: editor
-merge-out, personal git copy-in, «Свой git» tab. Do not treat leftover as
+comments / contributions is **closed**. Leftover unfinished: personal git **bind** API (no copy-in), unused
+merge-out. `#/user` has **no**
+«Свой git» tab (TZ **3.38**). Do not treat leftover as
 canon. Dropbox/Drive are not this wave.
 `/search` and the graph read `note_index`
 (no bodies there «so search is faster»). Working copies live in
@@ -400,7 +406,14 @@ slider in Settings and Admin users, not two channel boxes. Admin
 UI is three screens (users / journal / operator), not a stub list.
 Graph-layer names from TZ 2.36 stay. Shared-graph UI uses Cytoscape.js **fCoSE**
 (TZ 2.27 / §6.5.1): live force layout, centered outlined labels, neighborhood
-highlight; GraphNotes layer colors stay. The canvas has two views (TZ 2.51):
+highlight; GraphNotes layer colors stay unless a canvas group recolors the
+node (TZ **3.39**). The `#/graph` page has an Obsidian-like settings cog:
+filters (tag nodes, orphans), groups (search query + color), display
+(arrows, text-fade, node size, link thickness), forces (center/gravity,
+repel, link elasticity, ideal length). Prefs: `localStorage`
+`graphnotes-graph-settings`, same class as `graphnotes-theme`, not `/user`.
+The card-page aside local graph does not open that panel. Gene-demo sliders
+are still not ported. The canvas has two views (TZ 2.51):
 **весь граф** (bounded page) and **локальный граф** (`center` + `depth` 1–4,
 «Показать всё»). Overlay-only personal nodes keep `personal:{path}` as the
 local-graph center so the neighborhood is not the first shared page. Nested `.md` trees are indexed from
@@ -425,8 +438,8 @@ the interaction feed read that same derived visibility — no second
 manual catalog of which personal notes are «the part». Differ offer list
 (`GET /differ`, plugin «Предложить в ризому») compares `personal_uploads`
 with `shared_notes` and does **not** call an external git host (TZ 3.31 / **3.35** / **3.37**).
-Leftover git HEAD refresh is copy-in / poller / webhook, not the offer
-path. No second canonical clone of
+Leftover poller / webhook / unused `copy_git_*` do **not** copy-in
+(TZ **3.37**). The offer path never live-pulls GitHub. No second canonical clone of
 personal Markdown. Light and dark UI themes (TZ 2.19 / 2.22 /
 §5.5.4) are client-side: `localStorage` key `graphnotes-theme`, else
 `prefers-color-scheme`. The control is a Theme Switcher toggle (sliding
@@ -437,12 +450,14 @@ use CSS theme tokens, not hardcoded washed-out fills. Landing `/` is `/graph`
 open published shared card bodies (TZ 2.64); feed, comments, personal
 and queue still require a session. Account settings
 (§5.5 / TZ 2.13 / 2.58 / 2.77) live at **`/user`** (name in header opens it; `.topbar` `padding-inline: 1.25rem` keeps that control and the brand off the window edge):
-five chrome tabs — personal data, git, author contract, Obsidian tokens,
-**«Пригласить пользователя»**. Send-invite UI (email field, submit button,
-pending unused invites) lives **only** on that fifth tab (`POST /api/invites`,
+four chrome tabs — personal data, author contract, Obsidian tokens,
+**«Пригласить пользователя»**. There is **no** «Свой git» tab and no
+personal-git connect form (TZ **3.38**). Send-invite UI (email field, submit button,
+pending unused invites) lives **only** on that invite tab (`POST /api/invites`,
 `GET /api/invites`); personal-data has the «who invited you» line, not the
-send form. Required unique email, optional phone/Telegram contacts (not login), git
-connect/disconnect and author contract — not the public person card.
+send form. Required unique email, optional phone/Telegram contacts (not login)
+and author contract — not the public person card. Leftover
+`POST`/`DELETE /api/personal/connect` is not mounted in the cabinet.
 ZIP download of published shared is removed (TZ 2.5; ADR-009 amendment
 2026-09-11). **Rhizome access
 levels** (ADR-016 / TZ 2.31, UX 2.41): a paid level is a closed slice of
@@ -502,8 +517,9 @@ Markdown is the primary/canonical knowledge data.
 
 The graph is derived data.
 
-Do not merge graph files. Merge Markdown changes in the local store (after
-connector copy-in), then re-index affected notes and links.
+Do not merge graph files. Merge Markdown changes in the local store
+(plugin ingest; leftover connector copy-in unused), then re-index
+affected notes and links.
 
 ```text
 personal Markdown (GraphNotes local copy) / shared Markdown
@@ -533,7 +549,7 @@ Internet
            -> PostgreSQL
 ```
 
-Leftover (not canon, TZ **3.35**): personal git copy-in and merge-out.
+Leftover (not canon, TZ **3.35** / **3.37**): personal git bind API and unused merge-out.
 
 Technologies:
 - FastAPI / Python
@@ -569,11 +585,15 @@ Technologies:
 Ingest is the Obsidian plugin into `personal_uploads` / `shared_notes`.
 GraphNotes is not Wikipedia. An external git host is **not** in the living
 canon: not a store, connector, merge engine, or live API.
-**Source code:** GitHub remains delivery of the GraphNotes **program**
-(`nord → GitHub → rhizome-test → rhizome`, ADR-006). That is not knowledge.
 
-Leftover unfinished (not canon): «Свой git» Settings tab, personal git
-copy-in, shared merge-out, live HEAD, webhook/poller.
+Leftover unfinished (not canon): personal git **bind** API
+(`POST`/`DELETE /personal/connect` still talks to the GitHub App for
+metadata, no copy-in), unused `copy_git_*` / `commit_markdown` /
+`reconcile_proposals` merge-out, webhook delivery log without live disk.
+Poller default `GRAPHNOTES_PERSONAL_SYNC_INTERVAL_SECONDS=0`;
+`pull_connected_gits` is a no-op. Admin «Подключить общую ризому» is
+**gone**; `POST /repository/connect` ensures a **local** shared binding
+and reindexes `shared_notes`. `#/user` does **not** show «Свой git» (TZ **3.38**).
 Do not add MinIO/S3/Gitea. Pull Request pages, branch names and SHAs are
 not shown in the product UI.
 
@@ -583,15 +603,15 @@ ADR-008 leftover; Obsidian authoring remains.
 GraphNotes should handle:
 - application users and permissions
 - the hosted personal store (plugin) as the **default** personal rhizome
-- leftover optional connected personal git remotes (copy-in) — not canon
-- leftover binding of one shared knowledge repository — not canon
+- leftover optional connected personal git remotes (bind metadata only) — not canon
+- leftover GitHub App client / merge_branch — unused from product request paths
 - Differ (outbound personal layer → published shared; TZ 3.13 inbound
   published shared → personal store for watched accepted paths;
   list/open reads local stores, not a live remote HEAD)
 - graph indexing and in-app read of published Markdown
 - one derived `note_index` for graph **and** SQL search; rebuild
-  (`POST /index/rebuild`) refreshes local stores; leftover webhook/poller
-  git copy-in is unfinished
+  (`POST /index/rebuild`) reindexes local stores only; leftover webhook
+  records delivery and does not copy-in; leftover poller is a no-op
 - card GET and comment create read `shared_notes` / `personal_uploads`;
   a path missing from the local store is 404, not a ghost body
 - admin sets any account password (`POST /admin/users/{id}/password`),
@@ -650,7 +670,7 @@ Do not replace writing on GraphNotes with a second Obsidian (live preview,
 Markdown editor (TZ 2.93) until reverse download / reverse sync exists.
 `PUT /api/personal/notes/{path}` remains for the plugin / API and TZ 2.66
 stub create. Published shared working copies live in
-`shared_notes` after copy-in; Differ remains the write gate.
+`shared_notes` after plugin ingest (leftover copy-in unused); Differ remains the write gate.
 
 Initial product store concept:
 
@@ -810,7 +830,7 @@ Not needed for the initial MVP unless actual load/features justify them:
   `rhizome-test`** (TZ 2.89). Invite is an **email link**; no Register
   tab (Login / forgot password stay). Any active account may invite;
   store inviter UUID (one chain with vsepsy.ru). Website send UI is the
-  fifth Settings tab **«Пригласить пользователя»** (`#/user`; same
+  Settings tab **«Пригласить пользователя»** (`#/user`; same
   `POST /api/invites`); not on personal data. Person card and
   `GET /api/users/{login}/card` show «Приглашен %date% по приглашению от
   @user» (omit if no inviter). Cutover attributes existing accounts
@@ -974,8 +994,9 @@ Authentication / users:
 - `GET  /api/repository/status`
 
 Personal layer (plugin write to the local store; git connector leftover):
-- `POST /api/personal/connect` (from account settings; requires author contract)
-- `DELETE /api/personal/connect` (unbind personal git; store files remain)
+- `POST /api/personal/connect` (leftover TZ **3.38**: cabinet does not
+  call this; requires author contract)
+- `DELETE /api/personal/connect` (leftover unbind; store files remain)
 - `POST /api/personal/import-md` (leftover TZ 2.96: no website button;
   future upload must sync into the local store like the plugin;
   ZIP up to 10 000 members, else 400 `archive has too many files`;

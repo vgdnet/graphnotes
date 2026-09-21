@@ -3,7 +3,7 @@ from pytest import MonkeyPatch
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.main import app
-from tests.test_ingest import _github, _install
+from tests.test_ingest import _connect_pair, _github, _install
 from tests.test_proposals import _admin, _second
 
 
@@ -25,6 +25,7 @@ async def test_user_card_hides_other_personal_and_closed(
 
     author = await _second("card-author")
     await author.post("/personal/connect", json={"repository": "vgdnet/guide_psy"})
+    await _connect_pair(author, "vgdnet/guide_psy", github)
     created = await author.post("/proposals", json={"paths": ["already.md"]})
     assert created.status_code == 200
     published = await admin.post(
@@ -92,4 +93,29 @@ async def test_user_card_hides_other_personal_and_closed(
     assert anon.json()["user"]["username"] == "card-author"
     missing = await guest.get("/users/no-such-login/card")
     assert missing.status_code == 404
+    await guest.aclose()
+
+
+async def test_user_card_does_not_refresh_github(
+    auth_test_context: tuple[AsyncClient, async_sessionmaker[AsyncSession]],
+    monkeypatch: MonkeyPatch,
+) -> None:
+    admin, session_factory = auth_test_context
+    _install(monkeypatch, _github())
+    await _admin(admin, session_factory, "stat-admin")
+    author = await _second("stat-author")
+
+    def boom(*_args: object, **_kwargs: object) -> None:
+        raise AssertionError("person card must read derived stats without git refresh")
+
+    monkeypatch.setattr("app.services.github.GitHubAppClient", boom)
+    own = await author.get("/users/stat-author/card")
+    assert own.status_code == 200
+    assert own.json()["self"] is True
+    assert "store" in own.json()
+    assert "achievements" in own.json()
+    guest = AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver")
+    public = await guest.get("/users/stat-author/card")
+    assert public.status_code == 200
+    assert public.json()["achievements"]["proposals"] >= 0
     await guest.aclose()

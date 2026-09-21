@@ -5,9 +5,10 @@ await mkdir('dist/graphnotes-card-merge', { recursive: true });
 await build({
   entryPoints: ['src/main.ts'],
   bundle: true,
-  platform: 'browser',
+  platform: 'node',
   format: 'cjs',
   target: 'es2022',
+  charset: 'utf8',
   external: ['obsidian', 'electron'],
   outfile: 'dist/graphnotes-card-merge/main.js',
   banner: { js: '/* GraphNotes Card Merge — AGPL-3.0-only */' },

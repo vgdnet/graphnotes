@@ -6,10 +6,11 @@ from datetime import UTC, datetime
 import difflib
 import uuid
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
+from app.models.card_revision import CardRevision
 from app.models.github import PersonalRepository, SharedRepository
 from app.models.personal_upload import PersonalUpload
 from app.models.proposal import Proposal, ProposalStatus
@@ -19,11 +20,11 @@ from app.services.audit import record_audit_event
 from app.services.closed_corpus import closed_paths_for_user
 from app.services.git_paths import PathError, normalize_git_path
 from app.services.github import GitHubAppClient, GitHubAppError
-from app.services.grants import editorial_path_allowed, filter_editorial_paths
+from app.services.grants import editorial_path_allowed, filter_editorial_paths, queue_scope
 from app.services.index import IndexerError, drop_proposal_notes, index_proposal_notes, rebuild_shared, reindex_shared_store
 from app.services.markdown import parse_markdown, unresolved_links
 from app.services.notify import notify_new_proposal
-from app.services.repository import SHARED_SINGLETON_ID, apply_snapshot, published_sha
+from app.services.repository import SHARED_SINGLETON_ID, apply_snapshot, ensure_local_shared, published_sha
 from app.services.wikidiff2 import Wikidiff2Error, table_diff
 
 
@@ -162,25 +163,16 @@ async def create_proposal(
     paths: list[str],
     summary: str,
     expected_sha: str | None,
-    client: GitHubAppClient,
+    client: GitHubAppClient | None = None,
 ) -> dict[str, object]:
     del client  # leftover merge-out only; offer compares local stores
+    del expected_sha  # leftover git HEAD; working copy is personal_uploads
     if not can_propose_to_rhizome(user):
         raise ProposalError(403, "this account cannot propose to the shared rhizome")
     if len(paths) > settings.take_max_paths:
         raise ProposalError(400, "too many notes in one proposal")
-    personal = await database.scalar(
-        select(PersonalRepository).where(PersonalRepository.user_id == user.id)
-    )
-    shared = await database.get(SharedRepository, SHARED_SINGLETON_ID)
-    if shared is None or not published_sha(shared):
-        raise ProposalError(409, "the shared rhizome is not connected")
-    if personal is not None and expected_sha is not None and expected_sha != personal.observed_sha:
-        raise ProposalError(409, "your git changed, retry")
-    if (personal is None or not personal.observed_sha) and expected_sha is not None:
-        raise ProposalError(409, "your git changed, retry")
-    shared_ref = published_sha(shared)
-    assert shared_ref is not None
+    shared = await ensure_local_shared(database)
+    shared_ref = published_sha(shared) or "empty"
 
     normalized: list[str] = []
     seen: set[str] = set()
@@ -278,6 +270,7 @@ async def list_proposals(
 ) -> dict[str, object]:
     # Offer/queue path list is local rows. GitHub reconcile is leftover merge-out
     # on detail/approve, not GET /proposals (plugin marks queued offers here).
+    mode, has_grants = await queue_scope(database, user)
     query = select(Proposal).order_by(Proposal.created_at.desc())
     if not _is_editor(user):
         query = query.where(Proposal.author_user_id == user.id)
@@ -297,7 +290,11 @@ async def list_proposals(
         if not visible:
             continue
         items.append(_public(row, author, paths=visible))
-    return {"proposals": items}
+    return {
+        "proposals": items,
+        "editorial_queue_mode": mode,
+        "has_editorial_grants": has_grants,
+    }
 
 
 async def proposal_for_viewer(
@@ -454,7 +451,7 @@ async def resolve_proposal(
     }:
         raise ProposalError(409, "this proposal cannot be accepted now")
     shared = await database.get(SharedRepository, SHARED_SINGLETON_ID)
-    if shared is None or not shared.observed_sha:
+    if shared is None or not published_sha(shared):
         raise ProposalError(409, "the shared rhizome is not connected")
     scope = set(_paths(row.scope_paths))
     to_commit: dict[str, str] = {}
@@ -675,6 +672,10 @@ async def _approve(
     reason: str,
     client: GitHubAppClient,
 ) -> dict[str, object]:
+    actor_id = user.id
+    actor_username = user.username
+    proposal_id = row.id
+    author_id = row.author_user_id
     already = await _finish_if_already_accepted(database, row, user, client)
     if already is not None:
         return already
@@ -686,71 +687,78 @@ async def _approve(
     }:
         raise ProposalError(409, "this proposal cannot be accepted now")
     shared = await database.get(SharedRepository, SHARED_SINGLETON_ID)
-    if shared is None or not shared.observed_sha:
+    if shared is None or not published_sha(shared):
         raise ProposalError(409, "the shared rhizome is not connected")
-    row.status = ProposalStatus.ACCEPTED_PENDING_MERGE.value
-    row.reason = reason or None
-    row.decided_by_user_id = user.id
-    row.decided_at = datetime.now(UTC)
-    row.previous_sha = shared.observed_sha
-    await database.commit()
-    await database.refresh(row)
-    from app.services.provenance import record_publication_events, snapshot_shared_revision
-
-    before_paths, before_edges = await snapshot_shared_revision(
-        client, shared.owner, shared.name, shared.observed_sha
-    )
-    try:
-        merged = await client.merge_branch(
-            shared.owner,
-            shared.name,
-            base=shared.default_branch,
-            head=row.branch_name,
-            message=row.summary,
-        )
-    except GitHubAppError as exc:
-        row.status = (
-            ProposalStatus.CONFLICTED.value if exc.status == "conflict" else ProposalStatus.FAILED.value
-        )
-        row.error = exc.message[:255]
+    current = published_sha(shared)
+    if row.base_sha and current and row.base_sha != current:
+        row.status = ProposalStatus.CONFLICTED.value
+        row.error = "this proposal conflicts with the current shared rhizome"
         await database.commit()
-        if exc.status == "conflict":
-            raise ProposalError(409, "this proposal conflicts with the current shared rhizome") from exc
-        raise _github(exc) from exc
-    row.merged_sha = merged
-    row.status = ProposalStatus.MERGED_INDEXING.value
-    await database.commit()
+        raise ProposalError(409, "this proposal conflicts with the current shared rhizome")
+    files: dict[str, str] = {}
+    for path in _paths(row.scope_paths):
+        text = await _personal_layer_file(database, row.author_user_id, path)
+        if text is None:
+            raise ProposalError(404, "note was not found")
+        files[path] = text
+    from app.services.provenance import record_publication_events, _shared_edges, _shared_paths
+
+    previous = current
+    assert previous is not None
+    before_paths = await _shared_paths(database, previous)
+    before_edges = await _shared_edges(database, previous, before_paths)
+    row.reason = reason or None
+    row.decided_by_user_id = actor_id
+    row.decided_at = datetime.now(UTC)
+    row.previous_sha = previous
     try:
-        snapshot = await client.get_repository(shared.owner, shared.name)
-        apply_snapshot(shared, snapshot)
-        await rebuild_shared(database, client, actor_user_id=user.id)
-        shared = await database.get(SharedRepository, SHARED_SINGLETON_ID) or shared
-        if shared.indexed_sha == merged:
-            row.status = ProposalStatus.PUBLISHED.value
-            row.published_at = datetime.now(UTC)
-            row.error = None
-            await record_publication_events(
-                database, row, before_paths=before_paths, before_edges=before_edges
-            )
-            await drop_proposal_notes(database, row.id)
-        else:
-            row.status = ProposalStatus.FAILED.value
-            row.error = "index rebuild did not reach the merged revision"
-    except (GitHubAppError, IndexerError) as exc:
+        merged = await _apply_shared_files(database, user=user, files=files)
+        row.status = ProposalStatus.PUBLISHED.value
+        row.published_at = datetime.now(UTC)
+        row.merged_sha = merged
+        row.error = None
+        await record_publication_events(
+            database, row, before_paths=before_paths, before_edges=before_edges
+        )
+        await drop_proposal_notes(database, proposal_id)
+    except IndexerError as exc:
+        await database.rollback()
+        row = await database.get(Proposal, proposal_id)
+        if row is None:
+            raise ProposalError(404, "proposal was not found") from exc
         row.status = ProposalStatus.FAILED.value
-        row.error = str(getattr(exc, "detail", exc))[:255]
+        row.error = str(exc.detail)[:255]
+        row.reason = reason or None
+        row.decided_by_user_id = actor_id
+        row.decided_at = datetime.now(UTC)
     record_audit_event(
         database,
         action="proposal.approved",
-        actor_user_id=user.id,
-        target_user_id=row.author_user_id,
-        subject_username=user.username,
-        details={"proposal_id": str(row.id), "status": row.status},
+        actor_user_id=actor_id,
+        target_user_id=author_id,
+        subject_username=actor_username,
+        details={"proposal_id": str(proposal_id), "status": row.status},
     )
     await database.commit()
     await database.refresh(row)
-    author = await database.get(User, row.author_user_id)
+    author = await database.get(User, author_id)
     return _public(row, author or user)
+
+
+async def _previous_shared_body(database: AsyncSession, path: str) -> str | None:
+    rows = list(
+        (
+            await database.scalars(
+                select(CardRevision)
+                .where(CardRevision.path == path, CardRevision.owner_user_id.is_(None))
+                .order_by(CardRevision.n.desc())
+                .limit(2)
+            )
+        ).all()
+    )
+    if len(rows) < 2:
+        return None
+    return rows[1].source
 
 
 async def _rollback(
@@ -760,26 +768,43 @@ async def _rollback(
     reason: str,
     client: GitHubAppClient,
 ) -> dict[str, object]:
+    del client  # leftover merge-out; live rollback restores shared_notes
     if row.status != ProposalStatus.PUBLISHED.value or not row.previous_sha:
         raise ProposalError(409, "only a published proposal can be rolled back")
     shared = await database.get(SharedRepository, SHARED_SINGLETON_ID)
-    if shared is None or not shared.observed_sha:
+    if shared is None or not published_sha(shared):
         raise ProposalError(409, "the shared rhizome is not connected")
-    if row.merged_sha and shared.observed_sha != row.merged_sha:
+    current = shared.indexed_sha
+    if (
+        row.merged_sha
+        and current
+        and row.merged_sha != current
+        and current != shared.observed_sha
+    ):
         raise ProposalError(409, "the shared rhizome changed after this proposal")
+    from app.services.ingest import _upsert_shared_note
+
     try:
-        restored = await client.restore_revision(
-            shared.owner,
-            shared.name,
-            shared.default_branch,
-            row.previous_sha,
-            reason,
-        )
-        snapshot = await client.get_repository(shared.owner, shared.name)
-        apply_snapshot(shared, snapshot)
-        await rebuild_shared(database, client, actor_user_id=user.id)
-    except GitHubAppError as exc:
-        raise _github(exc) from exc
+        for path in _paths(row.scope_paths):
+            previous = await _previous_shared_body(database, path)
+            if previous is None:
+                await database.execute(delete(SharedNote).where(SharedNote.path == path))
+                continue
+            parsed = parse_markdown(path, previous)
+            await _upsert_shared_note(
+                database,
+                path,
+                previous,
+                parsed.content_hash,
+                actor_user_id=user.id,
+            )
+        restored = await reindex_shared_store(database)
+        shared = await database.get(SharedRepository, SHARED_SINGLETON_ID)
+        if shared is not None:
+            shared.indexed_sha = restored
+            shared.index_status = "current"
+            shared.sync_status = "ready"
+            shared.last_error = None
     except IndexerError as exc:
         raise ProposalError(exc.status_code, exc.detail) from exc
     row.status = ProposalStatus.REJECTED.value

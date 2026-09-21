@@ -9,6 +9,17 @@ import {
   highlightNeighborhood,
   runFcoseLayout,
 } from "./cytoscapeFcose";
+import { GraphSettingsPanel } from "./GraphSettingsPanel";
+import {
+  buildVisibleGraph,
+  forceLayoutOptions,
+  groupColorByPath,
+  isTagNodePath,
+  loadGraphSettings,
+  persistGraphSettings,
+} from "./graphSettings";
+import type { GraphSettings } from "./graphSettings";
+import { graphIndexStatusLabel } from "./labels";
 import { cardHash, missingNotePath } from "./cardRoute";
 import { graphNodePath, LOCAL_GRAPH_DEPTHS } from "./graphQuery";
 import type { GraphScope } from "./graphQuery";
@@ -22,6 +33,7 @@ export type GraphNode = {
   unresolved: boolean;
   locked?: boolean;
   origin?: string;
+  kind?: "note" | "tag";
 };
 
 export type GraphEdge = {
@@ -43,14 +55,8 @@ export type GraphResponse = {
 
 export type FilterKind = "all" | "unresolved" | "isolated" | "overlay" | "personal";
 
-const STATUS_LABEL: Record<string, string> = {
-  empty: "индекс пуст",
-  current: "актуален",
-  updating: "обновляется",
-  error: "ошибка индекса",
-};
-
 function originLabel(origin: string | undefined, personalLayer: boolean): string {
+  if (origin === "tag") return "тег";
   if (origin === "personal") return personalLayer ? "ваша личная ризома" : "ваша часть ризомы";
   if (origin === "both") return "общая и ваша часть ризомы";
   if (origin === "overlay") return "связь с общей";
@@ -112,7 +118,10 @@ export function GraphView({
   const [query, setQuery] = useState("");
   const [localKind, setLocalKind] = useState<FilterKind>("all");
   const kind = filterKind ?? localKind;
-  const [tag, setTag] = useState("");
+  const [settings, setSettings] = useState<GraphSettings>(() => loadGraphSettings());
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const forceKey = `${settings.centerForce}|${settings.repelForce}|${settings.linkForce}|${settings.linkDistance}`;
+  const prevForceKeyRef = useRef(forceKey);
   const [focusPath, setFocusPath] = useState<string | null>(null);
   const personalLayer = kind === "personal" || graph?.layer === "personal";
   const selectedNodePath = graphNodePath(selectedPath, personalLayer);
@@ -121,18 +130,12 @@ export function GraphView({
 
   const visible = useMemo(() => {
     if (!graph) return { nodes: [] as GraphNode[], edges: [] as GraphEdge[] };
-    const tagQ = tag.trim().toLowerCase();
-    const nodes = graph.nodes.filter((node) => {
-      if (kind === "unresolved" && !node.unresolved) return false;
-      if (kind === "isolated" && !node.isolated) return false;
-      if (kind === "overlay" && node.origin !== "personal" && node.origin !== "both") return false;
-      if (tagQ && !node.tags.some((item) => item.toLowerCase().includes(tagQ))) return false;
-      return true;
+    return buildVisibleGraph(graph, {
+      kind,
+      showTags: settings.showTags,
+      showOrphans: settings.showOrphans,
     });
-    const allowed = new Set(nodes.map((node) => node.path));
-    const edges = graph.edges.filter((edge) => allowed.has(edge.source) && allowed.has(edge.target));
-    return { nodes, edges };
-  }, [graph, kind, tag]);
+  }, [graph, kind, settings.showTags, settings.showOrphans]);
 
   const visibleKey = `${visible.nodes.map((node) => node.path).join("\0")}|${visible.edges.map((edge) => `${edge.source}->${edge.target}:${edge.type}`).join("\0")}`;
 
@@ -164,7 +167,13 @@ export function GraphView({
     };
   }, [query, searchLayer]);
 
+  useEffect(() => {
+    persistGraphSettings(settings);
+  }, [settings]);
+
   const focusPathRef = useRef<string | null>(null);
+  const settingsRef = useRef(settings);
+  settingsRef.current = settings;
   const personalLayerRef = useRef(personalLayer);
   const canReadNotesRef = useRef(canReadNotes);
   const onNeedAuthRef = useRef(onNeedAuth);
@@ -186,7 +195,7 @@ export function GraphView({
       minZoom: 0.15,
       maxZoom: 3,
       wheelSensitivity: 0.25,
-      style: graphStylesheet(),
+      style: graphStylesheet(settingsRef.current),
     });
     cyRef.current = cy;
     bindNeighborhoodHighlight(cy, () => focusPathRef.current);
@@ -198,6 +207,7 @@ export function GraphView({
       if (!event.target.isNode()) return;
       const path = event.target.id();
       setFocusPath(path);
+      if (isTagNodePath(path) || event.target.data("kind") === "tag") return;
       if (path.startsWith("locked:")) return;
       if (path.startsWith("unresolved:")) {
         const filePath = missingNotePath(path);
@@ -230,8 +240,8 @@ export function GraphView({
   useEffect(() => {
     const cy = cyRef.current;
     if (!cy) return;
-    cy.style().fromJson(graphStylesheet()).update();
-  }, [theme]);
+    cy.style().fromJson(graphStylesheet(settings)).update();
+  }, [theme, settings.arrows, settings.textFade, settings.nodeSize, settings.linkThickness]);
 
   useEffect(() => {
     const cy = cyRef.current;
@@ -247,6 +257,7 @@ export function GraphView({
           origin: node.origin || "shared",
           unresolved: node.unresolved ? 1 : 0,
           locked: node.locked ? 1 : 0,
+          kind: node.kind === "tag" ? "tag" : "note",
         },
       })),
       ...visible.edges.map((edge, index) => ({
@@ -256,18 +267,49 @@ export function GraphView({
           source: edge.source,
           target: edge.target,
           origin: edge.origin || "shared",
+          type: edge.type,
           unresolved: edge.unresolved ? 1 : 0,
           locked: edge.locked ? 1 : 0,
         },
       })),
     ]);
     applyDegreeScores(cy);
-    const layout = visible.nodes.length > 0 ? runFcoseLayout(cy) : undefined;
+    const colors = groupColorByPath(visible.nodes, settingsRef.current.groups);
+    cy.nodes().forEach((node) => {
+      const color = colors.get(node.id());
+      if (color) node.data("groupColor", color);
+      else node.removeData("groupColor");
+    });
+    const layout = visible.nodes.length > 0
+      ? runFcoseLayout(cy, forceLayoutOptions(settingsRef.current))
+      : undefined;
     return () => {
       layout?.stop();
       cy.stop();
     };
   }, [visibleKey, visible.nodes, visible.edges]);
+
+  useEffect(() => {
+    const cy = cyRef.current;
+    if (!cy) return;
+    const colors = groupColorByPath(visible.nodes, settings.groups);
+    cy.nodes().forEach((node) => {
+      const color = colors.get(node.id());
+      if (color) node.data("groupColor", color);
+      else node.removeData("groupColor");
+    });
+  }, [settings.groups, visible.nodes]);
+
+  useEffect(() => {
+    if (prevForceKeyRef.current === forceKey) return;
+    prevForceKeyRef.current = forceKey;
+    const cy = cyRef.current;
+    if (!cy || cy.nodes().empty()) return;
+    const layout = runFcoseLayout(cy, forceLayoutOptions(settings));
+    return () => {
+      layout?.stop();
+    };
+  }, [forceKey, settings]);
 
   useEffect(() => {
     const cy = cyRef.current;
@@ -293,12 +335,14 @@ export function GraphView({
 
   function currentNode(): GraphNode | null {
     const path = focusPath || selectedNodePath || localCenter;
-    if (!path || !graph) return null;
-    return graph.nodes.find((node) => node.path === path) ?? null;
+    if (!path) return null;
+    return visible.nodes.find((node) => node.path === path)
+      ?? graph?.nodes.find((node) => node.path === path)
+      ?? null;
   }
 
   function canOpenLocal(node: GraphNode | null): boolean {
-    return Boolean(node && !node.unresolved && !node.locked);
+    return Boolean(node && !node.unresolved && !node.locked && node.kind !== "tag" && !isTagNodePath(node.path));
   }
 
   function openLocalGraph(path: string) {
@@ -327,7 +371,8 @@ export function GraphView({
       moveFocus(-1);
     } else if (event.key === "Enter") {
       const node = currentNode();
-      if (node?.unresolved) {
+      if (!node || node.kind === "tag" || isTagNodePath(node.path)) return;
+      if (node.unresolved) {
         const filePath = missingNotePath(node.path);
         if (filePath) window.location.hash = cardHash(filePath);
       } else if (node) {
@@ -343,17 +388,17 @@ export function GraphView({
   }
 
   const selected = currentNode();
-  const status = graph ? STATUS_LABEL[graph.index_status] || graph.index_status : "загрузка";
+  const status = graph ? graphIndexStatusLabel(graph.index_status) : loading ? "загрузка" : "не загружен";
   const neighbors = (() => {
     if (!selected || !graph) return [] as GraphNode[];
     const seen = new Set<string>();
     const items: GraphNode[] = [];
-    for (const edge of graph.edges) {
+    for (const edge of visible.edges) {
       const other = edge.source === selected.path ? edge.target : edge.target === selected.path ? edge.source : null;
       if (!other || seen.has(other)) continue;
       seen.add(other);
       items.push(
-        graph.nodes.find((node) => node.path === other) ?? {
+        visible.nodes.find((node) => node.path === other) ?? graph.nodes.find((node) => node.path === other) ?? {
           path: other,
           title: other,
           tags: [],
@@ -427,36 +472,46 @@ export function GraphView({
             ))}
           </select>
         </label>
-        {!aside && (
-        <label>
-          Тег
-          <input value={tag} onChange={(event) => setTag(event.target.value)} placeholder="тег" />
-        </label>
-        )}
       </div>
       {!aside && (
       <p className="admin-panel__hint" role="status">
         Слой: {layerStatusLabel(graph?.layer, kind)}.
-        {graphScope === "local" ? ` Локальный граф, глубина ${localDepth}.` : " Весь граф."}
+        {graphScope === "local" ? ` Локальный граф, глубина ${localDepth}. ` : " Весь граф. "}
         Состояние: {status}.
         {graphScope === "local" && localCenter ? ` Центр: ${localCenter}.` : ""}
-        {graphScope === "full" && graph?.truncated ? " Показана часть ризомы. Выберите узел и откройте локальный граф." : ""}
+        {graphScope === "full" && graph?.truncated && graph.index_status !== "error"
+          ? " Показана страница узлов. Выберите узел и откройте локальный граф."
+          : ""}
         {loading ? " Обновляем граф…" : ""}
         {query.trim() && matches.length > 0 ? ` Совпадений на графе: ${matches.length}.` : ""}
         {query.trim() && matches.length === 0 ? " Совпадений нет — граф на месте." : ""}
       </p>
       )}
       {(!graph || graph.nodes.length === 0) && !loading ? (
-        <p className="admin-panel__hint">Граф пока пуст.</p>
+        <p className="admin-panel__hint">
+          {graphScope === "local"
+            ? "Рядом пока нет связей, которые можно показать."
+            : "Граф пока пуст."}
+        </p>
       ) : null}
-      <div
-        ref={containerRef}
-        className="graph-canvas"
-        tabIndex={0}
-        role="application"
-        aria-label={personalLayer ? "Граф вашей личной ризомы" : "Граф общей ризомы"}
-        onKeyDown={handleKey}
-      />
+      <div className={aside ? "graph-stage graph-stage--aside" : "graph-stage"}>
+        <div
+          ref={containerRef}
+          className="graph-canvas"
+          tabIndex={0}
+          role="application"
+          aria-label={personalLayer ? "Граф вашей личной ризомы" : "Граф общей ризомы"}
+          onKeyDown={handleKey}
+        />
+        {!aside && (
+          <GraphSettingsPanel
+            settings={settings}
+            onChange={setSettings}
+            open={settingsOpen}
+            onOpenChange={setSettingsOpen}
+          />
+        )}
+      </div>
       {!aside && (
       <div className="graph-legend" aria-hidden="true">
         <span><i className="swatch swatch--shared" /> общая</span>
@@ -507,7 +562,11 @@ export function GraphView({
             <ul className="graph-selection__links">
               {neighbors.map((node) => (
                 <li key={node.path}>
-                  {node.unresolved ? (
+                  {node.kind === "tag" || isTagNodePath(node.path) ? (
+                    <button type="button" className="button button--quiet" onClick={() => setFocusPath(node.path)}>
+                      {node.title}
+                    </button>
+                  ) : node.unresolved ? (
                     <a href={cardHash(missingNotePath(node.path))}>{node.title} · нет заметки</a>
                   ) : (
                     <a
@@ -523,7 +582,7 @@ export function GraphView({
               ))}
             </ul>
           )}
-          {!aside && !selected.unresolved && (
+          {!aside && !selected.unresolved && selected.kind !== "tag" && !isTagNodePath(selected.path) && (
             <p className="graph-selection__link">
               <a
                 href={cardHash(cardPathFor(selected, personalLayer))}

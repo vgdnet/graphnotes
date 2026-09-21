@@ -7,15 +7,15 @@ is not a download of shared and not a write into published shared.
 
 `POST /api/personal/take-from-shared` is gone (HTTP 410): GraphNotes does not
 write published shared notes into the personal layer. Published shared
-working copies live in `shared_notes` after copy-in; `note_index` is the
+working copies live in `shared_notes`; `note_index` is the
 search/graph index, not a second corpus.
 
-## GitHub App permission
+## Leftover git-host permission
 
-Stage 3 used Contents **read**. Live writes into a **connected personal git**
-need Contents **Read and write** on that repository (`vgdnet/guide_psy` on
-`rhizome-test`). After changing the permission, approve the installation
-update on GitHub.
+Stage 3 leftover used Contents **read**. Live writes into a leftover
+**connected personal git** need Contents **Read and write** on that
+repository. After changing the permission, approve the installation
+update on the git host.
 
 Upload-without-git does not need write to a user repository.
 
@@ -58,7 +58,7 @@ Already-indexed notes stay. The last active admin is not locked.
 Admins with a confirmed email (or queue-notify on) get installation
 SMTP mail (`GRAPHNOTES_SMTP_FROM`, public URL from
 `installation_settings`). SMTP off or send failure must not roll back
-the lock. Shared GitHub copy-in is not this gate. Zip-bomb limits
+the lock. Leftover shared git copy-in is not this gate. Zip-bomb limits
 above are unchanged.
 
 ## API

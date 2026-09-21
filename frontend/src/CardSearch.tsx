@@ -48,9 +48,17 @@ export function CardSearch({
     available_tags: [],
   });
   const [loading, setLoading] = useState(false);
+  const [searchError, setSearchError] = useState("");
   const canReview = role === "editor" || role === "admin";
 
   useEffect(() => {
+    const waiting = Boolean(query.trim() || tag);
+    if (!waiting) {
+      setLoading(false);
+      setSearchError("");
+      setBody((current) => ({ ...current, query: "", tag: "", hits: [] }));
+      return;
+    }
     const controller = new AbortController();
     const timer = window.setTimeout(() => {
       const params = new URLSearchParams();
@@ -59,15 +67,32 @@ export function CardSearch({
       if (canReadNotes) params.set("layer", "visible");
       const suffix = params.toString() ? `?${params}` : "";
       setLoading(true);
+      setSearchError("");
+      let timedOut = false;
+      const timeout = window.setTimeout(() => {
+        timedOut = true;
+        controller.abort();
+      }, 12000);
       void fetch(`/api/search${suffix}`, { signal: controller.signal })
-        .then(async (response) => (
-          response.ok
-            ? (await response.json()) as SearchResponse
-            : { query: query.trim(), tag, hits: [], available_tags: [] }
-        ))
-        .then(setBody)
-        .catch(() => undefined)
-        .finally(() => setLoading(false));
+        .then(async (response) => {
+          if (!response.ok) throw new Error("search failed");
+          return (await response.json()) as SearchResponse;
+        })
+        .then((payload) => {
+          setBody(payload);
+          setSearchError("");
+        })
+        .catch((requestError: unknown) => {
+          if (requestError instanceof DOMException && requestError.name === "AbortError") {
+            if (timedOut) setSearchError("Поиск не ответил. Попробуйте ещё раз.");
+            return;
+          }
+          setSearchError("Не удалось найти. Попробуйте ещё раз.");
+        })
+        .finally(() => {
+          window.clearTimeout(timeout);
+          setLoading(false);
+        });
     }, 160);
     return () => {
       window.clearTimeout(timer);
@@ -85,12 +110,12 @@ export function CardSearch({
   const hint = !canReadNotes
     ? "Гость ищет по опубликованной общей. Тело карточки — после входа."
     : role === "admin"
-      ? "Ищем все карточки, которые можно открыть: общая, личные слои, правки в очереди. Слой подсвечен на каждой карточке."
+      ? "Все карточки, которые можно открыть: общая, личные слои, правки в очереди. Слой подсвечен на каждой карточке."
       : canReview
-        ? "Ищем вашу ризому, общую и правки, которые вам дали на ревью."
+        ? "Ваша ризома, общая и правки, которые вам дали на ревью."
         : hasPersonal
-          ? "Ищем вашу ризому и общую. Слой карточки подсвечен: общая или ваша."
-          : "Ищем опубликованную общую ризому.";
+          ? "Ваша ризома и общая. Слой карточки подсвечен: общая или ваша."
+          : "Поиск по опубликованной общей ризоме.";
 
   return (
     <section className="notes-panel notes-panel--search" aria-labelledby="card-search-heading">
@@ -167,7 +192,15 @@ export function CardSearch({
         </div>
       )}
       <p className="admin-panel__hint" role="status">
-        {loading ? "Ищем…" : waiting && hits.length === 0 ? "Совпадений нет." : waiting ? `Совпадений: ${hits.length}.` : "Наберите слово или выберите тег."}
+        {searchError
+          ? searchError
+          : loading
+            ? "Ищем…"
+            : waiting && hits.length === 0
+              ? "Ничего не найдено."
+              : waiting
+                ? `Совпадений: ${hits.length}.`
+                : "Наберите слово или выберите тег."}
       </p>
       {hits.length > 0 && (
         <ul className="card-search__hits">

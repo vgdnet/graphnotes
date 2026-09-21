@@ -71,6 +71,29 @@ export class VaultSync {
     else this.pushAll(notice);
   }
 
+  /** Upload one vault path to personal store. Does not scan the rest of the vault. */
+  async pushPath(path: string, notice = false): Promise<void> {
+    if (this.running) {
+      throw new Error('Сейчас уже идёт передача. Дождитесь конца или нажмите «Проверить / продолжить».');
+    }
+    if (!this.ready()) {
+      throw new Error('Укажите адрес и токен GraphNotes.');
+    }
+    if (!eligible(path)) {
+      throw new Error('Этот файл нельзя передать в личное хранилище.');
+    }
+    this.running = true;
+    try {
+      await this.sendListed([path], [], 'queued', notice);
+      this.queued.delete(path);
+    } finally {
+      this.running = false;
+      const next = this.again;
+      this.again = null;
+      if (next) void this.flush(next, false);
+    }
+  }
+
   pushAll(notice = true): void {
     this.queued.clear();
     for (const file of vaultEligible(this.plugin.app)) this.queued.add(file.path);
@@ -215,7 +238,15 @@ export class VaultSync {
     const removed = [...this.removed];
     this.queued.clear();
     this.removed.clear();
+    await this.sendListed(paths, removed, scope, notice);
+  }
 
+  private async sendListed(
+    paths: string[],
+    removed: string[],
+    scope: 'queued' | 'all',
+    notice: boolean,
+  ): Promise<void> {
     const signal = this.plugin.beginSync();
     const { api } = this.plugin.connect(signal);
     const caps = await api.capabilities();
@@ -228,8 +259,7 @@ export class VaultSync {
         writeAllowed: false,
         error: caps.write_block_reason ?? 'write_not_allowed',
       });
-      new Notice('Сервер не разрешил запись в личное хранилище.');
-      return;
+      throw new Error('Сервер не разрешил запись в личное хранилище.');
     }
     const remote = new Map((await api.manifest(caps.limits.manifest_page_size)).map(file => [file.path, file]));
     const conn = connectionOf(this.plugin.saved, connectionKey(api.origin, caps.user.id));

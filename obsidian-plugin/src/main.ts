@@ -1,11 +1,22 @@
-import { App, Notice, Plugin, PluginSettingTab, Setting } from 'obsidian';
-import { Api, ApiError, type Capabilities } from './api';
+import { App, Notice, Plugin, PluginSettingTab, Setting, TFile } from 'obsidian';
+import { Api, ApiError, canProposeToRhizome, type Capabilities } from './api';
 import { safeLink, serverOrigin } from './core';
 import type { SavedData } from './core';
 import { emptySaved, normalizeSaved } from './store';
 import { VaultSync } from './sync';
 import { SIDEBAR_VIEW_TYPE } from './sidebar';
 import { GraphNotesSyncView } from './view';
+import {
+  asProposeMenuFile,
+  describeOfferError,
+  proposeClickBlock,
+  proposeClickNotice,
+  proposeOneNotice,
+  proposeOnePath,
+  registerProposeMenuEvents,
+  shouldShowProposeMenu,
+  type ProposeMenuWorkspace,
+} from './offer';
 
 const WRITE_REASONS: Record<string, string> = {
   author_contract_required: 'Нужен договор автора в настройках GraphNotes.',
@@ -23,6 +34,9 @@ export default class GraphNotesPublisherPlugin extends Plugin {
   abort?: AbortController;
   syncAbort?: AbortController;
   sync = new VaultSync(this);
+  canPropose: boolean | undefined = undefined;
+  proposeDenied = false;
+  private offerAbort?: AbortController;
 
   get token(): string {
     return this.saved.token;
@@ -42,7 +56,79 @@ export default class GraphNotesPublisherPlugin extends Plugin {
     this.addCommand({ id: 'resume', name: 'Проверить / продолжить', callback: () => this.sync.flush('queued', true) });
     this.addCommand({ id: 'open-sidebar', name: 'Открыть панель передачи', callback: () => void this.openSidebar(true) });
     this.addSettingTab(new GraphNotesSettingTab(this.app, this));
-    this.app.workspace.onLayoutReady(() => void this.openSidebar(false));
+    this.registerProposeMenus();
+    this.app.workspace.onLayoutReady(() => {
+      void this.openSidebar(false);
+      void this.refreshOfferGate();
+    });
+  }
+
+  private registerProposeMenus(): void {
+    registerProposeMenuEvents(
+      this.app.workspace as ProposeMenuWorkspace,
+      ev => this.registerEvent(ev as Parameters<Plugin['registerEvent']>[0]),
+      {
+        canPropose: () => this.canPropose,
+        onPropose: file => {
+          const found = this.resolveMenuFile(file);
+          if (found) void this.proposeOneFile(found);
+        },
+        activeFile: () => this.app.workspace.getActiveFile(),
+      },
+    );
+  }
+
+  private resolveMenuFile(file: { path: string }): TFile | null {
+    const found = this.app.vault.getAbstractFileByPath(file.path);
+    if (found instanceof TFile) return found;
+    const duck = asProposeMenuFile(file);
+    return duck?.path ? (file as TFile) : null;
+  }
+
+  async refreshOfferGate(): Promise<void> {
+    if (!this.token.trim() || !this.saved.server.trim()) {
+      this.canPropose = undefined;
+      this.proposeDenied = false;
+      return;
+    }
+    this.offerAbort?.abort();
+    this.offerAbort = new AbortController();
+    const signal = this.offerAbort.signal;
+    try {
+      const { api } = this.connect(signal);
+      const caps = await api.capabilities();
+      if (signal.aborted) return;
+      this.canPropose = canProposeToRhizome(
+        typeof caps.user.role === 'string' ? caps.user.role : '',
+        caps.can_propose_to_rhizome,
+      );
+      this.proposeDenied = this.canPropose === false;
+    } catch {
+      // Keep the last successful gate. A timeout/abort is not "this account cannot propose".
+    }
+  }
+
+  async proposeOneFile(file: TFile): Promise<void> {
+    try {
+      const block = proposeClickBlock(
+        Boolean(this.token.trim() && this.saved.server.trim()),
+        this.proposeDenied,
+      );
+      if (block) {
+        new Notice(proposeClickNotice(block));
+        return;
+      }
+      if (!shouldShowProposeMenu(true, file)) {
+        new Notice('Предложить можно только Markdown-заметку.');
+        return;
+      }
+      await this.sync.pushPath(file.path, false);
+      const { api } = this.connect(this.beginWork());
+      const result = await proposeOnePath(api, file.path);
+      new Notice(proposeOneNotice(result));
+    } catch (error) {
+      new Notice(describeOfferError(error));
+    }
   }
 
   async openSidebar(reveal: boolean): Promise<void> {
@@ -59,6 +145,7 @@ export default class GraphNotesPublisherPlugin extends Plugin {
   onunload(): void {
     this.abort?.abort();
     this.syncAbort?.abort();
+    this.offerAbort?.abort();
   }
 
   persist(): Promise<void> {
@@ -95,7 +182,7 @@ class GraphNotesSettingTab extends PluginSettingTab {
     containerEl.createEl('h2', { text: 'GraphNotes Publisher' });
     containerEl.createEl('p', {
       cls: 'gn-muted',
-      text: 'Локальный граф копируется в личное хранилище GraphNotes. Это бесплатно. В общую — только Differ на сайте. Кнопка «Передать правки на сервер» — в виде боковой панели. Иконка самолётика слева тоже пишет. Токен: Настройки → Obsidian.',
+      text: 'Локальный граф копируется в личное хранилище GraphNotes. Это бесплатно. После копии боковая панель показывает сверку Differ: «Предложить в ризому» создаёт заявку, не пишет в общую. Кнопка «Передать правки на сервер» — только личное. Иконка самолётика слева тоже пишет. Токен: Настройки → Obsidian.',
     });
 
     new Setting(containerEl)
@@ -183,6 +270,11 @@ class GraphNotesSettingTab extends PluginSettingTab {
             const signal = plugin.beginWork();
             const { origin, api } = plugin.connect(signal);
             const caps = await api.capabilities();
+            plugin.canPropose = canProposeToRhizome(
+              typeof caps.user.role === 'string' ? caps.user.role : '',
+              caps.can_propose_to_rhizome,
+            );
+            plugin.proposeDenied = plugin.canPropose === false;
             status.empty();
             status.createEl('div', { text: connectionSummary(origin, caps) });
             addSiteLinks(status, origin, caps);

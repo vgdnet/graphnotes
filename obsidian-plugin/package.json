@@ -1,5 +1,5 @@
 {
-  "name": "graphnotes-obsidian", "version": "0.1.0", "private": true,
+  "name": "graphnotes-obsidian", "version": "0.1.1", "private": true,
   "description": "Copy your local Obsidian vault into your personal GraphNotes store.",
   "license": "AGPL-3.0-only",
   "scripts": {

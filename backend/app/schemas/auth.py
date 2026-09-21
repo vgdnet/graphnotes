@@ -138,8 +138,10 @@ class UserResponse(BaseModel):
     telegram_public: bool = False
     notify_queue_email: bool = False
     notify_queue_telegram: bool = False
+    notify_card_changes: bool = False
     website: str | None = None
     role: str
+    editor_tags: list[str] = []
     is_active: bool
     is_author: bool
     author_contract_version: str | None
@@ -160,6 +162,7 @@ class ProfileUpdateRequest(BaseModel):
     telegram_public: bool | None = None
     notify_queue_email: bool | None = None
     notify_queue_telegram: bool | None = None
+    notify_card_changes: bool | None = None
     website: str | None = Field(default=None, max_length=300)
 
     @field_validator("display_name")

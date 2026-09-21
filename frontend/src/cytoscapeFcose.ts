@@ -1,6 +1,8 @@
 import cytoscape from "cytoscape";
 import type { Core, EventObject, LayoutOptions, StylesheetJson } from "cytoscape";
 import fcose from "cytoscape-fcose";
+import { GRAPH_SETTINGS_DEFAULTS, stylesheetOptions } from "./graphSettings";
+import type { GraphForceLayout, GraphSettings, GraphStylesheetOptions } from "./graphSettings";
 import { cssToken } from "./theme";
 
 cytoscape.use(fcose);
@@ -21,7 +23,10 @@ function graphTokens() {
   };
 }
 
-function labelStyle(tokens: ReturnType<typeof graphTokens>) {
+function labelStyle(
+  tokens: ReturnType<typeof graphTokens>,
+  minZoomedFontSize = 14,
+) {
   return {
     color: tokens.label,
     "font-size": 13,
@@ -29,7 +34,7 @@ function labelStyle(tokens: ReturnType<typeof graphTokens>) {
     "text-outline-color": tokens.outline,
     "text-outline-width": 3,
     "text-outline-opacity": 1,
-    "min-zoomed-font-size": 8,
+    "min-zoomed-font-size": minZoomedFontSize,
   };
 }
 
@@ -51,25 +56,54 @@ export const FCOSE_LAYOUT = {
   numIter: 2500,
 } as LayoutOptions;
 
-export function graphStylesheet(): StylesheetJson {
+function resolvedStylesheetOptions(
+  options?: GraphStylesheetOptions | GraphSettings,
+): GraphStylesheetOptions {
+  if (!options) return stylesheetOptions(GRAPH_SETTINGS_DEFAULTS);
+  if ("showTags" in options) return stylesheetOptions(options);
+  return options;
+}
+
+export function graphStylesheet(options?: GraphStylesheetOptions | GraphSettings): StylesheetJson {
   const tokens = graphTokens();
+  const display = resolvedStylesheetOptions(options);
+  const edgeArrows = display.arrows
+    ? {
+        "curve-style": "bezier" as const,
+        "target-arrow-shape": "triangle",
+        "target-arrow-color": tokens.edge,
+      }
+    : {
+        "curve-style": "haystack" as const,
+        "haystack-radius": 0.5,
+        "target-arrow-shape": "none",
+      };
+  const cutoff = display.labelScoreCutoff;
   return [
     {
       selector: "node",
       style: {
-        width: "mapData(score, 0, 8, 22, 56)",
-        height: "mapData(score, 0, 8, 22, 56)",
+        width: `mapData(score, 0, 8, ${display.nodeMin}, ${display.nodeMax})`,
+        height: `mapData(score, 0, 8, ${display.nodeMin}, ${display.nodeMax})`,
         label: "data(label)",
         "text-valign": "center",
         "text-halign": "center",
         "text-wrap": "wrap",
         "text-max-width": "80px",
         "background-color": tokens.shared,
-        ...labelStyle(tokens),
+        ...labelStyle(tokens, display.minZoomedFontSize),
         "overlay-padding": 6,
         "z-index": 10,
         "border-width": 0,
       },
+    },
+    {
+      selector: `node[score < ${cutoff}]`,
+      style: { "text-opacity": 0 },
+    },
+    {
+      selector: `node[score < ${cutoff}]:selected, node[score < ${cutoff}].highlighted, node[score < ${cutoff}][searchHit = 1]`,
+      style: { "text-opacity": 1 },
     },
     {
       selector: "node[origin = 'personal']",
@@ -82,6 +116,18 @@ export function graphStylesheet(): StylesheetJson {
     {
       selector: "node[unresolved = 1]",
       style: { "background-color": tokens.missing },
+    },
+    {
+      selector: "node[kind = 'tag']",
+      style: {
+        shape: "diamond",
+        "background-color": tokens.personal,
+        "z-index": 8,
+      },
+    },
+    {
+      selector: "node[groupColor]",
+      style: { "background-color": "data(groupColor)" },
     },
     {
       selector: "node[locked = 1]",
@@ -103,11 +149,10 @@ export function graphStylesheet(): StylesheetJson {
     {
       selector: "edge",
       style: {
-        "curve-style": "haystack",
-        "haystack-radius": 0.5,
+        ...edgeArrows,
         opacity: 0.45,
         "line-color": tokens.edge,
-        width: 1.6,
+        width: display.edgeWidth,
         "overlay-padding": 3,
       },
     },
@@ -139,6 +184,14 @@ export function graphStylesheet(): StylesheetJson {
         "line-color": tokens.both,
         "target-arrow-shape": "triangle",
         "target-arrow-color": tokens.both,
+      },
+    },
+    {
+      selector: "edge[type = 'tag']",
+      style: {
+        opacity: 0.28,
+        "line-style": "dashed",
+        "target-arrow-shape": display.arrows ? "triangle" : "none",
       },
     },
     { selector: "node.unhighlighted", style: { opacity: 0.2 } },
@@ -274,11 +327,21 @@ export function applyDegreeScores(cy: Core): void {
   });
 }
 
-export function runFcoseLayout(cy: Core) {
+export function runFcoseLayout(cy: Core, forces?: GraphForceLayout) {
   cy.stop();
   if (cy.nodes().empty()) return undefined;
   cy.layout({ name: "grid", animate: false, fit: false, padding: 24 }).run();
-  const layout = cy.layout(FCOSE_LAYOUT);
+  const layout = cy.layout({
+    ...FCOSE_LAYOUT,
+    ...(forces
+      ? {
+          gravity: forces.gravity,
+          nodeRepulsion: () => forces.nodeRepulsion,
+          idealEdgeLength: () => forces.idealEdgeLength,
+          edgeElasticity: () => forces.edgeElasticity,
+        }
+      : {}),
+  } as LayoutOptions);
   layout.run();
   return layout;
 }

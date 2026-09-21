@@ -10,6 +10,7 @@ from app.main import app
 from app.models.audit_event import AuditEvent
 from app.models.personal_upload import PersonalUpload
 from app.models.shared_note import SharedNote
+from app.services.admin import bootstrap_admin
 from tests.test_ingest import _register
 
 
@@ -140,6 +141,9 @@ async def test_capabilities_manifest_one_note_transfer(
     assert caps.status_code == 200
     body = caps.json()
     assert body["protocol_version"] == "1.0"
+    assert body["user"]["role"] == "user"
+    assert body["can_see_queue"] is False
+    assert body["can_propose_to_rhizome"] is True
     assert body["write_allowed"] is True
     assert body["write_block_reason"] is None
     assert "md" in body["formats"]
@@ -272,6 +276,39 @@ async def test_capabilities_manifest_one_note_transfer(
         actions = set((await database.scalars(select(AuditEvent.action))).all())
     assert "integration.transfer_applied" in actions
     assert "integration.transfer_indexed" in actions
+
+
+async def test_capabilities_propose_to_rhizome_flag_by_role(
+    auth_test_context: tuple[AsyncClient, async_sessionmaker[AsyncSession]],
+) -> None:
+    admin, session_factory = auth_test_context
+    await _author(admin, "caps-flag-admin")
+    async with session_factory() as database:
+        await bootstrap_admin(database, "caps-flag-admin")
+    admin_secret = (await _token(admin))["token"]
+    admin_caps = await admin.get(f"{PREFIX}/capabilities", headers=_auth(admin_secret))
+    assert admin_caps.status_code == 200
+    assert admin_caps.json()["user"]["role"] == "admin"
+    assert admin_caps.json()["can_propose_to_rhizome"] is False
+    assert admin_caps.json()["can_see_queue"] is True
+    assert admin_caps.json()["editorial_queue_mode"] == "all"
+
+    editor = AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver")
+    async with editor:
+        await _author(editor, "caps-flag-editor")
+        users = await admin.get("/admin/users")
+        editor_id = next(
+            item["id"] for item in users.json()["users"] if item["username"] == "caps-flag-editor"
+        )
+        assert (await admin.patch(f"/admin/users/{editor_id}", json={"role": "editor"})).status_code == 200
+        secret = (await _token(editor))["token"]
+        body = await editor.get(f"{PREFIX}/capabilities", headers=_auth(secret))
+        assert body.status_code == 200
+        assert body.json()["user"]["role"] == "editor"
+        assert body.json()["can_propose_to_rhizome"] is False
+        assert body.json()["can_see_queue"] is True
+        assert body.json()["editorial_queue_mode"] == "none"
+        assert body.json()["has_editorial_grants"] is False
 
 
 async def test_version_conflict_is_atomic(
@@ -833,9 +870,9 @@ async def test_connected_git_does_not_disable_plugin_write(
     from tests.test_ingest import _connect_pair, _github, _install
 
     client, _ = auth_test_context
-    _install(monkeypatch, _github())
+    github = _install(monkeypatch, _github())
     await _author(client, "git-plugin-user")
-    await _connect_pair(client, "vgdnet/guide_psy")
+    await _connect_pair(client, "vgdnet/guide_psy", github)
     secret = (await _token(client))["token"]
     caps = await client.get(f"{PREFIX}/capabilities", headers=_auth(secret))
     assert caps.status_code == 200

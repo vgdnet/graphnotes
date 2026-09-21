@@ -1,7 +1,9 @@
 # GraphNotes — канонический контекст Technical Observer
 
 Статус: ACTIVE
-Updated: 2026-09-21 (PRODUCT_SPEC **3.37**: living canon does not name an
+Updated: 2026-09-21 (PRODUCT_SPEC **3.39**: `#/graph` Obsidian-like
+settings cog, `localStorage` `graphnotes-graph-settings`. **3.38**: `#/user` has no personal-git
+connect; four tabs; leftover `/api/personal/connect` only. **3.37**: living canon does not name an
 external git host; plugin ingest. **3.36**: guest chrome / search four states /
 hanging local graph / italic `_…_` / plural «2 заметки» / Russian roles
 участник/редактор/администратор / title/og / about copy. **3.35**: plugin ingest;
@@ -122,8 +124,9 @@ API key stored in Settings and plugin `data.json`; list returns `token`.
 TZ 2.65: ZIP ingest 10 000 files; zip-bomb
 size/ratio guards stay. TZ 2.66: missing card page + personal create
 from dangling wikilink. TZ 2.67: white-noise personal ingest lock + admin
-mail; existing notes kept. TZ **3.35 / 3.37:** plugin ingest; leftover
-«Свой git» / copy-in. TZ 2.68–2.71: Obsidian
+mail; existing notes kept. TZ **3.38:** `#/user` has no «Свой git»
+tab or connect form; leftover personal git **bind** API (no copy-in). TZ **3.35 / 3.37:** plugin ingest; leftover
+copy-in unused. TZ 2.68–2.71: Obsidian
 plugin → personal store API + desktop plugin in-repo. Alembic 0017–0019,
 hashed lookup + stored token, no git copy-in on plugin apply.)
 
@@ -204,7 +207,8 @@ ADR. Глобальное изменение должно быть явно пр
 
 Каноническое знание хранится в Markdown. Склад личного — **всегда**
 локальная копия GraphNotes. Пишет **плагин** (ТЗ **3.35** / **3.37**).
-Leftover copy-in с внешнего git-хоста / «Свой git» / загрузки с сайта —
+Leftover copy-in с внешнего git-хоста (без вкладки «Свой git» в кабинете,
+ТЗ **3.38**) / загрузки с сайта —
 не канон ingest. Dropbox / Google Drive — только отдельным решением.
 PostgreSQL, узлы, связи, теги, поисковый индекс и визуальный граф —
 производные и должны быть восстановимы.
@@ -349,11 +353,12 @@ Differ is derived. Outbound is personal layer → published shared.
 TZ 3.13 inbound is published shared → personal store for paths in the
 caller's accepted proposals. Differ/status/graph/search/card GET compare
 or serve local stores (`personal_uploads` / `shared_notes` / `note_index`).
-Leftover copy-in (not canon, TZ **3.35** / **3.37**): `push`
-webhook, the
-in-process poller `GRAPHNOTES_PERSONAL_SYNC_INTERVAL_SECONDS`, CLI
-`python -m app.cli.sync_personal`, connect, or git refresh on
-`POST /index/rebuild`. Canon ingest is the plugin. Differ list is not
+Leftover (not canon, TZ **3.35** / **3.37**): GitHub App **bind** of a
+personal remote (no copy-in); unused merge-out (`reconcile_proposals` /
+`merge_branch`); webhook **delivery log** without live disk; poller
+default off (`GRAPHNOTES_PERSONAL_SYNC_INTERVAL_SECONDS=0`) and
+`pull_connected_gits` no-op. `POST /index/rebuild` reindexes stores only.
+Canon ingest is the plugin. Differ list is not
 a live remote HEAD.
 Upload-without-git input compares the
 owner's staged Markdown with published shared by the same path/content rule.
@@ -364,14 +369,19 @@ personal layer has nothing to offer. GraphNotes does not keep a second
 canonical clone of personal Markdown.
 
 Shared-graph UI uses **fCoSE** (`cytoscape-fcose`), not core `cose`. Layout
-coordinates remain UI-only.
+coordinates remain UI-only. TZ **3.39** adds the Obsidian-like settings
+panel on `#/graph` (`frontend/src/graphSettings.ts`, `GraphSettingsPanel.tsx`):
+tag nodes are synthesized client-side (`gn-tag:` ids; not Graph API);
+orphans hide `isolated` notes; groups paint `node[groupColor]`; display and
+forces feed `graphStylesheet` / `runFcoseLayout`. Aside local graph on a
+card keeps depth only. Prefs are browser-local.
 
 Landing `/` is `/graph` (TZ 2.14 / 2.58 / 3.00): rhizome by default; no
 «Мой граф» tab. Guests may read published shared card bodies (TZ 2.64);
 they must not receive personal, queue, feed or comments.
-Settings (TZ 2.13 / 2.58) live at **`/user`** (email/contacts, leftover
-«Свой git» bind, author contract); not the public person card and not the
-graph home.
+Settings (TZ 2.13 / 2.58 / **3.38**) live at **`/user`** (email/contacts,
+author contract, Obsidian tokens, invite; **no** personal-git bind); not the public person card and not the
+graph home. Graph canvas prefs (TZ **3.39**) stay on `#/graph`, not `/user`.
 The shipped contract copy (TZ 2.44, version `2026-09-05`) is WTFPL for
 cards plus AGPL-3.0 for software; it lives in Settings → Договор автора,
 not on **О программе**. `#/about` shows rhizome copy (TZ **3.36**) plus

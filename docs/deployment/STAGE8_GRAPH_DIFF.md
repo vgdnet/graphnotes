@@ -6,7 +6,7 @@ a second corpus, not `graph.json`, and not canonical note bodies in PostgreSQL.
 
 `GET /api/graph/diff?proposal_id=...` is visible to the proposal author and to
 editor/admin. Other users get 404. Public JSON still hides Git SHAs, branch
-names and GitHub URLs.
+names and pull-request URLs.
 
 The preview is the changed neighborhood, bounded like the shared graph. Summary
 counts stay complete when the drawing is truncated. Incomplete fetch or parse

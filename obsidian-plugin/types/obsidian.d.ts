@@ -63,9 +63,19 @@ declare module 'obsidian' {
     ensureSideLeaf(type: string, side: 'left' | 'right', options?: { active?: boolean; split?: boolean; reveal?: boolean }): Promise<WorkspaceLeaf>;
     on(name: 'file-open', cb: (file: TFile | null) => any): any;
     on(name: 'active-leaf-change', cb: (leaf: unknown) => any): any;
+    on(name: 'file-menu', cb: (menu: Menu, file: TAbstractFile, source: string, leaf?: WorkspaceLeaf) => any): any;
+    on(name: 'editor-menu', cb: (menu: Menu, editor: unknown, info: MarkdownView) => any): any;
   }
   export class MarkdownView {
     file: TFile | null;
+  }
+  export class Menu {
+    addItem(cb: (item: MenuItem) => any): this;
+  }
+  export class MenuItem {
+    setTitle(title: string): this;
+    setIcon(icon: string): this;
+    onClick(cb: (evt?: MouseEvent | KeyboardEvent) => any): this;
   }
   export interface CachedMetadata {
     embeds?: { link: string }[];

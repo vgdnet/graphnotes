@@ -1,9 +1,8 @@
 # GraphNotes
 
-GraphNotes indexes Markdown from Git and shows one shared knowledge graph.
-People write notes in their own git (often Obsidian). Editors merge selected
-notes into the shared repository. PostgreSQL holds a derived index, not the
-canonical note bodies.
+GraphNotes is a Markdown publisher with access rights and one shared rhizome.
+Authors write in Obsidian. The plugin copies `.md` into GraphNotes stores.
+PostgreSQL holds a derived index, not the canonical note bodies.
 
 This repository is licensed under GNU Affero General Public License v3.0.
 See `LICENSE`.
@@ -12,7 +11,6 @@ See `LICENSE`.
 
 - Docker and Docker Compose (full stack)
 - Python 3.12 (backend development without Compose)
-- a GitHub App if you connect knowledge repositories (see `docs/deployment/STAGE3_GITHUB.md`)
 
 ## Run the stack
 

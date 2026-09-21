@@ -23,7 +23,6 @@ from app.services.author_contract import (
     apply_withdraw,
 )
 from app.services.contributions import get_user_card
-from app.services.github import GitHubAppClient
 from app.services.integration_errors import IntegrationError
 from app.services.integration_tokens import (
     access_retention_days,
@@ -244,6 +243,5 @@ async def user_card(
         database,
         target=target,
         viewer=viewer,
-        client=GitHubAppClient(),
     )
     return UserCardResponse.model_validate(body)

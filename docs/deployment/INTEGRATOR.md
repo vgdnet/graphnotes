@@ -1,12 +1,12 @@
 # Инструкция интегратору
 
-Канонический путь поставки: `nord → GitHub → rhizome-test → принятая owner ревизия → main / rhizome`.
+Канонический путь поставки: `nord → канонический remote исходников → rhizome-test → принятая owner ревизия → main / rhizome`.
 
 ```
 обсудили и приняли
   → продуктовое ТЗ (docs/product/)
   → техническое ТЗ (MASTER_CONTEXT, deployment)
-  → Code Writer: код на nord, push GitHub
+  → Code Writer: код на nord, push в канонический remote
   → rhizome-test (172.16.13.14) fetch/checkout, migrate, compose, tests
   → если owner принял после тестов: merge/promote в main (или approved tag)
   → rhizome (prod) только approved revision; без push credentials на rhizome
@@ -22,7 +22,7 @@
 ## Что считать прогрессом ТЗ
 
 - История версий ТЗ: `docs/product/roadmap-and-governance.md` §15 плюс `git log`.
-- Между версиями ТЗ коммитим и пушим на GitHub, **пока owner явно не сказал откатить**.
+- Между версиями ТЗ коммитим и пушим в канонический remote, **пока owner явно не сказал откатить**.
 - Откат ТЗ — явная команда owner, не «тесты красные».
 - **ТЗ 2.99:** порядок поставки — продуктовое ТЗ → техническое ТЗ →
   выкладка на `rhizome-test`. На тест не раньше обоих ТЗ. Чат не канон.
@@ -31,7 +31,7 @@
 
 ## Роли
 
-- **Code Writer** пишет код на `nord`, пушит в GitHub и доводит выкладку
+- **Code Writer** пишет код на `nord`, пушит в канонический remote и доводит выкладку
   до `rhizome-test` (fetch/checkout, migrate, compose). Для ТЗ 2.98 после
   выкладки открывается `http://172.16.13.14:8080/#/invites`.
 - Integrator не выдумывает продукт и не правит ТЗ вместо продуктолога.

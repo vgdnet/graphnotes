@@ -24,7 +24,7 @@ Platform and tools:
 Role:
 - primary source-code authoring environment
 - local Git repository
-- GitHub write access
+- Git write access to the canonical source remote
 - branches, commits and pushes
 - Codex runs against the local repository
 - user reviews/modifies code in VS Code
@@ -49,8 +49,8 @@ Role:
 Rules:
 - every new feature revision must be tested here before deployment to `rhizome`
 - failures and destructive experiments belong here, not on `rhizome`
-- normally consume the GitHub repository read-only
-- clone, fetch and check out candidate revisions from GitHub
+- normally consume the canonical source remote read-only
+- clone, fetch and check out candidate revisions from that remote
 - do not treat this environment or its working tree as canonical source
 - use `compose.yaml` together with `deploy/compose.rhizome-test.yaml`
 - expose frontend to `nord` at `http://172.16.13.14:8080`
@@ -119,7 +119,7 @@ Current deployment decision:
 Rules:
 - deploy only a revision already validated on `rhizome-test`
 - Git repository access must be read-only
-- do not configure GitHub credentials capable of push
+- do not configure push-capable credentials on this host
 - receive only approved commits or tags
 - do not use this host for destructive experiments
 - do not use this host as the first environment for migrations or new feature code
@@ -134,7 +134,7 @@ Important:
 
 ```text
 nord
-  -> GitHub
+  -> canonical source remote
       -> rhizome-test
           -> approved revision
               -> rhizome
@@ -151,4 +151,4 @@ revision on `rhizome-test` before promotion to `rhizome`.
 ## 5. Source-of-truth rule
 Once the local repository is established, source edits should normally originate from the Git working tree on `nord`, not from direct ad-hoc editing in `/opt/graphnotes` on Rhizome.
 
-The public GitHub repository and approved revision are the source of truth for delivery across environments. Promote the same reviewed commit or tag from `rhizome-test` to `rhizome`; do not rebuild an untracked variant directly in production.
+The canonical public repository and approved revision are the source of truth for delivery across environments. Promote the same reviewed commit or tag from `rhizome-test` to `rhizome`; do not rebuild an untracked variant directly in production.

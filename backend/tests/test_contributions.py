@@ -3,7 +3,7 @@ from pytest import MonkeyPatch
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from tests.test_ingest import _connect_pair, _github, _install
-from tests.test_proposals import _admin, _second
+from tests.test_proposals import _admin, _grant_write, _second
 
 
 def _assert_hidden(payload: str) -> None:
@@ -30,7 +30,7 @@ async def test_contributions_me_marks_open_proposal_paths_as_proposed(
     await _admin(admin, session_factory, "contrib-admin")
 
     author = await _second("efimov")
-    await _connect_pair(author, "vgdnet/guide_psy")
+    await _connect_pair(author, "vgdnet/guide_psy", github)
 
     created = await author.post("/proposals", json={"paths": ["already.md", "card.md"]})
     assert created.status_code == 200
@@ -62,7 +62,7 @@ async def test_contribution_stats_are_scoped_by_role(
     await _admin(admin, session_factory, "stats-admin")
 
     author = await _second("author")
-    await _connect_pair(author, "vgdnet/guide_psy")
+    await _connect_pair(author, "vgdnet/guide_psy", github)
     created = await author.post("/proposals", json={"paths": ["already.md", "card.md"]})
     assert created.status_code == 200
     proposal_id = created.json()["id"]
@@ -71,6 +71,7 @@ async def test_contribution_stats_are_scoped_by_role(
     users = await admin.get("/admin/users")
     editor_id = next(item["id"] for item in users.json()["users"] if item["username"] == "reviewer")
     assert (await admin.patch(f"/admin/users/{editor_id}", json={"role": "editor"})).status_code == 200
+    await _grant_write(admin, editor_id, "already.md", "card.md")
 
     other_editor = await _second("other-editor")
     other_id = next(item["id"] for item in (await admin.get("/admin/users")).json()["users"] if item["username"] == "other-editor")

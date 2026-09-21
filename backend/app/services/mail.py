@@ -207,6 +207,26 @@ def queue_notify_mail(
     return "Новые правки по ризоме", "\n".join(lines)
 
 
+def card_change_mail(
+    recipient: User,
+    *,
+    paths: list[str],
+    public_base_url: str | None = None,
+) -> tuple[str, str]:
+    base = _public_base(public_base_url)
+    link = f"{base}/#/differ" if base else "#/differ"
+    names = ", ".join(paths[:8])
+    lines = [
+        f"Здравствуйте, {recipient.display_name}.",
+        "",
+        "В карточках, которые вы правили, появились новые правки в ризоме.",
+        f"Карточки: {names}",
+        "",
+        f"Сверка: {link}",
+    ]
+    return "Изменения в ваших карточках", "\n".join(lines)
+
+
 def white_noise_lock_mail(
     recipient: User,
     *,

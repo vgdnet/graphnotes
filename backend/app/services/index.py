@@ -70,144 +70,120 @@ async def _running_rebuild(
 
 async def rebuild_shared(
     database: AsyncSession,
-    client: GitHubAppClient,
+    client: GitHubAppClient | None = None,
     *,
     actor_user_id: uuid.UUID | None = None,
     paths: set[str] | None = None,
 ) -> SyncJob:
-    row = await database.get(SharedRepository, SHARED_SINGLETON_ID)
-    if row is None or not row.observed_sha:
-        raise IndexerError(409, "the shared rhizome is not connected")
+    """Rebuild the shared index from shared_notes. No GitHub copy-in."""
+    del client, paths
+    from app.services.repository import ensure_local_shared
+
     if await _running_rebuild(database, NoteLayer.SHARED.value, None):
         raise IndexerError(409, "index rebuild is already running")
-    from app.services.ingest import copy_shared_git_into_store
-
-    try:
-        synced = await copy_shared_git_into_store(
-            database,
-            client,
-            row,
-            previous_sha=row.indexed_sha,
-            actor_user_id=actor_user_id,
-        )
-    except GitHubAppError as exc:
-        row.index_status = "error"
-        await database.commit()
-        raise IndexerError(502, exc.message) from exc
-    if not synced:
-        row.index_status = "error"
-        await database.commit()
-        raise IndexerError(502, "could not copy shared git")
-    return await _rebuild(
-        database,
-        client,
+    row = await ensure_local_shared(database)
+    revision = await reindex_shared_store(database)
+    row = await database.get(SharedRepository, SHARED_SINGLETON_ID) or row
+    row.observed_sha = revision
+    row.indexed_sha = revision
+    row.index_status = "current"
+    row.sync_status = "ready"
+    row.last_error = None
+    job = SyncJob(
         layer=NoteLayer.SHARED.value,
-        owner_id=None,
-        owner=row.owner,
-        name=row.name,
-        revision=row.observed_sha,
-        binding=row,
-        actor_user_id=actor_user_id,
-        paths=paths,
+        owner_user_id=None,
+        revision_sha=revision,
+        status=SyncJobStatus.READY.value,
+        started_at=datetime.now(UTC),
+        finished_at=datetime.now(UTC),
     )
+    database.add(job)
+    record_audit_event(
+        database,
+        action="index.rebuild",
+        actor_user_id=actor_user_id,
+        details={"layer": NoteLayer.SHARED.value, "mode": "store"},
+    )
+    await _prune_sync_jobs(database)
+    await database.commit()
+    await database.refresh(job)
+    return job
 
 
 async def rebuild_personal(
     database: AsyncSession,
     user_id: uuid.UUID,
-    client: GitHubAppClient,
+    client: GitHubAppClient | None = None,
     *,
     actor_user_id: uuid.UUID | None = None,
     paths: set[str] | None = None,
 ) -> SyncJob:
-    row = await database.scalar(
-        select(PersonalRepository).where(PersonalRepository.user_id == user_id)
-    )
-    if row is None or not row.observed_sha:
-        raise IndexerError(409, "connect your git first")
+    """Rebuild the personal index from personal_uploads. No GitHub copy-in."""
+    del client, paths
     if await _running_rebuild(database, NoteLayer.PERSONAL.value, user_id):
         raise IndexerError(409, "index rebuild is already running")
-    from app.services.ingest import copy_git_into_personal_store
-
-    try:
-        synced = await copy_git_into_personal_store(
-            database, user_id, client, row, previous_sha=row.indexed_sha
-        )
-    except GitHubAppError as exc:
-        row.index_status = "error"
-        await database.commit()
-        raise IndexerError(502, exc.message) from exc
-    if not synced:
-        row.index_status = "error"
-        await database.commit()
-        raise IndexerError(502, "could not copy personal git")
-    return await _rebuild(
-        database,
-        client,
+    revision = await reindex_personal_uploads(database, user_id)
+    job = SyncJob(
         layer=NoteLayer.PERSONAL.value,
-        owner_id=user_id,
-        owner=row.owner,
-        name=row.name,
-        revision=row.observed_sha,
-        binding=row,
-        actor_user_id=actor_user_id or user_id,
-        paths=paths,
+        owner_user_id=user_id,
+        revision_sha=revision,
+        status=SyncJobStatus.READY.value,
+        started_at=datetime.now(UTC),
+        finished_at=datetime.now(UTC),
     )
+    database.add(job)
+    record_audit_event(
+        database,
+        action="index.rebuild",
+        actor_user_id=actor_user_id or user_id,
+        details={"layer": NoteLayer.PERSONAL.value, "mode": "store"},
+    )
+    await _prune_sync_jobs(database)
+    await database.commit()
+    await database.refresh(job)
+    return job
 
 
-async def ensure_shared_current(database: AsyncSession, client: GitHubAppClient) -> None:
+async def ensure_shared_current(database: AsyncSession, client: GitHubAppClient | None = None) -> None:
+    del client
     row = await database.get(SharedRepository, SHARED_SINGLETON_ID)
-    if row is None or not row.observed_sha:
+    if row is None:
         return
-    if row.indexed_sha == row.observed_sha and row.index_status != "error":
-        return
-    await rebuild_shared(database, client)
+    await reindex_shared_store(database)
 
 
 async def ensure_personal_current(
     database: AsyncSession,
     user_id: uuid.UUID,
-    client: GitHubAppClient,
+    client: GitHubAppClient | None = None,
 ) -> None:
-    row = await database.scalar(
-        select(PersonalRepository).where(PersonalRepository.user_id == user_id)
-    )
-    if row is None or not row.observed_sha:
-        return
-    if row.indexed_sha == row.observed_sha and row.index_status != "error":
-        return
-    await rebuild_personal(database, user_id, client)
+    del client
+    await reindex_personal_uploads(database, user_id)
 
 
 async def rebuild_derived_indexes(
     database: AsyncSession,
-    client: GitHubAppClient,
+    client: GitHubAppClient | None = None,
     *,
     actor_user_id: uuid.UUID | None = None,
 ) -> None:
-    """Rebuild derived indexes from the local Markdown stores.
+    """Rebuild derived indexes from the local Markdown stores. No GitHub."""
+    del client
+    from app.services.repository import ensure_local_shared
 
-    GitHub is copy-in only (TZ 2.63). Search and graph read ``note_index``;
-    cards read ``shared_notes`` / ``personal_uploads``.
-    """
-    from app.services.repository import refresh_personal, refresh_shared
-
-    await refresh_shared(database, client)
-    shared = await database.get(SharedRepository, SHARED_SINGLETON_ID)
-    if shared is not None and shared.observed_sha:
-        await rebuild_shared(database, client, actor_user_id=actor_user_id)
-    user_ids = list(await database.scalars(select(PersonalRepository.user_id)))
+    await ensure_local_shared(database)
+    await reindex_shared_store(database)
+    user_ids = set(await database.scalars(select(PersonalUpload.user_id).distinct()))
+    user_ids.update(list(await database.scalars(select(PersonalRepository.user_id))))
     for user_id in user_ids:
-        await refresh_personal(database, user_id, client)
-        personal = await database.scalar(
-            select(PersonalRepository).where(PersonalRepository.user_id == user_id)
-        )
-        if personal is None or not personal.observed_sha:
-            continue
-        await rebuild_personal(
-            database, user_id, client, actor_user_id=actor_user_id or user_id
-        )
+        await reindex_personal_uploads(database, user_id)
     await purge_comments_for_missing_notes(database)
+    record_audit_event(
+        database,
+        action="index.rebuild",
+        actor_user_id=actor_user_id,
+        details={"layer": "derived", "mode": "store"},
+    )
     await database.commit()
 
 
@@ -272,9 +248,8 @@ async def _store_texts_for_layer(
                 )
             ).all()
         )
-        if rows:
-            return {row.path: row.body for row in rows}
-    return None
+        return {row.path: row.body for row in rows}
+    return {}
 
 
 async def _rebuild(
@@ -312,33 +287,10 @@ async def _rebuild(
     await database.flush()
 
     try:
-        if layer == NoteLayer.SHARED.value and isinstance(binding, SharedRepository):
-            from app.services.ingest import copy_shared_git_into_store
-
-            await copy_shared_git_into_store(
-                database,
-                client,
-                binding,
-                previous_sha=binding.indexed_sha,
-                actor_user_id=actor_user_id,
-            )
-        elif layer == NoteLayer.PERSONAL.value and owner_id is not None and isinstance(
-            binding, PersonalRepository
-        ):
-            from app.services.ingest import copy_git_into_personal_store
-
-            await copy_git_into_personal_store(
-                database, owner_id, client, binding, previous_sha=binding.indexed_sha
-            )
+        del client, owner, name
         texts = await _store_texts_for_layer(database, layer, owner_id)
-        if texts is not None:
-            listed = sorted(texts)
-            listed_set = set(listed)
-            blobs: dict[str, str] = {}
-        else:
-            blobs = await client.list_markdown_blobs(owner, name, revision)
-            listed = sorted(blobs)
-            listed_set = set(listed)
+        listed = sorted(texts)
+        listed_set = set(listed)
         if len(listed) > settings.index_max_notes:
             raise IndexerError(400, "too many notes to index")
         existing = (
@@ -356,16 +308,7 @@ async def _rebuild(
             fetch_paths = (listed_set & paths) | (listed_set - existing_paths)
         parsed: dict[str, ParsedNote] = {}
         for path in sorted(fetch_paths):
-            if texts is not None:
-                text = texts[path]
-            else:
-                sha = blobs.get(path)
-                text = (
-                    await client.get_blob(owner, name, sha)
-                    if sha
-                    else await client.get_file(owner, name, path, revision)
-                )
-            parsed[path] = parse_markdown(path, text)
+            parsed[path] = parse_markdown(path, texts[path])
         unchanged = [note for note in existing if note.path in listed_set and note.path not in fetch_paths]
         parsed.update(await _parsed_from_existing(database, unchanged))
         await _delete_layer(database, layer, owner_id)
@@ -553,8 +496,84 @@ async def reindex_personal_uploads(database: AsyncSession, user_id: uuid.UUID) -
         select(PersonalRepository).where(PersonalRepository.user_id == user_id)
     )
     if binding is not None:
+        binding.observed_sha = revision
         binding.indexed_sha = revision
         binding.index_status = "current"
+        binding.sync_status = "ready"
+        binding.last_error = None
+    await database.flush()
+    return revision
+
+
+async def reindex_shared_store(database: AsyncSession) -> str:
+    """Rebuild the shared derived index from shared_notes only.
+
+    Must not copy git into shared_notes: that would overwrite granted writes.
+    """
+    from app.services.repository import ensure_local_shared
+
+    if await _running_rebuild(database, NoteLayer.SHARED.value, None):
+        raise IndexerError(409, "index rebuild is already running")
+    await ensure_local_shared(database)
+    texts = await _store_texts_for_layer(database, NoteLayer.SHARED.value, None) or {}
+    digest = hashlib.sha256()
+    for path in sorted(texts):
+        digest.update(path.encode("utf-8"))
+        digest.update(b"\0")
+        digest.update(hashlib.sha256(texts[path].encode("utf-8")).digest())
+    revision = digest.hexdigest()[:40] if texts else "empty"
+    parsed = {path: parse_markdown(path, text) for path, text in texts.items()}
+    lookup = notes_lookup_map(set(parsed))
+    await _delete_layer(database, NoteLayer.SHARED.value, None)
+    records: dict[str, NoteIndex] = {}
+    for path, note in parsed.items():
+        record = NoteIndex(
+            index_key=_index_key(NoteLayer.SHARED.value, None, None, revision, path),
+            layer=NoteLayer.SHARED.value,
+            revision_sha=revision,
+            path=path,
+            slug=_slug(path),
+            title=note.title,
+            content_hash=note.content_hash,
+            owner_user_id=None,
+        )
+        database.add(record)
+        records[path] = record
+    await database.flush()
+    for path, note in parsed.items():
+        record = records[path]
+        for tag_name in dict.fromkeys(note.tags):
+            normalized = tag_name.casefold()[:80]
+            tag = await database.scalar(select(Tag).where(Tag.name == normalized))
+            if tag is None:
+                tag = Tag(name=normalized)
+                database.add(tag)
+                await database.flush()
+            database.add(NoteTag(note_id=record.id, tag_id=tag.id))
+        seen_links: set[tuple[str, str]] = set()
+        for link in note.typed_links:
+            key = (link.kind, link.target)
+            if key in seen_links:
+                continue
+            seen_links.add(key)
+            target_path = resolve_link_target(link.target, lookup)
+            target_note = records.get(target_path) if target_path else None
+            database.add(
+                NoteLink(
+                    source_id=record.id,
+                    target_id=None if target_note is None else target_note.id,
+                    target_raw=link.target[:200],
+                    link_type=link.kind,
+                    unresolved=target_note is None,
+                )
+            )
+    binding = await database.get(SharedRepository, SHARED_SINGLETON_ID)
+    if binding is not None:
+        binding.observed_sha = revision
+        binding.indexed_sha = revision
+        binding.index_status = "current"
+        binding.sync_status = "ready"
+        binding.last_error = None
     await database.flush()
     return revision
 
@@ -616,8 +635,25 @@ async def load_graph(
             if source_path and target_path:
                 adjacency[source_path].add(target_path)
                 adjacency[target_path].add(source_path)
-        chosen = _bounded_from_seeds(list(path_ids), adjacency, seeds, depth, limit)
-        truncated = len(rows) > len(chosen)
+        expanded = list(
+            dict.fromkeys(
+                key for seed in seeds for key in graph_center_keys(seed) if key in path_ids
+            )
+        )
+        if not expanded:
+            incoming = _incoming_paths_for_unresolved(seeds, by_id_path, links)
+            if not incoming:
+                return {**empty, "index_status": "current", "truncated": bool(rows)}
+            if depth <= 1:
+                chosen = set(incoming[:limit])
+            else:
+                chosen = _bounded_from_seeds(
+                    list(path_ids), adjacency, incoming, depth - 1, limit
+                )
+            truncated = len(rows) > len(chosen)
+        else:
+            chosen = _bounded_from_seeds(list(path_ids), adjacency, expanded, depth, limit)
+            truncated = len(rows) > len(chosen)
         if not chosen:
             return {**empty, "index_status": "current", "truncated": truncated}
         chosen_notes = list(
@@ -1048,6 +1084,77 @@ def _personal_graph_center(center: str | None) -> str | None:
     return center
 
 
+def graph_center_keys(center: str) -> tuple[str, ...]:
+    text = center.strip()
+    if not text:
+        return ()
+    keys: list[str] = [text]
+    rest = text
+    for prefix in ("unresolved:", "locked:"):
+        if rest.startswith(prefix):
+            rest = rest[len(prefix) :]
+            keys.append(rest)
+            break
+    if rest.startswith("personal:"):
+        rest = rest[len("personal:") :]
+        keys.append(rest)
+    stem = rest[:-3] if rest.lower().endswith(".md") else rest
+    file_name = stem if stem.lower().endswith(".md") else f"{stem}.md"
+    keys.extend(
+        [
+            stem,
+            file_name,
+            f"unresolved:{stem}",
+            f"unresolved:{file_name}",
+            f"locked:{stem}",
+            f"locked:{file_name}",
+        ]
+    )
+    seen: dict[str, None] = {}
+    for key in keys:
+        if key:
+            seen.setdefault(key, None)
+    return tuple(seen)
+
+
+def match_unresolved_center(center: str, target_raw: str) -> bool:
+    return bool(set(graph_center_keys(center)) & set(graph_center_keys(target_raw)))
+
+
+def seed_paths_for_center(center: str, paths: list[str]) -> list[str]:
+    keys = set(graph_center_keys(center))
+    found = [path for path in paths if path in keys]
+    if found:
+        return found
+    hanging: list[str] = []
+    for path in paths:
+        if not (path.startswith("unresolved:") or path.startswith("locked:")):
+            continue
+        raw = path.split(":", 1)[1]
+        if match_unresolved_center(center, raw):
+            hanging.append(path)
+    return hanging
+
+
+def _incoming_paths_for_unresolved(
+    seeds: list[str],
+    by_id_path: dict,
+    links: list,
+) -> list[str]:
+    incoming: list[str] = []
+    seen: set[str] = set()
+    for link in links:
+        if not (link.unresolved or link.target_id is None):
+            continue
+        if not any(match_unresolved_center(seed, link.target_raw) for seed in seeds):
+            continue
+        source_path = by_id_path.get(link.source_id)
+        if source_path and source_path not in seen:
+            incoming.append(source_path)
+            seen.add(source_path)
+    return incoming
+
+
 def _bounded_paths(
     paths: list[str],
     adjacency: dict[str, set[str]],
@@ -1057,7 +1164,8 @@ def _bounded_paths(
 ) -> set[str]:
     if not center:
         return set(paths[:limit])
-    return _bounded_from_seeds(paths, adjacency, [center], depth, limit)
+    starts = seed_paths_for_center(center, paths) or [center]
+    return _bounded_from_seeds(paths, adjacency, starts, depth, limit)
 
 
 def _bounded_from_seeds(
@@ -1102,7 +1210,8 @@ def bound_graph_payload(
         if source in adjacency and target in adjacency:
             adjacency[source].add(target)
             adjacency[target].add(source)
-    chosen = _bounded_from_seeds(paths, adjacency, [center], depth, limit)
+    starts = seed_paths_for_center(center, paths) or [center]
+    chosen = _bounded_from_seeds(paths, adjacency, starts, depth, limit)
     chosen_nodes = [node for node in nodes if str(node["path"]) in chosen]
     chosen_edges = [
         edge

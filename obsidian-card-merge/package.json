@@ -1,6 +1,6 @@
 {
   "name": "graphnotes-card-merge",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "description": "Obsidian editor plugin: compare and merge a remote Markdown card into the local vault file.",
   "license": "AGPL-3.0-only",

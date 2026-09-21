@@ -5,15 +5,18 @@ from collections import OrderedDict
 from dataclasses import dataclass
 import uuid
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.models.github import SharedRepository
 from app.models.proposal import Proposal, ProposalStatus
+from app.models.personal_upload import PersonalUpload
+from app.models.shared_note import SharedNote
 from app.models.user import User
 from app.services.github import GitHubAppClient, GitHubAppError
 from app.services.markdown import notes_lookup_map, parse_markdown, resolve_link_target
-from app.services.proposal import ProposalError, _github, proposal_for_viewer
+from app.services.proposal import ProposalError, _github, _paths, proposal_for_viewer
 from app.services.repository import SHARED_SINGLETON_ID, published_sha
 
 _PENDING = {
@@ -510,13 +513,36 @@ def _cache_put(key: tuple[object, ...], payload: dict[str, object]) -> None:
         _DIFF_CACHE.popitem(last=False)
 
 
-async def _tree(client: GitHubAppClient, owner: str, name: str, ref: str) -> dict[str, str]:
-    paths = await client.list_markdown_files(owner, name, ref)
-    if len(paths) > settings.index_max_notes:
-        raise ProposalError(400, "too many notes to compare")
-    files: dict[str, str] = {}
-    for path in paths:
-        files[path] = await client.get_file(owner, name, path, ref)
+async def _shared_tree(database: AsyncSession) -> dict[str, str]:
+    rows = list((await database.scalars(select(SharedNote))).all())
+    return {row.path: row.body for row in rows}
+
+
+async def _proposal_head_tree(
+    database: AsyncSession,
+    author_user_id: uuid.UUID,
+    scope: list[str],
+    base: dict[str, str],
+) -> dict[str, str]:
+    files = dict(base)
+    if not scope:
+        return files
+    uploads = {
+        row.path: row.body
+        for row in (
+            await database.scalars(
+                select(PersonalUpload).where(
+                    PersonalUpload.user_id == author_user_id,
+                    PersonalUpload.path.in_(scope),
+                )
+            )
+        ).all()
+    }
+    for path in scope:
+        if path in uploads:
+            files[path] = uploads[path]
+        else:
+            files.pop(path, None)
     return files
 
 
@@ -524,10 +550,11 @@ async def proposal_graph_diff(
     database: AsyncSession,
     user: User,
     proposal_id: uuid.UUID,
-    client: GitHubAppClient,
+    client: GitHubAppClient | None = None,
     *,
     limit: int,
 ) -> dict[str, object]:
+    del client  # leftover GitHub trees; compare local stores (TZ 3.37)
     row = await proposal_for_viewer(database, user, proposal_id)
     shared = await database.get(SharedRepository, SHARED_SINGLETON_ID)
     conflicted = row.status == ProposalStatus.CONFLICTED.value
@@ -554,32 +581,12 @@ async def proposal_graph_diff(
     if cached is not None:
         return cached
     try:
-        base_files, head_files = await asyncio.wait_for(
-            asyncio.gather(
-                _tree(client, shared.owner, shared.name, row.base_sha),
-                _tree(client, shared.owner, shared.name, row.head_sha),
-            ),
-            timeout=settings.graph_diff_timeout_seconds,
+        base_files = await _shared_tree(database)
+        head_files = await _proposal_head_tree(
+            database, row.author_user_id, _paths(row.scope_paths), base_files
         )
         base = build_snapshot(base_files)
         head = build_snapshot(head_files)
-    except TimeoutError:
-        return _incomplete(
-            proposal_id=str(row.id),
-            status=row.status,
-            stale=stale,
-            conflicted=conflicted,
-            detail="graph diff exceeded the time bound",
-        )
-    except GitHubAppError as exc:
-        mapped = _github(exc)
-        return _incomplete(
-            proposal_id=str(row.id),
-            status=row.status,
-            stale=stale,
-            conflicted=conflicted,
-            detail=mapped.detail,
-        )
     except (ValueError, ProposalError) as exc:
         detail = exc.detail if isinstance(exc, ProposalError) else "proposal graph could not be derived"
         return _incomplete(

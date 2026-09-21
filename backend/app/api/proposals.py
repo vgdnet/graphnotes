@@ -103,7 +103,7 @@ async def create_proposal_endpoint(
             paths=payload.paths,
             summary=payload.summary,
             expected_sha=payload.expected_sha,
-            client=_client(),
+            client=None,
         )
     except ProposalError as exc:
         _raise(exc)
@@ -129,7 +129,7 @@ async def get_proposal_endpoint(
     database: DatabaseSession,
 ) -> ProposalResponse:
     try:
-        body = await get_proposal(database, user, proposal_id, _client())
+        body = await get_proposal(database, user, proposal_id, None)
     except ProposalError as exc:
         _raise(exc)
     return ProposalResponse.model_validate(body)
@@ -143,7 +143,7 @@ async def get_proposal_work_file_endpoint(
     database: DatabaseSession,
 ) -> ProposalWorkFileResponse:
     try:
-        body = await get_proposal_work_file(database, user, proposal_id, note_path, _client())
+        body = await get_proposal_work_file(database, user, proposal_id, note_path, None)
     except ProposalError as exc:
         _raise(exc)
     return ProposalWorkFileResponse.model_validate(body)
@@ -163,7 +163,7 @@ async def resolve_proposal_endpoint(
             proposal_id=proposal_id,
             files=[(item.path, item.source) for item in payload.files],
             reason=payload.reason,
-            client=_client(),
+            client=None,
         )
     except ProposalError as exc:
         _raise(exc)
@@ -224,7 +224,7 @@ async def _decide(
             proposal_id=proposal_id,
             action=action,
             reason=reason,
-            client=_client(),
+            client=None,
         )
     except ProposalError as exc:
         _raise(exc)

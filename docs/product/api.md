@@ -35,7 +35,8 @@ DELETE /api/users/me/integration-tokens/{id}
 
 GET  /api/repository/status
 
-POST /api/personal/connect          # from account settings, not the graph home
+POST /api/personal/connect          # leftover TZ 3.35 / **3.38**: cabinet
+                                    # `#/user` does not call this
 POST /api/personal/import-md          # leftover TZ 2.96: no website button;
                                     # future upload must sync into the local store
                                     # (same as plugin); ZIP ≤ 10 000 files;
@@ -49,12 +50,14 @@ PUT  /api/personal/notes/{path}       # plugin / API / TZ 2.66 stub; not website
                                     # from a missing-link create (TZ 2.66)
 GET  /api/personal/uploads            # upload history: who / when / path / hash
 
-GET  /api/differ                      # TZ 3.11 / 3.13 / 3.20: chrome tab #/differ (Сверка)
-                                      # and Publisher sidebar offer list;
-                                      # {differences, inbound} path lists;
-                                      # kind=added|changed; inbound omitted from outbound;
+GET  /api/differ                      # TZ 3.11 / 3.13 / 3.20 / **3.31**: chrome tab #/differ (Сверка)
+                                      # and plugin sidebar offer list;
+                                      # {differences, inbound} path lists (no bodies);
+                                      # kind=added|changed from content_hash, not wikidiff2;
+                                      # inbound omitted from outbound;
                                       # cookie or Bearer gnp_ / personal:read (that user only).
-                                      # connected git: refresh public HEAD first.
+                                      # store hashes only; no live remote API; no git copy-in on list.
+                                      # ?include_inbound=false — offer panel (skip inbound+notices).
                                       # no live direction field
 POST /api/differ/inbound/{path}/accept
                                       # TZ 3.13 shipped: copy published shared
@@ -64,7 +67,8 @@ GET  /api/differ/files/{path}         # leftover pair JSON (shipped); not author
                                       # incoming=published shared, current=personal or empty;
                                       # shared-only path is 200 kind=changed, not 404;
                                       # errors {detail}
-GET  /api/contributions/me            # author's notes, links, proposals, counts; derived
+GET  /api/contributions/me            # author's notes, links, proposals, counts; derived;
+                                      # TZ 3.34: which edits proposed (path, volume, state);
                                       # editor/admin also receive own review stats
 GET  /api/users/{login}/card          # public person card (guest + signed-in, TZ 2.98):
                                       # login only (`efimov`); UUID key → 404; no user UUID in JSON;
@@ -73,8 +77,11 @@ GET  /api/users/{login}/card          # public person card (guest + signed-in, T
                                       # proposed_notes, proposed_links, proposed_edit_bytes};
                                       # accepted notes list; not personal/closed bodies; not /user
 GET  /api/admin/contributions         # admin only: same stats for every account
-GET  /api/admin/users                 # list/search/filter; last login, sessions;
-                                      # TZ 3.21: editor tag grants when present
+GET  /api/admin/users                 # list/search/filter by nick/username (also
+                                      # email, display name); last login, sessions;
+                                      # TZ 3.21 / **3.33**: editor_tags + grants[]
+                                      # (kind=path|tag|prefix) so the admin row
+                                      # shows rights without a second screen
 POST /api/admin/users                 # admin creates an account
 PATCH /api/admin/users/{id}/editor-tags
                                       # TZ 3.21 / 3.30: replace tag grants; admin;
@@ -83,7 +90,10 @@ PATCH /api/admin/users/{id}/editor-tags
 GET  /api/admin/grants                # admin; filter user_id / kind / value
 POST /api/admin/grants                # admin; kind=path|tag|prefix
 DELETE /api/admin/grants/{id}         # admin
-GET  /api/admin/grants/catalog        # admin; shared paths, tags, folder prefixes
+GET  /api/admin/grants/catalog        # admin; shared paths, tags, folder prefixes;
+                                      # TZ 3.33: ?q= filters path/title/tag/prefix;
+                                      # ?tag= lists cards with that tag; cards[]
+                                      # is {path, title}, no bodies
 GET  /api/integrations/obsidian/v1/granted
                                       # plugin: list granted shared cards
 GET  /api/integrations/obsidian/v1/granted/files/content
@@ -128,7 +138,9 @@ GET  /api/cards/{path}                # shipped display today: published shared 
                                       # granted write is the same shared file, not a
                                       # personal blob; PUT /personal/notes/{path} stays
                                       # for ungranted drafts / plugin leftover
-GET  /api/cards/{path}/revisions      # TZ 2.94: last 30 content revisions + unified diff;
+GET  /api/cards/{path}/revisions      # TZ 2.94 / 3.34: last 30 snapshots + diff;
+                                      # proposer (proposal author / grant writer),
+                                      # optional accepter, added/removed lines or bytes;
                                       # not loaded with the card; shared = guest OK;
                                       # personal = session; admin personal:{uuid}:;
                                       # proposal empty
@@ -147,7 +159,12 @@ POST /api/proposals                   # cookie or Bearer gnp_ / personal:read;
                                       # author contract; that user only (TZ 3.20)
 GET  /api/proposals                   # cookie or Bearer gnp_ / personal:read
                                       # (TZ 3.10: Card Merge editor queue);
-                                      # editor/admin — все заявки; user — свои
+                                      # editor — грант-срез; empty grant → [];
+                                      # admin — все pending (bypass);
+                                      # user — свои;
+                                      # {proposals, editorial_queue_mode:
+                                      # all|granted|none,
+                                      # has_editorial_grants}
 GET  /api/proposals/{id}              # тот же вход, что список; file diffs:
                                       # proposed body, shared before,
                                       # unified leftover, html from wikidiff2
@@ -211,7 +228,8 @@ DELETE /api/integrations/obsidian/v1/transfers/{id}   # cancel if not applying
 каталога в дереве — leftover, не канон.
 
 Сайт 3.11 / 3.13: вкладка `#/differ`, `/offer` только заявки, «Текст
-сверки» снята. Publisher 3.20: тот же `GET /api/differ` + `POST /api/proposals`
+сверки» снята. Плагин 3.20 / **3.31**: `GET /api/differ?include_inbound=false`
+(пути/хеши, без тел) + `POST /api/proposals` по выбранным
 для офера после копии в личное. Card Merge leftover-модалка — не этот контракт.
 
 Авторизация передачи и чтения Differ: `Authorization: Bearer <token>`.
@@ -240,12 +258,19 @@ capabilities), `personal:write` (пакет Publisher), опционально
 
 `GET /capabilities` сообщает, можно ли писать (`write_allowed` /
 `write_block_reason`), видна ли очередь (`can_see_queue`: `true` у
-`editor` / `admin`), можно ли предложить личное в общую
+`editor` / `admin`), срез очереди (`editorial_queue_mode`: `all` у
+`admin`, `granted` у editor с грантами, `none` у editor без грантов;
+`has_editorial_grants`), можно ли предложить личное в общую
 (`can_propose_to_rhizome`: сегодня `true` у роли `user`; `false` у
 `editor` / `admin`, ТЗ **3.27** — грубый шлюз, не вечный ACL), лимиты и ссылки на личный граф и Differ.
 `write_allowed` — договор автора и активная учётка, не «git подключён».
 Плагин прячет всю панель «Предложить в ризому», если флаг `false`
-(нет флага — прятать при роли `editor` / `admin`). Очередь от флага
+(нет флага — прятать при роли `editor` / `admin`). **ТЗ 3.32:** ту же
+строку в `file-menu` / `editor-menu` (регистрация в начале `onload`)
+показывают `user` / флаг true / неизвестные capabilities; прячут только
+известного `editor`/`admin`; заголовок без `.md` не прячет Markdown;
+клик не вызывает `GET /differ` на весь список — передача одного пути,
+затем `POST /proposals`. Очередь от флага
 офера не зависит.
 
 Пакет (`POST /transfers` … `commit`) применяется **целиком или никак** к

@@ -22,7 +22,8 @@ from app.models.integration import (
 )
 from app.models.personal_upload import PersonalUpload, UploadEvent
 from app.models.proposal import Proposal, ProposalStatus
-from app.models.user import User
+from app.models.user import User, can_propose_to_rhizome, can_see_queue
+from app.services.grants import queue_scope
 from app.services.audit import record_audit_event
 from app.services.index import IndexerError, reindex_personal_uploads
 from app.services.integration_errors import IntegrationError
@@ -176,6 +177,7 @@ async def capabilities_payload(
     quota = settings.integration_personal_quota_bytes
     reason = write_block_reason(user)
     base = public_base_url.rstrip("/")
+    queue_mode, has_grants = await queue_scope(database, user)
     return {
         "protocol_version": PROTOCOL_VERSION,
         "api_prefix": "/api/integrations/obsidian/v1",
@@ -183,9 +185,14 @@ async def capabilities_payload(
             "id": str(user.id),
             "username": user.username,
             "display_name": user.display_name,
+            "role": user.role,
         },
         "write_allowed": reason is None,
         "write_block_reason": reason,
+        "can_see_queue": can_see_queue(user),
+        "can_propose_to_rhizome": can_propose_to_rhizome(user),
+        "editorial_queue_mode": queue_mode,
+        "has_editorial_grants": has_grants,
         "scopes": list(token.scopes or []),
         "formats": ["md", "png", "jpeg", "gif", "webp", "pdf"],
         "limits": {
