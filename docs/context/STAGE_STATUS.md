@@ -1,8 +1,41 @@
 # GraphNotes - Stage Status
 
-Updated: 2026-09-16
+Updated: 2026-09-21
 
-**Shipped this session (nord):** TZ **3.31** — offer list / `GET /api/differ`
+**Shipped this session (nord → rhizome-test):** TZ **3.36** guest chrome
+on `http://172.16.13.14:8080`. Graph page names the rhizome and says when
+load failed; health is not green on `/api/health` alone; `/users/me` 5xx
+keeps the session; search empty/searching/none/error; hanging-card local
+graph shows incoming wikilinks; about copy + «Стать автором»; title/og
+«Ризома психоанализа». Overlay deploy only. Not production.
+
+**Also on rhizome-test:** TZ **3.33** admin
+search on `#/admin` (`http://172.16.13.14:8080/#/admin`). «Пользователи»:
+search by nick; the row shows rights (role, author, active, grants).
+«Доступы»: search → list of cards (path/title, no bodies) and list of
+tags (click lists cards with that tag). Reuses `GET /api/admin/users?q=`
+(`grants[]` on each row) and `GET /api/admin/grants/catalog?q=&tag=`
+(`cards[]`). Overlay deploy only. Not production.
+
+Product model TZ **3.37** (living canon does not name an external git
+host; plugin writes the store) / **3.35** (plugin ingest; not Wikipedia
+as a product; leftover git host unfinished) is TZ-only, not this overlay.
+Source-code delivery `nord → GitHub → rhizome-test` stays ADR-006.
+
+Product model TZ **3.34** (history + `/contribution`: who proposed which
+edit, volume; accepter is not the text author) is TZ-only, not this
+overlay.
+
+**Also on rhizome-test:** TZ **3.32** Card Merge file-menu — show
+«Предложить в ризому» for `user` / unknown capabilities; hide only known
+editor/admin. Register `file-menu` + `editor-menu` at start of `onload`.
+Same `dist/graphnotes-card-merge` build (`main.js`, `manifest.json`,
+`styles.css`), do not overwrite `data.json`:
+`/home/efimov/obsidian/rhizome/.obsidian/plugins/graphnotes-card-merge/`
+and `/home/efimov/obsidian/guide_psy/.obsidian/plugins/graphnotes-card-merge/`
+— Reload app without saving in **both** vaults.
+
+**Also on rhizome-test:** TZ **3.31** — offer list / `GET /api/differ`
 is path+hash metadata from `personal_uploads` ↔ `shared_notes` (no bodies,
 no wikidiff2, **no GitHub API**, no git copy-in on sidebar open or `#/differ`
 list). Plugin `user` calls `GET /api/differ?include_inbound=false`.
@@ -23,8 +56,9 @@ are per card; authorization is a DB grant `(user, path)` **or**
 withdrawn); empty is not a corpus dump. Runtime this wave:
 `access_grants` table; admin-only CRUD
 `GET/POST /api/admin/grants`, `DELETE /api/admin/grants/{id}`,
-`GET /api/admin/grants/catalog`; website **Доступы** (by user / card /
-tag / folder); queue/file/resolve filtered to the grant; plugin
+`GET /api/admin/grants/catalog`; website **Доступы** (TZ **3.33**:
+search by nick / card / tag / folder → lists, not one corpus select);
+queue/file/resolve filtered to the grant; plugin
 `GET/PUT /integrations/obsidian/v1/granted*`. Write-grant = right on
 **one** `shared_notes` file + vault client copy. Personal store =
 ungranted drafts only. Coarse `can_propose_to_rhizome` remains TZ
@@ -36,7 +70,9 @@ and `/home/efimov/obsidian/guide_psy/.obsidian/plugins/graphnotes-card-merge/`
 — Reload app without saving in **both** vaults.
 `obsidian-plugin/` leftover catalog hides the same panel.
 
-Product model TZ **3.31** (offer list = store hashes, no git/bodies on
+Product model TZ **3.33** (admin `#/admin` nick search + rights on the
+user row; «Доступы» search lists of cards/tags) /
+**3.31** (offer list = store hashes, no git/bodies on
 open) /
 **3.30** (prefix grant; shared apart from every
 account; 3.24 narrowed; **empty grant ≠ whole queue**; one server file
@@ -159,9 +195,10 @@ cards. TZ 2.63: GitHub is copy-in only. Local stores hold `.md`
 search/graph index, not a second canon. Personal export (if any) is
 from the store, not synthesized from the index. Shared is not a product ZIP.
 TZ 2.62: personal working copy is always the GraphNotes local
-store. Connectors (git now; Dropbox / Drive later) copy `.md` in. Differ
-compares that copy to the shared rhizome. Copy-in on git connect/refresh is
-shipped. In-app save of the website editor is **off** (TZ 2.93); plugin / ZIP /
+store. **Superseded as ingest canon by TZ 3.35 / 3.37** (plugin writes
+the store). Leftover: connectors copy `.md` in. Differ
+compares the local store to the shared rhizome. Leftover copy-in on git
+connect/refresh is unfinished vs 3.37. In-app save of the website editor is **off** (TZ 2.93); plugin / leftover ZIP /
 copy-in stay on the local store (no write-back to git).
 Disconnect keeps copied files (no `drop_personal_layer`). Alembic
 `0017_obsidian_integration` (tokens, transfers, personal assets,

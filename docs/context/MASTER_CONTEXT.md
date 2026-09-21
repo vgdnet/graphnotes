@@ -1,8 +1,20 @@
 # GraphNotes - MASTER CONTEXT
 
-Updated: 2026-09-16
+Updated: 2026-09-21
 Status: canonical architecture baseline
-Aligned with PRODUCT_SPEC **3.31** (3.30 grant kept): one
+Aligned with PRODUCT_SPEC **3.37** (living canon does not name an external
+git host: ingest is Markdown + Obsidian + plugin) /
+**3.36** (guest chrome: named rhizome + load
+error, health follows graph/status, 5xx session is not logout, search
+empty/searching/none/error, italic `_…_`, plural «2 заметки», hanging-card
+local graph, small-node labels until zoom/hover, Russian roles
+участник/редактор/администратор, title/og «Ризома психоанализа»,
+narrow header, about copy) /
+**3.35** (plugin ingest; not Wikipedia/MediaWiki as a product) /
+**3.34** (card history and contribution stats
+attribute **who proposed** which edit — proposer, path, diff volume;
+accepter is editorial, not authorship. Not paragraph blame.) /
+**3.33** (3.30 grant kept): one
 shared rhizome per install, **apart from every account** (including
 editor). «Editor account is the rhizome» is rejected. Endpoints are per
 card; authorization is a DB grant `(user_id, card_path)` **or**
@@ -54,6 +66,7 @@ update. Queue = others’ edits through the editor. GraphNotes stays the
 canonical shared store; editor vault is not a second rhizome.
 **Runtime 2026-09-16:** Card Merge writes the vault and opens the note first; POST `/proposals/{id}/resolve` is the second op if local ≠ shared; 504 does not undo the vault write) /
 3.30 (third grant kind: `(user, path_prefix)`; admin «Доступы»;
+TZ **3.33** nick/card/tag search on `#/admin`;
 plugin granted GET/PUT; one server file kept from 3.29) /
 3.29 (one server file for a granted card NOW; grant = right on shared;
 personal = ungranted drafts; vault = client; 3.21 empty ≠ whole queue;
@@ -95,7 +108,7 @@ first is runtime debt) /
 not a merge; Card Merge does not list personal Differ; editor plugin = queue) /
 3.20 (Publisher lists GET /api/differ added/changed and
 creates POST /api/proposals with the same gnp_ token) /
-3.31 (GET /api/differ is store path/hash metadata; no GitHub API,
+3.31 (GET /api/differ is store path/hash metadata; no live remote API,
 no git copy-in, no bodies, no wikidiff2 on list; plugin `?include_inbound=false`) /
 3.10 (editor-access sidebar =
 website `#/queue` New tab via GET /api/proposals) /
@@ -142,7 +155,8 @@ Person card `#/users/{login}` is the same
 for guests and signed-in users (`store` counts + inviter; no foreign
 personal bodies). TZ 2.94: card history is **not** fetched
 with the card body. Button «История правок» loads `GET /api/cards/{path}/revisions`
-— last **30** snapshots + unified diff (who / when / what changed).
+— last **30** snapshots + diff (TZ **3.34**: who **proposed** the edit,
+optional accepter, volume).
 Table `card_revisions` (Alembic `0021`); working copy stays in the store;
 this is not a second living canon. ADR-013 `rhizome_events` stay body-less
 for contribution counts; the card page does not auto-fetch `/feed`.
@@ -213,14 +227,13 @@ symlinks/encryption/odd compression. Graph node tap and `[[wikilink]]` open
 article. Guests may read published shared cards (not personal, queue, or
 comments). Knowledge Markdown **always** lives in GraphNotes
 local stores (personal `personal_uploads`, published shared `shared_notes`).
-GitHub is a **source**: connectors copy `.md` in. Cards and Differ read copies.
-Live-read of GitHub blobs on GET Differ / `#/differ` / plugin sidebar /
-`GET /repository/status` / graph / search / card / comments / contributions
-is **closed** (local stores). Leftover: editor merge-out and live-read of
-proposal branches (`GET /proposals/{id}`, `/files`, Graph Diff, approve /
-rollback). Disconnect personal git does not wipe copied files. Do not rip the
-GitHub App this wave. Dropbox/Drive are not this wave.
-TZ 2.63: GitHub is copy-in only. `/search` and the graph read `note_index`
+**TZ 3.35 / 3.37:** ingest is the **Obsidian plugin**. Cards and Differ read
+local stores. Live-read of an external git remote on GET Differ / `#/differ`
+/ plugin sidebar / `GET /repository/status` / graph / search / card /
+comments / contributions is **closed**. Leftover unfinished: editor
+merge-out, personal git copy-in, «Свой git» tab. Do not treat leftover as
+canon. Dropbox/Drive are not this wave.
+`/search` and the graph read `note_index`
 (no bodies there «so search is faster»). Working copies live in
 `personal_uploads` / `shared_notes`. A personal export, if offered, is
 bytes from the local store, not rows synthesized from the index. Published
@@ -285,9 +298,11 @@ table. `GET /api/cards/{path}/revisions` is the on-demand card edit history
 (TZ 2.94, last 30). `GET /api/cards/{path}/feed` stays for contribution
 events and is not fetched when opening a card. Shared / others'
 personal / proposal cards stay read-only; shared changes go through Differ.
-Working copies of **published shared** Markdown live in `shared_notes` after
-copy-in (TZ 2.63); that is not a write path that bypasses Differ. Personal
-hosted Markdown (upload store / plugin) is the product default (TZ 2.61–2.63).
+Working copies of **published shared** Markdown live in `shared_notes`
+(TZ **3.35** / **3.37**); leftover git copy-in is not ingest canon and
+is not a write path that bypasses Differ. Personal hosted Markdown
+(plugin) is the product default (TZ 2.61 / **3.35** / **3.37**; 2.62–2.63
+leftover).
 ADR-008 leftover: «no hosted vault» does not forbid
 that store; «no in-app Obsidian» forbids a second Obsidian-class editor;
 TZ 2.93 also keeps the thin website editor off until reverse sync.
@@ -302,15 +317,32 @@ published notes stay in shared git), **WTFPL for card/note content** offered
 to the shared rhizome, and **AGPL-3.0 for the software** with developer
 credit (Юрий Ефимов, y@psychoanalyst.pro). Same Russian text in Settings →
 Договор автора only — not on **О программе**. `#/about` (footer button
-«О программе», guests and signed-in) shows credits: rhizome — Мария
-Надршина (`https://t.me/unconsciousjourney`); GraphNotes — Юрий Ефимов
-(`https://t.me/guide_psy`). Persistent footer has no WTFPL/AGPL one-liner
+«О программе», guests and signed-in; footer stays at the bottom of the
+shell) shows rhizome copy (TZ **3.36**): «Ризома психоанализа» + Maria’s
+description, editor credit (Мария Надршина, `https://t.me/unconsciousjourney`),
+GraphNotes credit (Юрий Ефимов, `https://t.me/guide_psy`), and **Стать автором**
+→ `#/auth` (invite-only). Persistent footer has no WTFPL/AGPL one-liner
 and no author-contract control (TZ 2.78). No second
-LICENSE file; `LICENSE` remains AGPL-3.0. Git in Settings is a **connector**
-(TZ 2.62–2.63): it copies `.md` into the local store. Shared GitHub is the same:
-copy-in, not live read. Disconnect does **not** wipe
-copied files. Hint lives next to
-connect/disconnect in Settings, not on Differ. TZ 2.41 refines ADR-016 UX without a second
+LICENSE file; `LICENSE` remains AGPL-3.0.
+**TZ 3.36 chrome (same install, not a second spec):** `/graph` on API
+failure still shows the rhizome name, two lead phrases, and
+«не удалось загрузить» — not a silent empty canvas. Header health is
+green only when the process **and** graph/status data respond; else
+«данные не загрузились» / «нет связи» — not `/api/health` alone.
+`GET /api/users/me` **5xx** keeps the session and says «связь потеряна»;
+**401** is guest; do not paint a login-form error as logout. `/search`
+status is four states: empty («наберите слово») / searching / none /
+error (timeout/fault); «Ищем…» only while a request runs. Card Markdown
+renders italic `_…_` as well as `*…*`. Note counts use Russian plural
+(«2 заметки»). RBAC strings in UI are **участник** / **редактор** /
+**администратор**, not raw `user`/`editor`/`admin`. Missing-card local
+graph shows **incoming** wikilinks when they exist. On the whole-graph
+canvas, small-node labels stay hidden until zoom or hover (selected /
+hit / hovered stay named). Document `title` and og tags are
+«Ризома психоанализа». Header stays inset from the window edge (TZ 2.77
+narrow chrome). Git in Settings is **leftover**
+(TZ **3.35** / **3.37**): not canon ingest. The plugin writes `.md`. Disconnect of a
+leftover git link does **not** wipe copied files. TZ 2.41 refines ADR-016 UX without a second
 repo: «два графа» is the shared start map plus the signed-in user's own
 overlay on **one** graph (layer filter, Stage 6 — not two indexes). After
 entitlement, «ризома автора» is a **view** of the marked closed slice
@@ -392,7 +424,7 @@ bodies). `layer=overlay` is the graph stitch for canvas highlight;
 the interaction feed read that same derived visibility — no second
 manual catalog of which personal notes are «the part». Differ offer list
 (`GET /differ`, plugin «Предложить в ризому») compares `personal_uploads`
-with `shared_notes` and does **not** call GitHub (TZ 3.31 / 2.62–2.63).
+with `shared_notes` and does **not** call an external git host (TZ 3.31 / **3.35** / **3.37**).
 Leftover git HEAD refresh is copy-in / poller / webhook, not the offer
 path. No second canonical clone of
 personal Markdown. Light and dark UI themes (TZ 2.19 / 2.22 /
@@ -429,7 +461,7 @@ code writer, observers, and Codex/Cursor agents read the same truth:
 `docs/decisions/ADR-*.md`. No second Markdown canon, no chat residue as
 spec, no per-agent private TZ. If code and TZ diverge, stop. Leftover
 runtime is unfinished code, not a second spec. Leftover: `AGENTS.md` is
-gitignored, so GitHub clones do not carry it; do not treat that hole as
+gitignored, so clones of the source remote do not carry it; do not treat that hole as
 a second brief.
 
 The canonical product requirements are maintained in
@@ -439,25 +471,26 @@ in `docs/decisions/ADR-*.md`.
 
 ## 1. Product
 GraphNotes is a Markdown publisher with access rights and exactly one shared
-rhizome — analog of Obsidian Publish, not «knowledge lives on GitHub». Each
-user has a personal layer on the same `/graph` canvas (TZ 3.00). People author on the GraphNotes store
-(upload / plugin; website editor off until reverse sync, TZ 2.93). External disks **copy** `.md` into
-that store (TZ 2.62). GitHub also copies published shared `.md` into the
-local shared store (TZ 2.63). GraphNotes shows the one shared rhizome as a graph in the app (read-only
-Markdown, cards). It does **not** offer ZIP download or a product clone of the
-published shared corpus. Differ outbound is **local personal copy** →
-published shared (propose). TZ 3.13 adds inbound **published shared →
-personal store** only for paths this author already got accepted.
-Editors still merge selected outbound differences into shared. See
-ADR-008 amendment TZ 2.63, ADR-009 (needs inbound amendment),
-PRODUCT_SPEC 2.63 / 3.13 / **3.24** (per-card display API + card
-rights: canon, not runtime; needs ADR).
+rhizome — analog of Obsidian Publish. It is **not** Wikipedia / MediaWiki as
+a product (wikidiff2 is editor `/queue` only). Knowledge is **`.md`**. Authors
+write in **Obsidian**. The **plugin** copies files into GraphNotes stores
+(TZ **3.35**). Each user has a personal layer on the same `/graph` canvas
+(TZ 3.00). Website editor off until reverse sync (TZ 2.93).
+GraphNotes shows the one
+shared rhizome as a graph in the app (read-only Markdown, cards). It does
+**not** offer ZIP download or a product clone of the published shared corpus.
+Differ outbound is **local personal copy** → published shared (propose).
+TZ 3.13 adds inbound **published shared → personal store** only for paths
+this author already got accepted. Editors still merge selected outbound
+differences into shared. See ADR-008 leftover (git authoring withdrawn;
+Obsidian remains), ADR-009, PRODUCT_SPEC
+**3.37** / 3.13 / **3.24**.
 
 Core data flow:
 
 ```text
-.md (upload / git connector / later Dropbox-Drive / shared GitHub source)
-  -> copy into GraphNotes local stores (personal + published shared)
+.md (Obsidian vault → plugin / API)
+  -> GraphNotes local stores (personal_uploads + shared_notes)
       -> Parser
           -> PostgreSQL derived index
               -> Graph API
@@ -498,8 +531,9 @@ Internet
        -> React frontend
        -> FastAPI backend
            -> PostgreSQL
-           -> GitHub App / GitHub API
 ```
+
+Leftover (not canon, TZ **3.35**): personal git copy-in and merge-out.
 
 Technologies:
 - FastAPI / Python
@@ -530,43 +564,41 @@ Technologies:
   The chrome control is a Theme Switcher (`role="switch"` sliding pill with
   sun and moon icons) in the header and Settings, not a pair of text buttons.
 
-## 4. GitHub role in the product
-GitHub is **not** the user's knowledge store (TZ 2.61). Ordinary UX is hosted
-graph + cards on the installation (Publish analog). GitHub remains: (a) source
-delivery ADR-006; (b) optional personal git **connector** (copy-in, TZ 2.62);
-(c) leftover Git engine for
-**shared** Markdown merge in the current stack (Stage 3 GitHub App). Do not
-treat GitHub as the product disk. Do not add MinIO/S3/Gitea because of 2.61.
+## 4. Knowledge ingest (TZ 3.35 / 3.37)
 
-When the shared-merge leftover still uses GitHub, it should handle:
-- Git repositories
-- branches
-- commits
-- history
-- textual diff
-- mergeability/conflicts
-- merge
+Ingest is the Obsidian plugin into `personal_uploads` / `shared_notes`.
+GraphNotes is not Wikipedia. An external git host is **not** in the living
+canon: not a store, connector, merge engine, or live API.
+**Source code:** GitHub remains delivery of the GraphNotes **program**
+(`nord → GitHub → rhizome-test → rhizome`, ADR-006). That is not knowledge.
 
-GraphNotes uses GitHub git refs and the merges API for proposals while that
-leftover remains. Pull Request pages, branch names and SHAs are not shown in
-the product UI.
+Leftover unfinished (not canon): «Свой git» Settings tab, personal git
+copy-in, shared merge-out, live HEAD, webhook/poller.
+Do not add MinIO/S3/Gitea. Pull Request pages, branch names and SHAs are
+not shown in the product UI.
+
+ADR conflict this wave (do not rewrite ADRs): ADR-003 leftover; git-part of
+ADR-008 leftover; Obsidian authoring remains.
 
 GraphNotes should handle:
 - application users and permissions
-- the hosted personal store (`.md` / ZIP / plugin) as the **default** personal
-  rhizome; optional connected personal git remotes (copy-in)
-- binding one shared knowledge repository in the current leftover stack
+- the hosted personal store (plugin) as the **default** personal rhizome
+- leftover optional connected personal git remotes (copy-in) — not canon
+- leftover binding of one shared knowledge repository — not canon
 - Differ (outbound personal layer → published shared; TZ 3.13 inbound
   published shared → personal store for watched accepted paths;
-  list/open reads local stores, not a live GitHub HEAD)
+  list/open reads local stores, not a live remote HEAD)
 - graph indexing and in-app read of published Markdown
 - one derived `note_index` for graph **and** SQL search; rebuild
-  (`POST /index/rebuild`, webhook/poller/connect) copies git in then
-  refreshes shared plus every personal git tree and drops comments whose paths left those trees
+  (`POST /index/rebuild`) refreshes local stores; leftover webhook/poller
+  git copy-in is unfinished
 - card GET and comment create read `shared_notes` / `personal_uploads`;
   a path missing from the local store is 404, not a ghost body
 - admin sets any account password (`POST /admin/users/{id}/password`),
-  creates accounts (`POST /admin/users`), searches/filters users, revokes
+  creates accounts (`POST /admin/users`), searches/filters users **by nick**
+  (`GET /admin/users?q=` also matches email/display name; each row includes
+  `grants[]` plus `editor_tags`, role, `is_author`, `is_active` so `#/admin`
+  shows rights without a second screen — TZ **3.33**), revokes
   sessions (`POST /admin/users/{id}/sessions/revoke`), reads the filterable
   in-database action log (`GET /admin/audit`), and sees operator/SMTP
   status (`GET /admin/operator`) plus a persisted public site URL
@@ -683,7 +715,10 @@ the vault. The same primitive can give any user 1–N cards; those cards
 are the same one shared file + vault client copy (queue only if editor
 capability on those cards; two-table copies leftover). `admin` includes all
 editor/user rights plus system administration; grants do not cut admin
-queue review. Admin with an empty grant still does **not** download the
+queue review (`editorial_queue_mode=all` on GET `/proposals` and
+capabilities). Editor with zero grants: `[]` plus `editorial_queue_mode=none`;
+plugin and `/queue` show «Нет грантов», not a blank «нет предложений».
+Admin with an empty grant still does **not** download the
 whole corpus into the vault.
 
 **TZ 3.30 (narrows 3.24; keeps 3.29 one file).** Card endpoints are per
@@ -813,7 +848,7 @@ The canonical delivery workflow is:
 
 ```text
 nord
-  -> GitHub
+  -> canonical source remote
       -> rhizome-test
           -> approved revision
               -> rhizome
@@ -821,13 +856,13 @@ nord
 
 The canonical public repository is `https://github.com/vgdnet/graphnotes`.
 
-Git is the primary delivery mechanism. SSH/rsync is a fallback or bootstrap mechanism only. `nord` owns source authoring and GitHub write operations. `rhizome-test` is the development-runtime and test environment; it normally consumes candidate revisions read-only and is never canonical source. `rhizome` is production. Its Git access must be read-only, with no credentials capable of push, and it receives only commits or tags approved on `rhizome-test`. Every new feature revision must pass the applicable integration, deployment and migration checks on `rhizome-test` before the same approved revision is deployed to `rhizome`. Do not use `rhizome` for destructive experiments, first-run migrations or ad-hoc source edits. See `docs/decisions/ADR-006-production-git-readonly.md`.
+Git is the primary delivery mechanism. SSH/rsync is a fallback or bootstrap mechanism only. `nord` owns source authoring and write operations on that remote. `rhizome-test` is the development-runtime and test environment; it normally consumes candidate revisions read-only and is never canonical source. `rhizome` is production. Its Git access must be read-only, with no credentials capable of push, and it receives only commits or tags approved on `rhizome-test`. Every new feature revision must pass the applicable integration, deployment and migration checks on `rhizome-test` before the same approved revision is deployed to `rhizome`. Do not use `rhizome` for destructive experiments, first-run migrations or ad-hoc source edits. See `docs/decisions/ADR-006-production-git-readonly.md`.
 
 ## 8. Stage roadmap
 - Stage 0 - Infrastructure - DONE
 - Stage 1 - Project Bootstrap - DONE
 - Stage 2 - Password Authentication - DONE
-- Stage 3 - GitHub Integration - DONE
+- Stage 3 - historical git connector - DONE
 - Stage 4 - Take from shared / ZIP fallback - DONE (product path superseded by ADR-009)
 - Stage 5 - Graph Engine - DONE
 - Stage 6 - Shared graph + personal overlay (links to shared) - DONE
@@ -870,17 +905,15 @@ This section is a technical verification contract: the exact storage schema and 
 
 Key product invariants that the technical architecture must preserve:
 
-- Personal and shared working copies (TZ 2.62–2.63): GraphNotes **local
-  stores are always** the working copy. Upload / Obsidian plugin
-  write personal (`personal_uploads`; attachments in `personal_assets`).
-  GitHub (and later Dropbox / Google Drive) **copy** `.md` in. One active
-  personal connector; do not merge two remotes. Differ outbound is local
-  copy → published shared. TZ 3.13 inbound copies published shared into
-  the personal store only for watched accepted paths. Upload and the
-  plugin are not a write into published shared.
-  After editor accept, the published shared working copy is `shared_notes`
-  (leftover stack may still push shared git, then copy-in). Git live-read
-  without copy-in and in-app commit to GitHub are leftover vs 2.63.
+- Personal and shared working copies (TZ **3.35**): GraphNotes **local
+  stores are always** the working copy. The Obsidian plugin writes personal
+  (`personal_uploads`; attachments in `personal_assets`). External git
+  copy-in is leftover, not canon. Differ outbound is local copy → published
+  shared. TZ 3.13 inbound copies published shared into the personal store
+  only for watched accepted paths. The plugin is not a write into published
+  shared. After editor accept, the published shared working copy is
+  `shared_notes` (leftover stack may still push shared git). Git live-read
+  and in-app commit to an external host are leftover vs 3.35.
 - Unpublished personal bytes live in the owner's GraphNotes store.
   Published shared bodies in `shared_notes` are the serving copy, not a
   Differ bypass. Upload history (who / when /
@@ -901,7 +934,7 @@ Key product invariants that the technical architecture must preserve:
   «Администрирование». This does not change shared-note visibility (that is
   §5.4.1 closed corpus / ADR-016). Public JSON still omits Git
   SHAs, branches and PR URLs.
-- Provenance, rhizome-card interaction feed, GitHub-style public user cards
+- Provenance, rhizome-card interaction feed, public user cards
   and closed/paid corpus remain product will pending entitlement tables.
   Do not invent a second Markdown canon or a second knowledge repository
   to implement them (ADR-016).
@@ -964,7 +997,7 @@ Shared publication and Differ:
   and plugin offer list; `{differences, inbound}` path lists, **no bodies**;
   `kind` = `added`|`changed` from `content_hash`, not wikidiff2.
   Cookie or Bearer `gnp_` / `personal:read`. Store hashes only — **no
-  GitHub API, no git copy-in on list**. `?include_inbound=false` for the user offer
+  live remote API, no git copy-in on list**. `?include_inbound=false` for the user offer
   panel (skip inbound + notices). Inbound paths are omitted from
   outbound when inbound is computed. Do not invent a live `direction` field.)
 - `POST /api/differ/inbound/{path}/accept` (TZ 3.13 shipped: copy
@@ -976,10 +1009,12 @@ Shared publication and Differ:
   path checkboxes + propose, not a merge pane. Card Merge sidebar does
   not consume this (TZ 3.11). `{detail}` errors: 400 invalid path, 404
   missing/closed, 409 shared not connected)
-- `GET  /api/contributions/me` (author’s notes/links/proposals/counts; derived; git not required)
+- `GET  /api/contributions/me` (author’s notes/links/proposals/counts; TZ 3.34
+  which edits proposed: path, volume, state; derived; git not required)
 - `GET  /api/admin/contributions` (admin: same stats for every account; TZ 2.7 / §5.4.2)
-- `GET  /api/admin/users` (search/filter; last login and session count;
-  TZ 3.21 editor tag grants when present)
+- `GET  /api/admin/users` (search/filter by nick/username, also email and
+  display name; last login and session count; TZ 3.21 / **3.33**
+  `editor_tags` and `grants[]` `{id, kind, value}` on each row)
 - `POST /api/admin/users` (admin-created account)
 - `PATCH /api/admin/users/{id}/editor-tags` (admin; TZ 3.21 / **3.30**;
   replaces `kind=tag` grants; empty = no extra shared write, not the
@@ -987,13 +1022,15 @@ Shared publication and Differ:
 - `GET  /api/admin/grants` (admin; filter `user_id` / `kind=path|tag|prefix` / `value`)
 - `POST /api/admin/grants` (admin; `{user_id, kind, value}`; 201 / 409)
 - `DELETE /api/admin/grants/{id}` (admin; 204)
-- `GET  /api/admin/grants/catalog` (admin; shared paths, tags, folder prefixes)
+- `GET  /api/admin/grants/catalog` (admin; shared paths, tags, folder prefixes;
+  TZ **3.33**: `?q=` substring on path/title/tag/prefix; `?tag=` cards with
+  that tag; `cards[]` `{path, title}`, no bodies)
 - `POST /api/admin/users/{id}/sessions/revoke`
 - `GET  /api/admin/operator`
 - `PUT  /api/admin/operator` (persist public site URL for mail links)
 - `POST /api/admin/mail/test`
-- `GET  /api/users/{login}/card` (public person card by login only; UUID key 404; no public UUID; not a GitHub
-  profile; not personal or closed bodies)
+- `GET  /api/users/{login}/card` (public person card by login only; UUID key 404; no public UUID;
+  not personal or closed bodies)
 - `GET  /api/shared/notes` (public titles; not card bodies)
 - `GET  /api/shared/notes/{path}` (published shared card body; guest OK, TZ 2.64)
 - `GET  /api/cards/{path}` (shipped display today: published shared body
@@ -1002,8 +1039,10 @@ Shared publication and Differ:
   this route. TZ 3.28: endpoints per card; authorization is
   grant(user, path); this public GET of published shared is the guest
   vitrine, not that grant)
-- `GET  /api/cards/{path}/revisions` (TZ 2.94: last 30 snapshots + diff;
-  not fetched with the card; shared guest OK; personal needs a session)
+- `GET  /api/cards/{path}/revisions` (TZ 2.94 / **3.34**: last 30 snapshots
+  + diff; **proposer** of the edit, optional accepter, added/removed
+  lines or bytes; not fetched with the card; shared guest OK; personal
+  needs a session)
 - `GET  /api/cards/{path}/feed` (contribution events; shared `owner_user_id` null;
   own personal = caller; admin `personal:{uuid}:` = that owner; proposal
   empty; in-app personal edits do not appear on the shared path feed; no bodies)
@@ -1059,7 +1098,7 @@ Proposals and editor workflow (Stage-owned):
 - `POST /api/proposals/{id}/request-changes`
 - `POST /api/proposals/{id}/rollback`
 
-Reconciliation hook:
+Reconciliation hook (leftover, not canon ingest):
 - `POST /api/webhooks/github`
 
 ### 12.1 Obsidian plugin → personal store (TZ 2.68–2.90)
@@ -1134,13 +1173,26 @@ access the queue UI is off. Runtime client is `obsidian-card-merge/`;
 `obsidian-plugin/` is leftover. Do not dump the whole `shared_notes` tree into the vault. 2+ editors accept
 different cards in parallel; one card in work is one person (server
 slot leftover if only local TZ 3.16). Capabilities includes `user.role`,
-`can_see_queue`, and `can_propose_to_rhizome` so the
+`can_see_queue`, `can_propose_to_rhizome`, `editorial_queue_mode`
+(`all`/`granted`/`none`), and `has_editorial_grants` so the
 plugin shows the queue when the account is editor/admin, otherwise the
-queue UI is off, and shows «Предложить в ризому» only when
+queue UI is off; editor with zero grants sees «Нет грантов»; admin sees
+all pending; and shows «Предложить в ризому» only when
 `can_propose_to_rhizome` is true (today: role `user`; TZ 3.27 coarse
-gate, not a forever editor-never-proposes ACL). `editor`/`admin` hide
-the whole offer panel and do not refresh Differ offers. POST `/proposals`
-is 403 when the flag is false. TZ 3.25 op 2 stays POST `/resolve`, not
+gate, not a forever editor-never-proposes ACL) **or** capabilities are
+still unknown. `editor`/`admin` hide the whole offer panel and the
+file-menu line once role is known; unknown ping does not hide.
+`file-menu` and `editor-menu` register at the start of `onload` (before
+`loadData`). Explorer title without `.md` still matches a markdown
+`TFile`. POST `/proposals`
+is 403 when the flag is false. TZ **3.32:** Obsidian `file-menu` (markdown
+`TFile`) and `editor-menu` (active note) show the same «Предложить в
+ризому» for role `user`, flag true, or unknown capabilities; hide only known editor/admin; click uploads **that path** to
+personal (not a vault-wide Differ), then `POST /api/proposals` for it;
+already-open / already-in-sync notices, no duplicate spam. Runtime
+`obsidian-card-merge/` 0.1.1. Plugin Bearer `gnp_` is enough (no website login/password). A
+capabilities timeout is not «this account cannot propose»; POST
+`/proposals` is the server gate (user 200, editor/admin 403). TZ 3.25 op 2 stays POST `/resolve`, not
 the user offer. Do not wire vault→shared for every personal draft
 (slice filter OPEN). Leftover:
 `OpenMergeModal` still calls `GET /api/differ` — unfinished code, not
@@ -1195,10 +1247,14 @@ re-checks author contract (`403 author_contract_required`) and activity.
 
 **Write policy.** `write_allowed` = active account + accepted author
 contract. `can_see_queue` = role `editor` or `admin`.
+`editorial_queue_mode` = `all` (admin, grants do not cut pending),
+`granted` (editor with grants), `none` (editor with zero grants — empty
+queue copy «Нет грантов», not the whole queue).
 `can_propose_to_rhizome` = today's coarse gate, role `user` (TZ 3.27;
 `editor`/`admin` → false). Not a per-card ACL and not «editor never
-proposes, forever». POST `/proposals` 403 when false. Connected personal git does **not** set `write_disabled`
-(TZ 2.62: working copy is always the GraphNotes store).
+proposes, forever». POST `/proposals` 403 when false. Leftover connected
+personal git does **not** set `write_disabled` (TZ **3.35** / **3.37**:
+working copy is always the GraphNotes store; 2.62 leftover).
 
 **Store.** Markdown upsert/delete applies to `personal_uploads` (same
 rows as in-app / ZIP ingest). Attachments live in `personal_assets`

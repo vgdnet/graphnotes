@@ -1,35 +1,33 @@
 # Stage 7 proposals, Differ (no shared ZIP)
 
-Differ compares the caller's **personal layer** to the **published** shared
-rhizome. Outbound lists what can be offered: paths missing from shared, or
-paths whose content differs and are not inbound (TZ 3.13). Personal layer
-is connected git **or** `.md`/ZIP upload without git (TZ 2.6). Git
-comparison is derived from Git trees by blob SHA. Upload comparison uses
-the same path/content rule. Differ does not read canonical **published**
-note bodies from PostgreSQL. Files that exist only in shared and were
-never published by this caller are not Differ results.
+Differ compares the caller's **personal store** (`personal_uploads`) to
+**published shared** (`shared_notes`) on GraphNotes (TZ **3.31** /
+**3.35** / **3.37**). Outbound lists paths missing from shared, or paths
+whose **content hash** differs and are not inbound (TZ 3.13). Living
+ingest is the plugin; leftover git copy-in is not the offer path. Opening
+`GET /api/differ` or `#/differ` does **not** call an external git host, does
+not copy-in git, does not load Markdown bodies, and does not run wikidiff2.
+Plugin offer uses `GET /api/differ?include_inbound=false`. Files that exist
+only in shared and were never in this caller's personal store are not
+outbound Differ results.
 
-The user selects outbound rows and creates a proposal. GraphNotes copies
-only those files onto a hidden branch of the shared repository. Connected
-personal git is not rewritten. Upload-without-git is not a write into
-published shared until an editor accepts. After accept and index catch-up,
-those paths leave **outbound** Differ. TZ 3.11 / **3.13**: chrome tab
-**Сверка** (`#/differ`) is the author Differ — outbound propose, plus
-inbound take-into-personal for paths that were in this caller's accepted
-proposals and now differ. It is not a merge editor. `#/offer` is my
-proposals only. Shipped `GET /api/differ` is `{differences, inbound}`.
-`POST /api/differ/inbound/{path}/accept` copies published shared into
-the caller's personal store for a watched inbound path.
-The git XOR upload copy is next to connect/disconnect in Settings,
-not a top-level Differ tab. While git is connected, Settings hides the bind
-field and shows a GitHub link; disconnect drops the personal `note_index`.
-
-Opening Differ reads the caller's connected public git HEAD through the GitHub
-App before comparing trees. The personal index is rebuilt when the SHA moved
-by the in-process poller (`GRAPHNOTES_PERSONAL_SYNC_INTERVAL_SECONDS`, default
-300; `0` disables it), `python -m app.cli.sync_personal`, graph/status
-requests, or a configured GitHub `push` webhook. GraphNotes does not keep a
-second canonical clone of personal Markdown.
+The user selects outbound rows and creates a proposal from the store pair.
+Leftover GitHub merge-out on `POST /proposals` must not block the offer on
+rate limit. Connected personal git is not rewritten. Store Markdown is not
+a write into published shared until an editor accepts (`POST /resolve`
+writes `shared_notes`; leftover `/approve` merge-out is not the live
+offer path). After accept and index catch-up, those paths leave **outbound**
+Differ. TZ 3.11 / **3.13**: chrome tab **Сверка** (`#/differ`) is the author
+Differ — outbound propose, plus inbound take-into-personal for paths that
+were in this caller's accepted proposals and now differ. It is not a merge
+editor. `#/offer` is my proposals only. Shipped `GET /api/differ` is
+`{differences, inbound}` path/hash metadata. `POST /api/differ/inbound/{path}/accept`
+copies published shared into the caller's personal store for a watched
+inbound path. Leftover «Свой git» connect/disconnect in Settings is not
+canon ingest (TZ **3.35** / **3.37**). While leftover git is connected,
+Settings may hide the bind field; disconnect must not wipe copied store
+files. Leftover poller/webhook may still copy `.md` in; they are not on
+the Differ list path.
 
 GraphNotes does **not** offer ZIP download of published shared (`Скачать` /
 `GET /api/shared/archive` removed, TZ 2.5). Shared is read in the app.

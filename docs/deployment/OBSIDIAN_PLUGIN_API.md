@@ -75,6 +75,15 @@ manifest / GET content). No `force=true`. Shared notes are not written.
 TZ **3.20**: after personal copy, Publisher lists outbound Differ and
 creates a proposal when `can_propose_to_rhizome` is true (role `user`).
 TZ **3.27**: `editor` / `admin` → flag false; hide that panel.
+TZ **3.32**: Obsidian `file-menu` on a markdown `TFile` (and `editor-menu`
+for the active note) adds «Предложить в ризому» for role `user`, flag true,
+or unknown capabilities; hide only known editor/admin. Register both
+events at the start of `onload` (before `loadData`). Explorer title may
+omit `.md`; still treat `extension === 'md'`. Click: transfer **this path** into personal (same as «Передать
+правки», not the whole vault), then `POST /api/proposals` for that path
+if it is new or differs; notices for created / already queued / already
+in sync / error. Do not `GET /differ` for the bulk list. Do not GitHub.
+Canon client `obsidian-card-merge/` 0.1.1.
 TZ **3.26**: one Obsidian plugin is canon (3.09
 withdrawn). Queue from API is an editor capability in the same client;
 without editor access the queue UI is off. Manual editor edit uses the
@@ -125,10 +134,15 @@ request-changes / rollback stay on the website.
 ### Technical editor check (TZ 3.10 / 3.12 / 3.20)
 
 - View type `graphnotes-card-merge-queue` ≠ Publisher `graphnotes-publisher-sync`.
-- Publisher sidebar fetches `GET /api/differ` (added/changed only) and
+- Publisher/Card Merge user offer fetches `GET /api/differ?include_inbound=false`
+  (added/changed paths from store hashes, TZ **3.31**) and
   `POST /api/proposals` with Bearer `gnp_` / `personal:read` (TZ 3.20).
+  TZ **3.32** file-menu / editor-menu propose-one-path does **not** fetch
+  that bulk list: one-path personal transfer, then `POST /api/proposals`.
+  Role `user` Bearer `gnp_` must succeed (no website login). Editor/admin
+  Bearer is 403. A failed capabilities ping is not a propose deny.
   It does not write `shared_notes` and does not restore conflict-picker UX.
-- Card Merge author token: sidebar does **not** fetch `GET /api/differ`.
+- Card Merge editor/admin token: sidebar does **not** fetch `GET /api/differ`.
 - Editor/admin token: sidebar fetches `GET /api/proposals` (Bearer);
   no file bodies on refresh. Same New-tab statuses as `#/queue`.
 - «Принять в работу» uses `GET /api/proposals/{id}/files/{path}`
@@ -175,16 +189,16 @@ request-changes / rollback stay on the website.
 ## Author Differ (website `#/differ`, TZ 3.11 / Publisher 3.20) / Card Merge queue
 
 Not a second prefix. Author Differ is the website chrome tab `#/differ`
-and the Publisher sidebar offer list (`GET /api/differ`: outbound path
-list + `POST /api/proposals`). Card Merge sidebar does not consume that
+and the Publisher/Card Merge sidebar offer list (`GET /api/differ`: outbound path
+list + `POST /api/proposals`; TZ **3.31** hashes, `?include_inbound=false`). Card Merge editor sidebar does not consume that
 list. FastAPI paths have no `/api`; Nginx strips it.
 
 | Browser / plugin | FastAPI |
 | --- | --- |
-| `GET /api/differ` | `GET /differ` (site Сверка; Publisher offer list) |
-| `GET /api/differ/files/{path}` | `GET /differ/files/{path}` (leftover pair; not Publisher UI) |
-| `POST /api/proposals` | `POST /proposals` (TZ 3.20: cookie or Bearer, that user) |
-| `GET /api/proposals` | `GET /proposals` (TZ 3.10 editor queue; Publisher queued mark) |
+| `GET /api/differ` | `GET /differ` (site Сверка; offer list, TZ 3.31 hashes, **no GitHub**; `?include_inbound=false`) |
+| `GET /api/differ/files/{path}` | `GET /differ/files/{path}` (leftover pair; local stores) |
+| `POST /api/proposals` | `POST /proposals` (TZ 3.20: cookie or Bearer, that user; compare local; leftover GitHub branch does not block on rate limit) |
+| `GET /api/proposals` | `GET /proposals` (TZ 3.10 editor queue; offer queued mark; **no GitHub reconcile**) |
 | `GET /api/proposals/{id}` | `GET /proposals/{id}` (website `/queue` wikidiff2) |
 | `GET /api/proposals/{id}/files/{path}` | `GET /proposals/{id}/files/{path}` (TZ 3.12 pair) |
 | `POST /api/proposals/{id}/resolve` | `POST /proposals/{id}/resolve` (TZ 3.12 publish) |
@@ -216,7 +230,8 @@ Leftover: successful Bearer calls on `/differ` and `/proposals` do
 `/integrations/obsidian/v1` records the access log. Token
 `last_used_at` still updates on authenticate.
 
-Shipped outbound list (site `#/differ` and Publisher sidebar; not Card Merge):
+Shipped outbound list (site `#/differ` and user offer panel; TZ **3.31**
+path/hash metadata, no bodies; plugin `?include_inbound=false`):
 
 ```http
 GET /api/differ
@@ -310,10 +325,16 @@ Authorization: Bearer gnp_…
 
 `personal:read` is enough. `write_allowed` is for personal sync.
 `can_see_queue` is `true` for `editor` / `admin` (TZ 3.26: queue UI on;
-`user` → queue off). `can_propose_to_rhizome` is `true` today for role
+`user` → queue off). `editorial_queue_mode` is `all` for admin (grants
+do not cut pending proposals), `granted` for an editor with at least one
+grant, `none` for an editor with zero grants — plugin shows «Нет грантов»
+instead of a blank «нет предложений». `has_editorial_grants` is the raw
+row flag. `can_propose_to_rhizome` is `true` today for role
 `user` (TZ 3.27 coarse gate, not a forever ACL); `false` for `editor` / `admin` — hide the whole
 Differ-offer panel («Обновить список» / «Предложить выбранные» /
-«Предложить в ризому») and do not call the offer refresh. Queue UI
+«Предложить в ризому») **and** the file-explorer / editor context-menu
+line (TZ **3.32**) once role is known editor/admin (unknown caps still
+show the line) and do not call the offer refresh. Queue UI
 does not depend on this flag. `user.role` is `user` / `editor` / `admin`.
 
 ## Ready methods (Publisher v1)
@@ -347,9 +368,9 @@ Personal data responses: `Cache-Control: no-store`. Errors:
 | `GET /transfers/{id}` | ready | state, results, remaining_blobs, index_revision |
 | `DELETE /transfers/{id}` | ready | 204 cancel; 409 if applying |
 
-`write_allowed` is **author contract + active account**. A connected
-personal git does **not** set `write_disabled` (canonical TZ 2.62: the
-working copy is always the GraphNotes store).
+`write_allowed` is **author contract + active account**. Leftover
+connected personal git does **not** set `write_disabled` (TZ **3.35** /
+**3.37**: the working copy is always the GraphNotes store; 2.62 leftover).
 
 ## GET /files/content
 
@@ -384,6 +405,8 @@ Authorization: Bearer gnp_…
   "write_block_reason": null,
   "can_see_queue": false,
   "can_propose_to_rhizome": true,
+  "editorial_queue_mode": "none",
+  "has_editorial_grants": false,
   "scopes": ["personal:read", "personal:write"],
   "formats": ["md", "png", "jpeg", "gif", "webp", "pdf"],
   "limits": {

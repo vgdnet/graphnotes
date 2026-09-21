@@ -1,14 +1,21 @@
 # GraphNotes — канонический контекст Technical Observer
 
 Статус: ACTIVE
-Updated: 2026-09-16 (PRODUCT_SPEC **3.30**, 3.29 one-file kept: one shared rhizome per
+Updated: 2026-09-21 (PRODUCT_SPEC **3.37**: living canon does not name an
+external git host; plugin ingest. **3.36**: guest chrome / search four states /
+hanging local graph / italic `_…_` / plural «2 заметки» / Russian roles
+участник/редактор/администратор / title/og / about copy. **3.35**: plugin ingest;
+not Wikipedia as a product; leftover git host unfinished. **3.34**: card history and
+`/contribution` attribute who **proposed** which edit — volume of that
+diff; queue accepter is editorial, not authorship. **3.33**, 3.29 one-file kept: one shared rhizome per
 install, apart from every account including editor; endpoints are
 per-card; authorization is a DB grant `(user_id, card_path)` **or**
 `(user_id, tag)` **or** `(user_id, path_prefix)`, per GET/PUT/queue/sync — write if direct path or any
 card tag matches or path is under a prefix grant. Not ACL-in-markdown and not 3.24 «rights on the card»
 as primary. Editor-slice = user-with-N-cards.
 **3.21 empty-list withdrawn:** empty grant = no extra shared write, not
-the whole queue. Differ = ungranted publish gate. **TZ 3.29 one server
+the whole queue. Editor with zero grants: `editorial_queue_mode=none` and
+plugin/site «Нет грантов». Admin queue bypass remains (`all`). Differ = ungranted publish gate. **TZ 3.29 one server
 file NOW:** grant = right on the shared object; personal store holds
 ungranted drafts only; vault is always a client copy. Plugin downloads
 granted cards; 3.25 local-first then sync to the **same** `shared_notes`
@@ -22,7 +29,18 @@ OPEN: read-without-write for queue review. 3.25 local-first after accept
 holds. Today's coarse
 `can_propose_to_rhizome` true for role `user`, false for `editor`/`admin`.
 Plugin hides the Differ-offer panel; POST `/proposals` 403 when false;
-`can_see_queue` stays on for editor. Do not sync whole vault to shared.
+`can_see_queue` stays on for editor. TZ **3.32:** `file-menu` /
+`editor-menu` «Предложить в ризому» for user / flag true / unknown caps
+(hide only known editor/admin); register both at start of `onload`;
+explorer title without `.md` still matches markdown; one-path
+personal transfer then POST `/proposals`. Plugin Bearer `gnp_` / `personal:read` is enough — no cookie login.
+Capabilities abort/timeout must not fail-close as 3.27; POST `/proposals`
+403 is the editor/admin deny. Do not sync whole vault to shared.
+TZ **3.33:** `#/admin` user search is `GET /api/admin/users?q=` (nick,
+also email/name); each row includes `grants[]` plus role / `is_author` /
+`is_active` / `editor_tags`. «Доступы» lists cards/tags via
+`GET /api/admin/grants/catalog?q=&tag=` (`cards[]` path+title, no bodies).
+Do not invent a second grants UI or a new RBAC model.
 OPEN: editor-of-a-slice vs editor who also authors other cards.
 **3.26**: one Obsidian plugin is
 canon; TZ 3.09 withdrawn. Queue from API is an editor capability in
@@ -101,13 +119,13 @@ show-once is not the product. TZ 2.74: access log stays in the working
 DB for ~6 months, hard ceiling ~1 year; do not add a second logs
 database yet. TZ 2.73: plugin token access log on `/user`. TZ 2.72:
 API key stored in Settings and plugin `data.json`; list returns `token`.
-TZ 2.68–2.71: Obsidian plugin → personal store API + desktop plugin
-in-repo. Alembic 0017–0019, hashed lookup + stored token,
-no git copy-in on plugin apply. TZ 2.67: white-noise personal ingest lock + admin
-mail; existing notes kept. TZ 2.66: missing card page + personal create
-from dangling wikilink. TZ 2.65: ZIP ingest 10 000 files; zip-bomb
-size/ratio guards stay. TZ 2.63: GitHub copy-in only; local personal +
-shared stores)
+TZ 2.65: ZIP ingest 10 000 files; zip-bomb
+size/ratio guards stay. TZ 2.66: missing card page + personal create
+from dangling wikilink. TZ 2.67: white-noise personal ingest lock + admin
+mail; existing notes kept. TZ **3.35 / 3.37:** plugin ingest; leftover
+«Свой git» / copy-in. TZ 2.68–2.71: Obsidian
+plugin → personal store API + desktop plugin in-repo. Alembic 0017–0019,
+hashed lookup + stored token, no git copy-in on plugin apply.)
 
 Этот файл задаёт рабочий регламент отдельного Technical Observer проекта
 GraphNotes. Его можно передать новому воркеру целиком. Он не заменяет
@@ -146,7 +164,7 @@ Technical Observer:
 
 Перед каждым аудитом прочитать полностью:
 
-1. `AGENTS.md` (leftover: gitignored — not on GitHub clones; TZ 3.05
+1. `AGENTS.md` (leftover: gitignored — not on source-remote clones; TZ 3.05
    canon is still `PRODUCT_SPEC` + `MASTER_CONTEXT` + ADRs);
 2. `docs/product/PRODUCT_SPEC.md`;
 3. `docs/context/MASTER_CONTEXT.md`;
@@ -185,16 +203,17 @@ ADR. Глобальное изменение должно быть явно пр
 ### Markdown — источник истины
 
 Каноническое знание хранится в Markdown. Склад личного — **всегда**
-локальная копия GraphNotes (загрузки / in-app / копия с коннектора). Git,
-позже Dropbox / Google Drive — ingest copy-in, не второй канон.
+локальная копия GraphNotes. Пишет **плагин** (ТЗ **3.35** / **3.37**).
+Leftover copy-in с внешнего git-хоста / «Свой git» / загрузки с сайта —
+не канон ingest. Dropbox / Google Drive — только отдельным решением.
 PostgreSQL, узлы, связи, теги, поисковый индекс и визуальный граф —
 производные и должны быть восстановимы.
 
 Запрещён второй канонический графовый файл, включая `graph.json`.
-Рабочие тела **опубликованной общей** живут в `shared_notes` после copy-in
-(ТЗ 2.63) — это не обход Differ и не тела в `note_index` «для поиска».
-Личный hosted Markdown — продуктовый путь (ТЗ 2.62). Поиск — `note_index`.
-Выгрузка своей — со склада `.md`, не из индекса.
+Рабочие тела **опубликованной общей** живут в `shared_notes`
+(ТЗ **3.35** / **3.37**) — это не обход Differ и не тела в `note_index`
+«для поиска». Личный hosted Markdown — продуктовый путь (плагин).
+Поиск — `note_index`. Выгрузка своей — со склада `.md`, не из индекса.
 
 Плагин Obsidian (ТЗ 2.68–2.91 / MASTER §12.1) — HTTP API в **тот же**
 `personal_uploads` / `personal_assets`. Клиент 2.90 копит правки локально;
@@ -229,12 +248,13 @@ Card Merge leftover-модалка / `GET /api/differ` — у агентов п�
 ### Rhizome and RBAC model
 
 - exactly one shared rhizome per installation;
-- exactly one personal rhizome per user (GraphNotes local store; connectors
-  copy `.md` in — TZ 2.62 / ADR-008 amendment);
+- exactly one personal rhizome per user (GraphNotes local store; **plugin**
+  writes `.md` — TZ **3.35** / ADR-008 leftover git);
 - no workspace/organization/team/community/multiple-shared entities;
-- published shared working copies live in `shared_notes` after GitHub
-  copy-in (TZ 2.63); Differ remains the write gate; `note_index` has no
-  bodies; personal hosted Markdown is the product default (TZ 2.61);
+- published shared working copies live in `shared_notes` (TZ **3.35**;
+  leftover git copy-in unfinished); Differ remains the write gate;
+  `note_index` has no bodies; personal hosted Markdown via plugin is the
+  product default;
 - GraphNotes for authors is a Publish analog with rights and one shared
   rhizome (TZ 2.61), not a second Obsidian: website in-app editor is **off**
   (TZ 2.93) until reverse download / reverse sync; do not mount
@@ -259,7 +279,9 @@ Card Merge leftover-модалка / `GET /api/differ` — у агентов п�
   `/offer` **my** proposals; `/graph`
   shared canvas; `/invites` invite map (currently admin; TZ 2.98);
   `/search` card search; no `/my_graph` (TZ 3.00; personal is a `/graph` filter);
-  `/contribution` Мой вклад; Differ UI is `#/differ` (TZ 3.11 / 3.13:
+  `/contribution` Мой вклад; `#/admin` admin cabinet (TZ **3.33**: nick
+  search + rights on the user row; «Доступы» search lists of cards/tags);
+  Differ UI is `#/differ` (TZ 3.11 / 3.13:
   outbound propose and inbound take-into-personal; not a merge editor);
   `/offer` is my proposals; editor
   proposal text is wikidiff2 C++ via a native helper (TZ 3.03 /
@@ -305,7 +327,7 @@ Card Merge leftover-модалка / `GET /api/differ` — у агентов п�
 - derived records distinguish `shared`, owned `personal`, and immutable
   `proposal` revisions, and must support contribution provenance (author attribution) for accepted nodes/links.
 
-GitHub/PostgreSQL atomicity must not be overstated. Observer verifies a durable
+Remote-git/PostgreSQL atomicity must not be overstated. Observer verifies a durable
 state machine, idempotent reconciliation, index-before-visible shared revision
 switch, and recovery from merge/index failure.
 
@@ -314,7 +336,7 @@ switch, and recovery from merge/index failure.
 ADR-009 is accepted. Markdown circulation is:
 
 ```text
-personal layer (git or .md upload) -> Differ -> selected proposal
+personal layer (plugin → personal_uploads) -> Differ -> selected proposal
   -> editor queue -> merge/index -> published shared -> Differ again
 ```
 
@@ -327,9 +349,12 @@ Differ is derived. Outbound is personal layer → published shared.
 TZ 3.13 inbound is published shared → personal store for paths in the
 caller's accepted proposals. Differ/status/graph/search/card GET compare
 or serve local stores (`personal_uploads` / `shared_notes` / `note_index`).
-Copy-in is GitHub `push` webhook, the in-process poller
-`GRAPHNOTES_PERSONAL_SYNC_INTERVAL_SECONDS`, CLI `python -m app.cli.sync_personal`,
-connect, or `POST /index/rebuild` — not sidebar / `#/differ` / propose list.
+Leftover copy-in (not canon, TZ **3.35** / **3.37**): `push`
+webhook, the
+in-process poller `GRAPHNOTES_PERSONAL_SYNC_INTERVAL_SECONDS`, CLI
+`python -m app.cli.sync_personal`, connect, or git refresh on
+`POST /index/rebuild`. Canon ingest is the plugin. Differ list is not
+a live remote HEAD.
 Upload-without-git input compares the
 owner's staged Markdown with published shared by the same path/content rule.
 It is not `graph.json` and must not store **published** shared bodies in
@@ -344,12 +369,21 @@ coordinates remain UI-only.
 Landing `/` is `/graph` (TZ 2.14 / 2.58 / 3.00): rhizome by default; no
 «Мой граф» tab. Guests may read published shared card bodies (TZ 2.64);
 they must not receive personal, queue, feed or comments.
-Settings (TZ 2.13 / 2.58) live at **`/user`** (email/contacts, git bind,
-author contract); not the public person card and not the graph home.
+Settings (TZ 2.13 / 2.58) live at **`/user`** (email/contacts, leftover
+«Свой git» bind, author contract); not the public person card and not the
+graph home.
 The shipped contract copy (TZ 2.44, version `2026-09-05`) is WTFPL for
 cards plus AGPL-3.0 for software; it lives in Settings → Договор автора,
-not on **О программе**. `#/about` shows rhizome / GraphNotes credits with
-Telegram links (TZ 2.78). The footer is the About button only.
+not on **О программе**. `#/about` shows rhizome copy (TZ **3.36**) plus
+GraphNotes credits with Telegram links (TZ 2.78). «Стать автором» opens
+`#/auth`. The footer is the About button only, at the bottom of the shell.
+TZ **3.36** also: `/graph` names the rhizome on API failure («не удалось
+загрузить»); health green only if process **and** graph/status data
+respond; `/users/me` 5xx is «связь потеряна», not guest; `/search` four
+states (empty / searching / none / error); italic `_…_`; plural
+«2 заметки»; UI roles участник/редактор/администратор; hanging-card
+local graph shows incoming links; small-node labels until zoom/hover;
+`title`/og «Ризома психоанализа»; narrow header.
 
 Light/dark theme (TZ 2.19 / 2.22) is CSS tokens plus `localStorage`, not a
 server setting and not a second visual language. The control is a Theme
@@ -409,7 +443,7 @@ production deploy explicitly deferred.
 ### Среды и доставка
 
 - `nord` — рабочая станция для создания и ревью исходного кода, веток,
-  коммитов и push в GitHub;
+  коммитов и push в канонический remote исходников;
 - `rhizome-test` (`172.16.13.14`) — development/integration runtime,
   тестирование, миграции, deployment rehearsal и разрушительные проверки;
 - `rhizome` (`172.16.13.13`) — production; только утверждённые и уже
@@ -418,7 +452,7 @@ production deploy explicitly deferred.
 Канонический маршрут:
 
 ```text
-nord -> GitHub -> rhizome-test -> approved revision -> rhizome
+nord -> canonical source remote -> rhizome-test -> approved revision -> rhizome
 ```
 
 На `rhizome` запрещены первая проверка новой функциональности, разрушительные
@@ -428,8 +462,8 @@ nord -> GitHub -> rhizome-test -> approved revision -> rhizome
 
 Канонический stack: FastAPI/Python, React/TypeScript, PostgreSQL, SQLAlchemy 2.x
 async, Alembic, Docker/Compose, host Nginx; Cytoscape.js — UI общего графа,
-personal overlay и Graph Diff (Stage 6+). GitHub App — leftover Git-движок
-общей ризомы (Stage 3), не диск пользователя (ТЗ 2.61).
+personal overlay и Graph Diff (Stage 6+). Внешний git-хостинг знания — leftover, не канон
+(ТЗ **3.35** / **3.37**).
 
 Без отдельного принятого решения нельзя преждевременно добавлять Neo4j,
 Elasticsearch, Redis, Celery, RabbitMQ, MinIO/S3, Gitea/GitLab или Kubernetes.
@@ -478,7 +512,7 @@ Observer проверяет diff на:
 - ослабление authentication, global RBAC, personal ownership или разделения
   shared/personal/proposal layers;
 - утечки секретов, персональных данных и чувствительных значений в логах;
-- небезопасные uploads, webhooks, cookies, токены и GitHub credentials;
+- небезопасные uploads, webhooks, cookies, токены и leftover git credentials;
   ZIP ingest: file-count cap is 10 000 (TZ 2.65); do not treat a raise of
   `ingest_max_files` as licence to drop zip-bomb guards (2 MiB compressed,
   8 MiB unpacked, 256 KiB/file, compression ratio, no symlink/encrypt);
