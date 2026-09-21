@@ -9,6 +9,9 @@ Technical architecture, runtime, stack, and technical TZ are one file:
 `docs/context/MASTER_CONTEXT.md` plus last accepted `PRODUCT_SPEC` **3.40**
 (owner 2026-09-21; ingest remains 3.37 plugin / no external git host).
 
+- Read **SPEC + MASTER**, not a stack of ADR. Living vs superseded:
+  MASTER §0 and `docs/decisions/README.md`. Do not treat superseded
+  files as ingest/RBAC/circulation canon.
 - Do not invent a second stack, second ingest, or a second Markdown canon.
 - Do not amend an ADR or change runtime without matching `MASTER_CONTEXT.md`.
 - Technical questions go through the technical agent / `MASTER_CONTEXT.md`.
@@ -17,7 +20,9 @@ Technical architecture, runtime, stack, and technical TZ are one file:
   second spec.
 
 Knowledge has **no git**. Ingest is Obsidian → plugin → GraphNotes stores.
-GitHub `https://github.com/vgdnet/rhizome` is **private**, not ingest.
-GitHub is ADR-006 source-code delivery only. Editor text-diff is native C++
-wikidiff2 (PHP only off that path). Live plugin: `obsidian-card-merge/`.
+GitHub is ADR-006 source-code delivery only (repo **private**;
+`nord → GitHub → rhizome-test`). Living GitHub product name is
+`https://github.com/vgdnet/rhizome` (not ingest; not host `rhizome`).
+Editor text-diff is native C++ wikidiff2 (PHP is not the engine).
+Live plugin: `obsidian-card-merge/`.
 Grants: `access_grants` `(user, path|tag|prefix)`; empty ≠ whole queue.

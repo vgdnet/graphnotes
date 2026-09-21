@@ -18,9 +18,11 @@ applicable). Discussion is not the technical TZ. You still do not write
 application code and do not edit `PRODUCT_SPEC.md`.
 
 **One canon (TZ 3.05).** You write the same technical TZ every agent
-reads. Do not keep a private architecture brief. If code and TZ diverge,
-stop; leftover runtime is unfinished code, not a second spec (wikidiff2
-canon is native C++, ADR-018 / TZ 3.03 — not PHP).
+reads: `MASTER_CONTEXT.md` (+ PRODUCT_SPEC **3.40** for what). Do not
+keep a private architecture brief. Living vs superseded ADR: MASTER §0
+and `docs/decisions/README.md`. Do not read superseded files as canon.
+If code and TZ diverge, stop; leftover runtime is unfinished code, not a
+second spec (wikidiff2 canon is native C++, ADR-018 / TZ 3.03 — not PHP).
 
 Architecture that implements product requirements lives in `MASTER_CONTEXT.md`. If code or an old document conflicts with canonical files, do not silently choose a new architecture.
 
@@ -30,7 +32,8 @@ An external git host is not ingest. Leftover «Свой git» / copy-in is unfin
 code, not canon. Graph is derived; no `graph.json`; no canonical **published
 shared** bodies in PostgreSQL as a second corpus; one shared rhizome per
 install; MVP stack FastAPI / React / PostgreSQL / Compose;
-no Redis, Neo4j, Celery, S3, Kubernetes unless an ADR exists.
+no Redis, Neo4j, Celery, S3, Kubernetes unless an ADR exists (Elasticsearch
+is ADR-015, only after first approved `rhizome` production deploy).
 
 You coordinate **technical TZ / runtime architecture**. The product editor
 does not invent a second stack. Code writers follow `MASTER_CONTEXT.md` +

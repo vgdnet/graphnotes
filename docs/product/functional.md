@@ -1100,7 +1100,8 @@ leftover-каталог `obsidian-plugin/` не канон. Общие карт�
 из API при editor-доступе на карточку. Не `take-from-shared` корпуса.
 Vault не вторая ризома и не «диск = ризома».
 
-**Нужен ADR:** один плагин снимает 3.09; грант API (3.30 сужает 3.24).
+Грант API и один плагин живут в SPEC **3.40** / MASTER (ADR-007
+**superseded**). OPEN, следующая стадия: грант-запись уже в общую.
 Открытые вопросы — [access.md](access.md) §5.6.7,
 [roadmap-and-governance.md](roadmap-and-governance.md) §12 п. 12.
 

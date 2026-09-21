@@ -156,8 +156,8 @@ sync as a participant. Catalogs `obsidian-plugin/` +
 Publisher is retired; runtime is `obsidian-card-merge/` (sync + offer +
 queue). Later the same plugin shows/hides capabilities
 from the API when access is not all cards, only specific cards —
-fits TZ 3.24. Needs ADR: one plugin supersedes 3.09; per-card API
-grants) /
+fits TZ 3.24. Grant API and one plugin live in MASTER; ADR-007 is
+superseded. OPEN next stage: grant-write to already-shared) /
 3.25 (two operations after accept, not «Save &
 Resolve = POST shared»: (1) always write local vault; opening = that
 note; accept unfinished if write fails; (2) update rhizome store from
@@ -273,7 +273,7 @@ functions remain unused). In-app save of the website editor is **off** (TZ 2.93)
 stay on the local store (no write-back to git).
 Disconnect keeps copied files (no `drop_personal_layer`). Alembic
 `0017_obsidian_integration` (tokens, transfers, personal assets,
-`object_version`). ADR-008 leftover «no hosted vault» vs hosted store.
+`object_version`). ADR-008 is **superseded**; hosted store is canon.
 Website in-app edit is **off** until reverse download / reverse sync
 (`#/card/personal:{path}` remains preview; hash may be `personal%3A`).
 TZ 2.54: `[[wikilink]]` inherits the open card layer (personal stays personal).
@@ -502,8 +502,9 @@ Branch: `feature/07-publish-merge`
 Completed: 2026-08-19
 Tested integration revision: `b362aa8382777465bc5da8f90663f93e0b7c4b72`
 
-ADR-009: Differ lists one-way personal → published shared differences; the user
-selects them and proposes. Download is a ZIP of the published shared revision.
+ADR-009 (historical): Differ listed personal → published shared;
+download was a ZIP. **Superseded:** ZIP of published shared is not
+product; living Differ is store path/hash (SPEC 3.40 / MASTER).
 Editors accept, reject, return or roll back. See `docs/stages/STAGE7_COMPLETED.md`.
 
 ## Stage 8 - Proposal Graph Diff
@@ -604,7 +605,7 @@ TZ 2.5–2.7 on this branch (not merged to main; production
   `GET /api/cards/{path}`. Guest `#/card/` = published hits, no body.
   Default search `layer=visible` (overlay remains graph stitch).
   ADR-011 `closed_paths` still omit Differ, lock stub, hide body from
-  other users. ADR-008 leftover vs this TZ is paperwork.
+  other users. ADR-008 is **superseded** (hosted store is canon).
   Live on `rhizome-test` 2026-09-07: running tree on git SHA
   `3fb9be9db1a9719acab1990a6f0d4bd9b74e2163` (Alembic
   `0015_installation_public_url`; personal editor + `0014_personal_edit_events`
@@ -703,8 +704,8 @@ TZ 2.5–2.7 on this branch (not merged to main; production
   `/differ` and `/proposals` errors stay `{detail}`, not the v1
   `{error:{code,…}}` envelope;
 - leftover: `AGENTS.md` is gitignored — clones of the source remote do not have
-  it; one canon is still `PRODUCT_SPEC` + `MASTER_CONTEXT` + ADRs
-  (TZ 3.05);
+  it; one canon is `PRODUCT_SPEC` **3.40** + `MASTER_CONTEXT` (TZ 3.05);
+  living ADRs via MASTER §0, not the superseded pile;
 - leftover: promote invite wave (TZ 2.85–2.87 / 2.89) to production
   `rhizome` only after a separate owner decision;
   TZ 2.80 / §16 guest anti-scrape (one IP → many unique
@@ -715,7 +716,8 @@ TZ 2.5–2.7 on this branch (not merged to main; production
   rhizome access-level **entitlement tables** / payment
   gateway (ADR-016 + TZ 2.41 name the model and the «ризома автора»
   view; `closed_paths` already exists — not this slice); vsepsy
-  identity §6.1.3 (needs ADR); ZIP wording in ADR-009 vs TZ 2.5;
+  identity §6.1.3 (needs ADR); ZIP of published shared is not product
+  (ADR-009 superseded);
   formal ADR for TZ 2.18 admin password/audit vs ADR-002 (screen
   already expanded in 2.37); Elasticsearch remains ADR-015, scheduled
   **only after the first approved rhizome production deploy** (TZ 2.83;
