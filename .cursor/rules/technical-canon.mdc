@@ -6,8 +6,8 @@ alwaysApply: true
 # Technical canon (chief technical agent)
 
 Technical architecture, runtime, stack, and technical TZ are one file:
-`docs/context/MASTER_CONTEXT.md` plus last accepted `PRODUCT_SPEC` (owner
-named **3.37**; later 3.38+ on disk — report, do not silently treat as accepted).
+`docs/context/MASTER_CONTEXT.md` plus last accepted `PRODUCT_SPEC` **3.40**
+(owner 2026-09-21; ingest remains 3.37 plugin / no external git host).
 
 - Do not invent a second stack, second ingest, or a second Markdown canon.
 - Do not amend an ADR or change runtime without matching `MASTER_CONTEXT.md`.

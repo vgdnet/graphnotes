@@ -24,9 +24,8 @@ spec.
 Product requirements live in `PRODUCT_SPEC.md`. A global product change needs an explicit owner decision, then ADR + PRODUCT_SPEC + MASTER_CONTEXT together — you update PRODUCT_SPEC and stop; tell the owner the architecture file still needs the builder.
 
 Accepted product model: **TZ 3.35 / 3.37** ingest is Obsidian + plugin
-(owner 2026-09-21: last accepted product they named is **3.37**; later
-overlay versions may already be on disk in PRODUCT_SPEC — report, do not
-silently bump). Differ is store path/hash (`personal_uploads` ↔
+(owner 2026-09-21: last accepted product they named is **3.40**; ingest
+unchanged). Differ is store path/hash (`personal_uploads` ↔
 `shared_notes`); ZIP of published shared is not the product path.
 Not Wikipedia / MediaWiki as a product.
 

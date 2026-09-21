@@ -1,6 +1,6 @@
 # GraphNotes - Environments
 
-Updated: 2026-09-12
+Updated: 2026-09-21
 
 Current implementation stage is Stage 8 (Graph Diff) on `feature/08-graph-diff`.
 Stages 0–7 are DONE and were validated on `rhizome-test`. Stage 9 production
@@ -138,8 +138,14 @@ nord
               -> rhizome
 ```
 
-Canonical public repository:
+Canonical source repository:
 `https://github.com/vgdnet/graphnotes`
+
+Owner 2026-09-21: this is **not a public product**. Visibility private;
+ADR-006 delivery still uses that repo. `rhizome-test` must clone/fetch
+with authenticated Git (SSH deploy key / token). Anonymous HTTPS fetch
+will fail once the repo is private. `nord` already uses
+`git@github.com:vgdnet/graphnotes.git`.
 
 Git is the primary delivery mechanism. SSH/rsync is permitted only as a fallback
 or bootstrap mechanism when Git delivery is not yet available. A fallback copy
@@ -149,4 +155,4 @@ revision on `rhizome-test` before promotion to `rhizome`.
 ## 5. Source-of-truth rule
 Once the local repository is established, source edits should normally originate from the Git working tree on `nord`, not from direct ad-hoc editing in `/opt/graphnotes` on Rhizome.
 
-The canonical public repository and approved revision are the source of truth for delivery across environments. Promote the same reviewed commit or tag from `rhizome-test` to `rhizome`; do not rebuild an untracked variant directly in production.
+The canonical source repository and approved revision are the source of truth for delivery across environments. Promote the same reviewed commit or tag from `rhizome-test` to `rhizome`; do not rebuild an untracked variant directly in production.

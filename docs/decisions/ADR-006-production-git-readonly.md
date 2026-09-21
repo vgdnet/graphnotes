@@ -8,9 +8,14 @@ integration testing to the production environment. Deployment hosts must not
 become competing sources of truth, and compromise of the production host must
 not provide credentials capable of changing the canonical repository.
 
-The canonical public repository is:
+The canonical source repository is:
 
 `https://github.com/vgdnet/graphnotes`
+
+Owner 2026-09-21: the repo is **not a public product**. Visibility
+private; this ADR still uses that GitHub repo for source-code delivery
+only. `rhizome-test` consumes it read-only via **authenticated** fetch
+(SSH deploy key / token), not anonymous HTTPS.
 
 ## Decision
 The canonical delivery workflow is:
@@ -31,9 +36,10 @@ Environment roles and access are:
 - `nord` owns source development and may use GitHub write access for branches,
   commits and pushes.
 - `rhizome-test` is the development-runtime, integration, migration and test
-  environment. It normally consumes the public repository read-only by cloning,
-  fetching and checking out candidate revisions. It is not a canonical source
-  repository; source authoring remains on `nord`.
+  environment. It consumes the canonical (private) repository read-only by
+  cloning, fetching and checking out candidate revisions with authenticated
+  Git. It is not a canonical source repository; source authoring remains on
+  `nord`.
 - `rhizome` is the production environment. Its repository access must be
   read-only. It must not contain GitHub credentials capable of push and receives
   only commits or tags already approved on `rhizome-test`.

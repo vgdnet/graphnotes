@@ -34,7 +34,7 @@ no Redis, Neo4j, Celery, S3, Kubernetes unless an ADR exists.
 
 You coordinate **technical TZ / runtime architecture**. The product editor
 does not invent a second stack. Code writers follow `MASTER_CONTEXT.md` +
-`PRODUCT_SPEC.md` last accepted (**3.37** ingest). Live Obsidian client is
-`obsidian-card-merge/`; do not merge plugin trees.
+`PRODUCT_SPEC.md` last accepted (**3.40**; ingest remains **3.37** plugin).
+Live Obsidian client is `obsidian-card-merge/`; do not merge plugin trees.
 
 Environments: `nord` authors, `rhizome-test` integrates, `rhizome` is production and stays untouched unless the owner says otherwise.

@@ -2,20 +2,50 @@
 
 Updated: 2026-09-21
 
-**Shipped this session (nord):** knowledge merge-out **gone** (no
+**Accepted product TZ 3.40** (owner 2026-09-21). Technical TZ last
+accepted is **3.40** (graph settings chrome as Obsidian). Ingest remains
+**3.37** plugin / no external git host. Do not invent extra product.
+
+**This wave:** user cards always stay in `personal_uploads` (see graph,
+send edits). A card into the rhizome = proposal from that personal copy.
+Duplicate path in personal+shared is **not dirt** — do not delete
+personal rows because a shared file exists. Do not wipe
+`personal_uploads` on deploy (postgres volume stays; no
+`compose down -v`). OPEN, next stage (спросить product-editor): granted
+write to already-shared cards (one shared file, plugin PUT shared, no
+duplicate personal). Do not implement that this wave.
+
+**Plugin:** one live client, already united: `obsidian-card-merge/`.
+`obsidian-plugin/` (old Publisher) is leftover-not-built, not a second
+shipped package. Do not invent a third merge.
+
+**This session rhizome-test:** hard-align `/opt/graphnotes` to pushed
+`origin/feature/08-graph-diff` only. Discard host **source** overlay (no
+merge, no stash-apply, no mix of uncommitted test-host edits). Do not
+treat personal store rows as overlay dirt. Canonical compose:
+`compose.yaml` + `deploy/compose.rhizome-test.yaml`. Rebuild backend
+image so native C++ **wikidiff2** is in the running container. Not
+production.
+
+Owner: source remote is **not a public product**; `gh repo edit
+vgdnet/graphnotes --visibility private`. ADR-006 delivery still uses
+that repo; test fetch must be authenticated. Leftover this session if
+`gh` has no login: visibility not flipped until an operator token.
+
+**Previously shipped on nord:** knowledge merge-out **gone** (no
 `create_branch` / `merge_branch` / `commit_markdown` / `reconcile_proposals`;
 `GitHubAppClient` cannot talk to GitHub). Approve/reject/rollback write
 `shared_notes` + proposal rows. Native C++ **wikidiff2** helper in the
 backend image (pinned Wikimedia 1.14.2 + CLI); PHP only off that path.
-Grants already in tree and on `rhizome-test` (`access_grants`, Admin
-«Доступы», empty ≠ whole queue) — not rewritten. Always-applied Cursor
-rule `.cursor/rules/technical-canon.mdc`. GitHub remains source-code
-delivery (ADR-006). Live plugin is `obsidian-card-merge/`. Not production.
+Grants already in tree (`access_grants`, Admin «Доступы», empty ≠ whole
+queue) — not rewritten. Always-applied Cursor rule
+`.cursor/rules/technical-canon.mdc`. GitHub remains source-code delivery
+(ADR-006). Live plugin is `obsidian-card-merge/`. Not production.
 
-**Previous overlay on rhizome-test (TZ 3.40):** graph settings
-panel chrome as Obsidian (folds, switches, slider numbers, round color,
-«Запустить анимацию») on `http://172.16.13.14:8080/#/graph`. Overlay
-frontend only. Not production.
+**Previous overlay on rhizome-test (TZ 3.40, superseded by hard-align):**
+graph settings panel chrome as Obsidian (folds, switches, slider numbers,
+round color, «Запустить анимацию») on
+`http://172.16.13.14:8080/#/graph`. Overlay frontend only. Not production.
 
 **Also on rhizome-test:** TZ **3.39** Obsidian-like
 graph settings on `#/graph`

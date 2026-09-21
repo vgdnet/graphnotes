@@ -1,7 +1,7 @@
 # GraphNotes — канонический контекст Technical Observer
 
 Статус: ACTIVE
-Updated: 2026-09-21 (PRODUCT_SPEC **3.40**: graph settings panel chrome as
+Updated: 2026-09-21 (PRODUCT_SPEC **3.40 accepted**: graph settings panel chrome as
 Obsidian. **3.39**: `#/graph` Obsidian-like
 settings cog, `localStorage` `graphnotes-graph-settings`. **3.38**: `#/user` has no personal-git
 connect; four tabs; leftover `/api/personal/connect` is HTTP 410. **3.37**: living canon does not name an
@@ -25,9 +25,9 @@ granted cards; 3.25 local-first then sync to the **same** `shared_notes`
 file if different. Queue of others’ edits if editor on that card.
 `can_propose_to_rhizome` stays user-only for ungranted cards. Revoke:
 stop write/sync/load-update from API; vault copy may remain. Later
-vault=rhizome same file is not canon. **Runtime debt:**
-`personal_uploads` + `shared_notes` copies of the same granted path.
-Today leftover: POST `/resolve`.
+vault=rhizome same file is not canon. **This wave:** personal store
+stays; a path in both tables is not dirt. OPEN (next stage, спросить
+product-editor): granted write to already-shared cards.
 OPEN: read-without-write for queue review. 3.25 local-first after accept
 holds. Today's coarse
 `can_propose_to_rhizome` true for role `user`, false for `editor`/`admin`.
@@ -48,10 +48,10 @@ OPEN: editor-of-a-slice vs editor who also authors other cards.
 **3.26**: one Obsidian plugin is
 canon; TZ 3.09 withdrawn. Queue from API is an editor capability in
 the same client; without editor access the queue UI is off. Manual
-editor edit = same sync as a participant. Catalogs `obsidian-plugin/`
-+ `obsidian-card-merge/` leftover catalog `obsidian-plugin/` until
-Publisher is retired; runtime is `obsidian-card-merge/` (sync + offer gated by `can_propose_to_rhizome` +
-queue). Later the same plugin shows/hides
+editor edit = same sync as a participant. One live client
+`obsidian-card-merge/` (already united). `obsidian-plugin/` is
+leftover-not-built, not a second shipped package. Do not invent a
+third merge. Later the same plugin shows/hides
 capabilities from the API when access is not all cards, only
 specific cards — fits TZ 3.24 / 3.28 / 3.29 / **3.30**. Needs ADR: one plugin supersedes 3.09;
 per-card API grants. **3.25**: queue of **others’** edits; editorial

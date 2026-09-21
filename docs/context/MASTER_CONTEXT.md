@@ -44,21 +44,25 @@ write/sync/load-update from the API; vault copy may remain. Differ /
 proposals stay the write path onto shared for people **without** a write
 grant. Later vault=rhizome same file is **not** canon (disk stays
 client). Do not restore take-from-shared. No website editor. No second
-rhizome. **Runtime debt:** `personal_uploads` + `shared_notes` may still
-hold the same path — unfinished code, not a second spec. Today’s granted
-sync leftover: POST `/resolve` after queue accept.
+rhizome. **This wave:** user cards always live in `personal_uploads`
+(see their graph; send edits). Passing a card into the rhizome creates a
+proposal from that personal copy. A path in both personal and shared is
+**not dirt** — do not delete personal rows because a shared file exists.
+OPEN (next stage, спросить product-editor): granted write to
+already-shared cards (one shared file, plugin PUT shared, no duplicate
+personal). Do not implement that this wave.
 OPEN: read-without-write for queue review. TZ 3.25 local-first after
 accept still holds. Today's coarse `can_propose_to_rhizome`: true
 for role `user`, false for `editor`/`admin`. Plugin hides the
 Differ-offer panel; POST /proposals is 403 when false; queue stays via
 `can_see_queue`. Do not reuse POST /proposals for TZ 3.25 op 2. Do not
 sync the whole vault to shared. OPEN: editor-of-a-slice vs editor who
-also authors cards outside the write grant. One Obsidian plugin is canon;
-TZ 3.09 withdrawn. Queue from API is an editor capability in the
-same client; without editor access the queue UI is off. Manual
-editor edit uses the same sync as a participant. Catalogs
-`obsidian-plugin/` + `obsidian-card-merge/` are leftover catalogs;
-do not merge trees. Runtime is `obsidian-card-merge/` (participant sync + offer gated by `can_propose_to_rhizome` + editor queue). Later the
+also authors cards outside the write grant. One live Obsidian client
+(`obsidian-card-merge/`); plugins already united. `obsidian-plugin/`
+(old Publisher) is leftover-not-built, not a second shipped package.
+Do not invent a third merge. TZ 3.09 withdrawn. Queue from API is an
+editor capability in the same client; without editor access the queue UI
+is off. Manual editor edit uses the same sync as a participant. Later the
 same plugin shows/hides capabilities from the API when access is not
 all cards, only granted cards — fits TZ 3.28 / 3.29 / **3.30**. Needs ADR: one plugin
 supersedes 3.09; grant API.
@@ -490,11 +494,11 @@ a second brief.
 agent (`MASTER_CONTEXT`, observer, deployment). Always-applied Cursor
 rule: `.cursor/rules/technical-canon.mdc`. The product editor does
 **not** invent a second stack. Code writers follow this file and
-`PRODUCT_SPEC.md` last accepted (owner 2026-09-21: **3.37** ingest;
-later overlay numbers on disk such as 3.38–3.40 are already in
-PRODUCT_SPEC — do not silently bump). Live Obsidian client is
-`obsidian-card-merge/`; leftover Publisher dir `obsidian-plugin/` —
-do not merge trees again.
+`PRODUCT_SPEC.md` last accepted (owner 2026-09-21: **3.40** graph
+settings chrome as Obsidian; ingest remains **3.37** plugin / no
+external git host). One live Obsidian client: `obsidian-card-merge/`
+(already united). `obsidian-plugin/` is leftover-not-built, not a
+second shipped package. Do not invent a third merge.
 
 The canonical product requirements are maintained in
 `docs/product/PRODUCT_SPEC.md`. This file defines the accepted architecture that
@@ -572,8 +576,8 @@ is HTTP 410 (no GitHub App). Knowledge merge-out is **gone**: no
 Approve/reject/rollback write `shared_notes` and proposal rows. GitHub is
 **source-code delivery only** (ADR-006). Knowledge App credentials are
 not required to run the stack. ADR-003 / ADR-007 / ADR-008 / ADR-009 are
-leftover vs TZ **3.37** — living product is 3.37 + this file; do not
-treat those ADRs as ingest canon.
+leftover vs TZ **3.37** — living product is **3.40** + this file
+(ingest still 3.37); do not treat those ADRs as ingest canon.
 
 Technologies:
 - FastAPI / Python
@@ -904,7 +908,10 @@ nord
               -> rhizome
 ```
 
-The canonical public repository is `https://github.com/vgdnet/graphnotes`.
+The canonical source repository is `https://github.com/vgdnet/graphnotes`
+(owner 2026-09-21: **not a public product**; visibility private).
+ADR-006 delivery still uses that repo. `rhizome-test` must fetch with
+authenticated Git (SSH deploy key / token), not anonymous HTTPS.
 
 Git is the primary delivery mechanism. SSH/rsync is a fallback or bootstrap mechanism only. `nord` owns source authoring and write operations on that remote. `rhizome-test` is the development-runtime and test environment; it normally consumes candidate revisions read-only and is never canonical source. `rhizome` is production. Its Git access must be read-only, with no credentials capable of push, and it receives only commits or tags approved on `rhizome-test`. Every new feature revision must pass the applicable integration, deployment and migration checks on `rhizome-test` before the same approved revision is deployed to `rhizome`. Do not use `rhizome` for destructive experiments, first-run migrations or ad-hoc source edits. See `docs/decisions/ADR-006-production-git-readonly.md`.
 

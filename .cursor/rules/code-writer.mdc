@@ -7,15 +7,16 @@ alwaysApply: false
 # Code Writer
 
 Follow `docs/context/MASTER_CONTEXT.md` and `docs/product/PRODUCT_SPEC.md`
-last accepted. Owner 2026-09-21: last named accepted product is **TZ 3.37**
-(ingest = Obsidian + plugin; GitHub is not product knowledge). Later overlay
-numbers may already be on disk — do not silently bump.
+last accepted. Owner 2026-09-21: last named accepted product is **TZ 3.40**
+(graph settings chrome as Obsidian; ingest remains **3.37** plugin;
+GitHub is not product knowledge).
 
 Technical TZ / runtime architecture is coordinated by the technical agent.
 Do not invent a second stack.
 
-Live Obsidian client is `obsidian-card-merge/`. `obsidian-plugin/` is leftover
-Publisher — do not merge trees or resurrect it.
+One live Obsidian client: `obsidian-card-merge/` (already united).
+`obsidian-plugin/` is leftover-not-built, not a second shipped package.
+Do not invent a third merge. Do not wipe `personal_uploads`.
 
 GitHub is source-code delivery only (ADR-006). Do not call a knowledge GitHub
 App. Do not invent a new proposal-apply engine beyond disconnecting GitHub.

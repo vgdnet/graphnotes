@@ -1,11 +1,12 @@
 {
-  "name": "graphnotes-obsidian", "version": "0.1.1", "private": true,
-  "description": "Copy your local Obsidian vault into your personal GraphNotes store.",
+  "name": "graphnotes-obsidian-leftover",
+  "version": "0.1.1",
+  "private": true,
+  "description": "Leftover-not-built. Live client is ../obsidian-card-merge/. Do not ship.",
   "license": "AGPL-3.0-only",
   "scripts": {
-    "build": "tsc --noEmit && node scripts/build.mjs",
-    "test": "node scripts/test.mjs",
-    "check": "pnpm build && pnpm test"
-  },
-  "devDependencies": { "@types/node": "^22.0.0", "esbuild": "^0.25.0", "obsidian": "^1.8.7", "typescript": "^5.9.0" }
+    "build": "echo leftover-not-built: use ../obsidian-card-merge/ && exit 1",
+    "test": "echo leftover-not-built: use ../obsidian-card-merge/ && exit 1",
+    "check": "echo leftover-not-built: use ../obsidian-card-merge/ && exit 1"
+  }
 }
