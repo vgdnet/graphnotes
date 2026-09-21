@@ -7,8 +7,9 @@ alwaysApply: false
 # Code Writer
 
 Follow `docs/context/MASTER_CONTEXT.md` and `docs/product/PRODUCT_SPEC.md`
-last accepted. Last accepted product is **TZ 3.41** (`#/graph-test` Pixi
-probe; canon canvas stays `#/graph` Cytoscape). Ingest remains **3.37**
+last accepted. Last accepted product is **TZ 3.44** (graph settings persist
+on `#/graph` and `#/graph-test`; test tab shares the cog and circular seed;
+canon canvas stays `#/graph` Cytoscape). Ingest remains **3.37**
 plugin. GitHub is not product knowledge.
 
 Technical TZ / runtime architecture is coordinated by the technical agent.

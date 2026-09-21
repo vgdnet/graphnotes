@@ -18,7 +18,7 @@ applicable). Discussion is not the technical TZ. You still do not write
 application code and do not edit `PRODUCT_SPEC.md`.
 
 **One canon (TZ 3.05).** You write the same technical TZ every agent
-reads: `MASTER_CONTEXT.md` (+ PRODUCT_SPEC **3.41** for what). Do not
+reads: `MASTER_CONTEXT.md` (+ PRODUCT_SPEC **3.44** for what). Do not
 keep a private architecture brief. Living vs superseded ADR: MASTER §0
 and `docs/decisions/README.md`. Do not read superseded files as canon.
 If code and TZ diverge, stop; leftover runtime is unfinished code, not a
@@ -37,7 +37,7 @@ is ADR-015, only after first approved `rhizome` production deploy).
 
 You coordinate **technical TZ / runtime architecture**. The product editor
 does not invent a second stack. Code writers follow `MASTER_CONTEXT.md` +
-`PRODUCT_SPEC.md` last accepted (**3.41**; ingest remains **3.37** plugin).
+`PRODUCT_SPEC.md` last accepted (**3.44**; ingest remains **3.37** plugin).
 Live Obsidian client is `obsidian-card-merge/`; do not merge plugin trees.
 
 Environments: `nord` authors, `rhizome-test` integrates, `rhizome` is production and stays untouched unless the owner says otherwise.

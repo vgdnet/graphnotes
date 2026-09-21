@@ -2,8 +2,10 @@
 
 Updated: 2026-09-22
 Status: canonical architecture baseline
-Aligned with PRODUCT_SPEC **3.43** (`#/graph-test` shares the `#/graph`
-settings cog and `localStorage`; circular/Obsidian disk seed) /
+Aligned with PRODUCT_SPEC **3.44** (graph settings persist on both
+canvases: `localStorage` + cookie copy, not `/user`) /
+**3.43** (`#/graph-test` shares the `#/graph`
+settings cog; circular/Obsidian disk seed) /
 **3.42** (`#/graph` wheel zoom 2× default;
 slider «Скорость зума» in display settings) /
 **3.41** (test tab `#/graph-test`: Pixi.js +
@@ -432,7 +434,10 @@ node (TZ **3.39**). The `#/graph` page has an Obsidian-like settings cog:
 filters (tag nodes, orphans), groups (search query + color), display
 (arrows, text-fade, node size, link thickness), forces (center/gravity,
 repel, link elasticity, ideal length). Prefs: `localStorage`
-`graphnotes-graph-settings`, same class as `graphnotes-theme`, not `/user`.
+`graphnotes-graph-settings` plus a cookie copy of the same JSON
+(TZ **3.44**, `Path=/`, `Max-Age` 1 year, `SameSite=Lax`), same class
+as `graphnotes-theme`, not `/user`. Both `#/graph` and `#/graph-test`
+read that one set.
 The card-page aside local graph does not open that panel. Gene-demo sliders
 are still not ported. TZ **3.40** matches Obsidian chrome: collapsible
 sections, right-hand switches, numeric slider readouts, round color swatch,

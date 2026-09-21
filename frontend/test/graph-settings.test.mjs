@@ -9,12 +9,14 @@ import {
   GRAPH_SETTINGS_STORAGE_KEY,
   buildVisibleGraph,
   colorForNode,
+  cookieWritePair,
   forceLayoutOptions,
   isTagNodePath,
   loadGraphSettings,
   nodeMatchesGroupQuery,
   parseGraphSettings,
   persistGraphSettings,
+  readCookie,
   stylesheetOptions,
   tagNodePath,
   wheelSensitivityValue,
@@ -130,6 +132,26 @@ test("parse and persist keep slider defaults and clamp junk", () => {
   const loaded = loadGraphSettings(storage);
   assert.equal(loaded.showTags, false);
   assert.equal(memory.has(GRAPH_SETTINGS_STORAGE_KEY), true);
+});
+
+test("graph settings persist to storage and fall back to a cookie copy", () => {
+  const jar = new Map();
+  const cookies = {
+    get(name) { return jar.get(name) ?? null; },
+    set(name, value) { jar.set(name, value); },
+  };
+  persistGraphSettings({ ...GRAPH_SETTINGS_DEFAULTS, showTags: false, zoomSpeed: 3 }, undefined, cookies);
+  assert.equal(JSON.parse(jar.get(GRAPH_SETTINGS_STORAGE_KEY)).zoomSpeed, 3);
+
+  const fromCookie = loadGraphSettings({
+    getItem() { return null; },
+    setItem() {},
+  }, cookies);
+  assert.equal(fromCookie.showTags, false);
+  assert.equal(fromCookie.zoomSpeed, 3);
+
+  const encoded = cookieWritePair(GRAPH_SETTINGS_STORAGE_KEY, JSON.stringify({ arrows: true }));
+  assert.equal(readCookie(encoded, GRAPH_SETTINGS_STORAGE_KEY)?.includes("arrows"), true);
 });
 
 test("default display and forces match the previous fCoSE look", () => {

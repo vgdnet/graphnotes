@@ -2,21 +2,21 @@
 
 Updated: 2026-09-22
 
-**This overlay on rhizome-test:** TZ **3.43** `#/graph-test` uses the
-same settings cog as `#/graph` (one `localStorage`) and seeds nodes in
-a disk around the center like Obsidian. TZ **3.42** `#/graph` wheel
-zoom is 2× by default; display slider «Скорость зума» (1×–4×).
-TZ **3.41** tab **Тестовый граф**
-`#/graph-test` — Pixi.js + d3-force, same `GET /api/graph/*`. Canon
-`#/graph` stays Cytoscape/fCoSE.
-`http://172.16.13.14:8080/#/graph` and
-`http://172.16.13.14:8080/#/graph-test`. Frontend overlay only. Not
-production.
+**This overlay on rhizome-test (TZ 3.44, 2026-09-22):** graph settings
+on `#/graph` and `#/graph-test` persist in `localStorage` and a cookie
+copy (`graphnotes-graph-settings`). TZ **3.43** `#/graph-test` uses the
+same cog and seeds a disk like Obsidian. Overlay frontend only
+(`compose.yaml` + `deploy/compose.rhizome-test.yaml`, LAN `:8080`).
+Checked: cog + «Скорость зума» 2.0× + «Запустить анимацию» on
+`http://172.16.13.14:8080/#/graph-test`; layers «весь / локальный»
+stay on `#/graph`. TZ **3.42** `#/graph` wheel zoom 2× + slider
+(1×–4×). TZ **3.41** tab **Тестовый граф** — Pixi.js + d3-force, same
+`GET /api/graph/*`. Canon `#/graph` stays Cytoscape/fCoSE. Not production.
 
 **Accepted product TZ 3.40** (owner 2026-09-21) plus **3.41** test tab,
-**3.42** wheel zoom and **3.43** test-tab settings/circle (owner
-2026-09-22). Ingest remains **3.37**
-plugin / no external git host. One canon: PRODUCT_SPEC **3.43** +
+**3.42** wheel zoom, **3.43** test-tab settings/circle and **3.44**
+browser persist (owner 2026-09-22). Ingest remains **3.37**
+plugin / no external git host. One canon: PRODUCT_SPEC **3.44** +
 MASTER_CONTEXT. Do not invent extra product. Do not treat Pixi as the
 rhizome canvas.
 

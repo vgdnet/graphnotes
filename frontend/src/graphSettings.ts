@@ -76,6 +76,13 @@ type StorageLike = {
   setItem(key: string, value: string): void;
 };
 
+export type CookieJar = {
+  get(name: string): string | null;
+  set(name: string, value: string): void;
+};
+
+export const GRAPH_SETTINGS_COOKIE_MAX_AGE = 60 * 60 * 24 * 365;
+
 export const GRAPH_SETTINGS_DEFAULTS: GraphSettings = {
   showTags: true,
   showOrphans: true,
@@ -168,25 +175,90 @@ function memoryStorage(): StorageLike | undefined {
   }
 }
 
-export function loadGraphSettings(storage?: StorageLike): GraphSettings {
-  const store = storage ?? memoryStorage();
-  if (!store) return { ...GRAPH_SETTINGS_DEFAULTS, groups: [] };
+export function readCookie(source: string, name: string): string | null {
+  const prefix = `${name}=`;
+  for (const part of source.split(";")) {
+    const piece = part.trim();
+    if (!piece.startsWith(prefix)) continue;
+    const raw = piece.slice(prefix.length);
+    try {
+      return decodeURIComponent(raw);
+    } catch {
+      return raw;
+    }
+  }
+  return null;
+}
+
+export function cookieWritePair(name: string, value: string): string {
+  return `${name}=${encodeURIComponent(value)}; Path=/; Max-Age=${GRAPH_SETTINGS_COOKIE_MAX_AGE}; SameSite=Lax`;
+}
+
+function documentCookies(): CookieJar | undefined {
   try {
-    const raw = store.getItem(GRAPH_SETTINGS_STORAGE_KEY);
-    if (!raw) return { ...GRAPH_SETTINGS_DEFAULTS, groups: [] };
-    return parseGraphSettings(JSON.parse(raw) as unknown);
+    const doc = (globalThis as { document?: { cookie: string } }).document;
+    if (!doc) return undefined;
+    return {
+      get(name) {
+        return readCookie(doc.cookie, name);
+      },
+      set(name, value) {
+        doc.cookie = cookieWritePair(name, value);
+      },
+    };
   } catch {
-    return { ...GRAPH_SETTINGS_DEFAULTS, groups: [] };
+    return undefined;
   }
 }
 
-export function persistGraphSettings(settings: GraphSettings, storage?: StorageLike): void {
-  const store = storage ?? memoryStorage();
-  if (!store) return;
+function parseStoredSettings(raw: string | null): GraphSettings | null {
+  if (!raw) return null;
   try {
-    store.setItem(GRAPH_SETTINGS_STORAGE_KEY, JSON.stringify(settings));
+    return parseGraphSettings(JSON.parse(raw) as unknown);
   } catch {
-    // Private mode can block storage; the session still keeps the panel.
+    return null;
+  }
+}
+
+export function loadGraphSettings(storage?: StorageLike, cookies?: CookieJar): GraphSettings {
+  const store = storage ?? memoryStorage();
+  const jar = cookies ?? documentCookies();
+  if (store) {
+    try {
+      const fromStore = parseStoredSettings(store.getItem(GRAPH_SETTINGS_STORAGE_KEY));
+      if (fromStore) return fromStore;
+    } catch {
+      // Private mode or a broken payload: try the cookie copy.
+    }
+  }
+  if (jar) {
+    const fromCookie = parseStoredSettings(jar.get(GRAPH_SETTINGS_STORAGE_KEY));
+    if (fromCookie) return fromCookie;
+  }
+  return { ...GRAPH_SETTINGS_DEFAULTS, groups: [] };
+}
+
+export function persistGraphSettings(
+  settings: GraphSettings,
+  storage?: StorageLike,
+  cookies?: CookieJar,
+): void {
+  const payload = JSON.stringify(settings);
+  const store = storage ?? memoryStorage();
+  const jar = cookies ?? documentCookies();
+  if (store) {
+    try {
+      store.setItem(GRAPH_SETTINGS_STORAGE_KEY, payload);
+    } catch {
+      // Private mode can block storage; the cookie copy still keeps the panel.
+    }
+  }
+  if (jar) {
+    try {
+      jar.set(GRAPH_SETTINGS_STORAGE_KEY, payload);
+    } catch {
+      // Cookie quota or a sandboxed document; localStorage may still hold it.
+    }
   }
 }
 

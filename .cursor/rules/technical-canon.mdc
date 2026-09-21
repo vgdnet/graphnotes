@@ -6,8 +6,9 @@ alwaysApply: true
 # Technical canon (chief technical agent)
 
 Technical architecture, runtime, stack, and technical TZ are one file:
-`docs/context/MASTER_CONTEXT.md` plus last accepted `PRODUCT_SPEC` **3.41**
-(owner 2026-09-22 test tab `#/graph-test`; ingest remains 3.37 plugin / no external git host).
+`docs/context/MASTER_CONTEXT.md` plus last accepted `PRODUCT_SPEC` **3.44**
+(owner 2026-09-22: graph settings persist on both canvases; `#/graph-test`
+shares the cog and circular seed; ingest remains 3.37 plugin / no external git host).
 
 - Read **SPEC + MASTER**, not a stack of ADR. Living vs superseded:
   MASTER §0 and `docs/decisions/README.md`. Do not treat superseded
