@@ -347,6 +347,9 @@ select { padding: .65rem .8rem; border: 1px solid var(--gn-input-border); border
   display: grid;
   gap: .6rem;
 }
+@media (max-width: 959px) {
+  .card-workspace__graph { display: none; }
+}
 .card-workspace__graph h3 { margin: 0; }
 .graph-view--aside .graph-canvas { height: min(52vh, 28rem); }
 .graph-view--aside .graph-selection { margin: 0; }

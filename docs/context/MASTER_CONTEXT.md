@@ -1,8 +1,10 @@
 # GraphNotes - MASTER CONTEXT
 
-Updated: 2026-09-22
+Updated: 2026-09-23
 Status: canonical architecture baseline
-Aligned with PRODUCT_SPEC **3.44** (graph settings persist on both
+Aligned with PRODUCT_SPEC **3.45** (mobile `#/card/{path}` shows the
+card only; local graph stays on wide screens) /
+**3.44** (graph settings persist on both
 canvases: `localStorage` + cookie copy, not `/user`) /
 **3.43** (`#/graph-test` shares the `#/graph`
 settings cog; circular/Obsidian disk seed) /
@@ -438,7 +440,10 @@ repel, link elasticity, ideal length). Prefs: `localStorage`
 (TZ **3.44**, `Path=/`, `Max-Age` 1 year, `SameSite=Lax`), same class
 as `graphnotes-theme`, not `/user`. Both `#/graph` and `#/graph-test`
 read that one set.
-The card-page aside local graph does not open that panel. Gene-demo sliders
+The card-page aside local graph does not open that panel. TZ **3.45**:
+that aside is mounted only when the viewport is at least **960px**
+wide; on mobile `#/card/{path}` is the card alone («К графу» stays).
+Gene-demo sliders
 are still not ported. TZ **3.40** matches Obsidian chrome: collapsible
 sections, right-hand switches, numeric slider readouts, round color swatch,
 «Запустить анимацию» re-runs fCoSE, header reset/close. TZ **3.41**

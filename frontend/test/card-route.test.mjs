@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { cardApiUrl, cardHash, cardSearchHash, canonicalCardHash, differFileApiUrl, parseCardRoute, pathFromCardHash, isOwnPersonalCard, canShowCardEditButton, normalizeCardPath, qualifyCardPath, wikiCardHash, missingNotePath, missingNoteTitle } from "../test-out/cardRoute.js";
+import { CARD_LOCAL_GRAPH_MIN_WIDTH, cardApiUrl, cardHash, cardPageShowsLocalGraph, cardSearchHash, canonicalCardHash, differFileApiUrl, parseCardRoute, pathFromCardHash, isOwnPersonalCard, canShowCardEditButton, normalizeCardPath, qualifyCardPath, wikiCardHash, missingNotePath, missingNoteTitle } from "../test-out/cardRoute.js";
 import { parseAppRoute, routeToView, viewHash, personCardHash, hashFromPathname } from "../test-out/appRoute.js";
 import { renderBlocks } from "../test-out/markdownRender.js";
 
@@ -177,4 +177,11 @@ test("underscore italics render as emphasis", () => {
   );
   assert.match(html, /<em>The International Journal of Psychoanalysis, 86<\/em>/);
   assert.doesNotMatch(html, /_The International/);
+});
+
+test("mobile card page does not open the local graph", () => {
+  assert.equal(cardPageShowsLocalGraph(375), false);
+  assert.equal(cardPageShowsLocalGraph(959), false);
+  assert.equal(cardPageShowsLocalGraph(CARD_LOCAL_GRAPH_MIN_WIDTH), true);
+  assert.equal(cardPageShowsLocalGraph(1280), true);
 });

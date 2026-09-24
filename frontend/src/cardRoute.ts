@@ -158,3 +158,10 @@ export function differFileApiUrl(path: string): string {
     .join("/");
   return `/api/differ/files/${encoded}`;
 }
+
+/** Wide card page keeps the local graph; narrower than this is mobile (TZ 3.45). */
+export const CARD_LOCAL_GRAPH_MIN_WIDTH = 960;
+
+export function cardPageShowsLocalGraph(viewportWidth: number): boolean {
+  return Number.isFinite(viewportWidth) && viewportWidth >= CARD_LOCAL_GRAPH_MIN_WIDTH;
+}

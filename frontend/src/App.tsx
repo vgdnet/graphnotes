@@ -16,7 +16,7 @@ import type { GraphDiffResponse } from "./GraphDiffView";
 import { CardHistory } from "./CardHistory";
 import { MarkdownBody } from "./MarkdownBody";
 import { CardSearch } from "./CardSearch";
-import { cardApiUrl, cardFilePath, cardHash, cardSearchHash, isOwnPersonalCard, missingNotePath, missingNoteTitle } from "./cardRoute";
+import { CARD_LOCAL_GRAPH_MIN_WIDTH, cardApiUrl, cardFilePath, cardHash, cardPageShowsLocalGraph, cardSearchHash, isOwnPersonalCard, missingNotePath, missingNoteTitle } from "./cardRoute";
 import { parseAppRoute, personCardHash, routeToView, viewHash, type ShellView } from "./appRoute";
 import { AuthPanel, type AuthMode } from "./AuthPanel";
 import { ActorLink, InviteAttribution, PersonCardPage } from "./PersonCard";
@@ -399,7 +399,22 @@ async function readError(response: Response): Promise<string> {
   return "Не удалось выполнить запрос. Попробуйте ещё раз.";
 }
 
+function useCardPageShowsLocalGraph(): boolean {
+  const [show, setShow] = useState(() =>
+    typeof window !== "undefined" && cardPageShowsLocalGraph(window.innerWidth),
+  );
+  useEffect(() => {
+    const mq = window.matchMedia(`(min-width: ${CARD_LOCAL_GRAPH_MIN_WIDTH}px)`);
+    const sync = () => setShow(mq.matches);
+    sync();
+    mq.addEventListener("change", sync);
+    return () => mq.removeEventListener("change", sync);
+  }, []);
+  return show;
+}
+
 export function App() {
+  const showCardLocalGraph = useCardPageShowsLocalGraph();
   const [health, setHealth] = useState<HealthState>("checking");
   const [sessionLost, setSessionLost] = useState(false);
   const [graphLoadError, setGraphLoadError] = useState("");
@@ -2071,6 +2086,7 @@ export function App() {
               <p className="admin-panel__hint" role="status">Загружаем карточку…</p>
             )}
             </div>
+            {showCardLocalGraph ? (
             <aside className="card-workspace__graph" aria-label="Локальный граф карточки">
                 <p className="eyebrow">Рядом</p>
                 <h3>Граф</h3>
@@ -2088,6 +2104,7 @@ export function App() {
                   theme={theme}
                 />
               </aside>
+            ) : null}
           </section>
           )}
           {view === "settings" && (
@@ -2937,6 +2954,7 @@ export function App() {
               <p className="admin-panel__hint" role="status">Загружаем карточку…</p>
             )}
             </div>
+            {showCardLocalGraph ? (
             <aside className="card-workspace__graph" aria-label="Локальный граф карточки">
                 <p className="eyebrow">Рядом</p>
                 <h3>Граф</h3>
@@ -2953,6 +2971,7 @@ export function App() {
                   theme={theme}
                 />
               </aside>
+            ) : null}
           </section>
         )}
         {view === "person" && (

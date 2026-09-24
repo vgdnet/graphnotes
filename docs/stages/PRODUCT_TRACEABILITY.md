@@ -56,7 +56,7 @@
 | 6.3.1 | Upload history in GraphNotes (who/when/hash), not user git log | next wave |
 | 6.4 | revisioned shared/personal/proposal derived index and rebuild | 5 |
 | 6.5 | bounded shared Graph API, personal overlay, local ego-graph view (весь / локальный, depth 1–4, «Показать всё»), Cytoscape UI, **fCoSE** live layout, Obsidian-like canvas settings (TZ **3.39**: tags/orphans, groups, display, forces; `localStorage`); TZ **3.41** / **3.43** test tab `#/graph-test` Pixi+d3-force, same Graph API and same settings cog, circular seed like Obsidian, not a second canvas canon | 5, 6 |
-| 6.5.2 | `#/search` role-scoped search; `#/card/{path}` **read-only** (TZ 2.93: no website editor until reverse sync); `#/users/{login}` person card | 6, 7, 8 |
+| 6.5.2 | `#/search` role-scoped search; `#/card/{path}` **read-only** (TZ 2.93: no website editor until reverse sync); TZ **3.45** mobile card has no local-graph aside; `#/users/{login}` person card | 6, 7, 8 |
 | 6.5.3 | Elasticsearch next search (ADR-015); SQL until then; questions 1–9 unanswered (TZ 2.83) | **only after the first approved rhizome production deploy**; not this branch |
 | 16 | Guest anti-scrape of published cards (1 IP → many unique paths); after `rhizome` prod only; not `rhizome-test` (TZ 2.80) | after first production deploy; ADR before code |
 | 17 | Invite email link; no Register tab; person card «Приглашен %date% по приглашению от @user»; same on vsepsy.ru (TZ 2.85–2.87) | shipped on rhizome-test (TZ 2.89); Alembic 0020 attributes existing accounts except efimov to @efimov |

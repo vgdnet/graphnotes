@@ -1,7 +1,8 @@
 # GraphNotes — канонический контекст Technical Observer
 
 Статус: ACTIVE
-Updated: 2026-09-22 (PRODUCT_SPEC **3.44**: graph settings persist
+Updated: 2026-09-23 (PRODUCT_SPEC **3.45**: mobile `#/card/{path}` is
+card-only. **3.44**: graph settings persist
 `localStorage` + cookie on `#/graph` and `#/graph-test`. **3.43**: test tab
 shares the cog + circular Obsidian seed. **3.41**: `#/graph-test` Pixi+d3-force test
 tab; canon `#/graph` Cytoscape. **3.40 accepted**: graph settings panel chrome as
@@ -392,7 +393,8 @@ panel on `#/graph` (`frontend/src/graphSettings.ts`, `GraphSettingsPanel.tsx`):
 tag nodes are synthesized client-side (`gn-tag:` ids; not Graph API);
 orphans hide `isolated` notes; groups paint `node[groupColor]`; display and
 forces feed `graphStylesheet` / `runFcoseLayout`. Aside local graph on a
-card keeps depth only. Prefs are browser-local (`localStorage` + cookie
+card keeps depth only and mounts only from **960px** (TZ **3.45**);
+narrow `#/card/{path}` is the card alone. Prefs are browser-local (`localStorage` + cookie
 copy, TZ **3.44**). TZ **3.40** restyles that
 panel to Obsidian chrome (folds, `role=switch`, slider numbers, round
 swatch, restart-layout button). TZ **3.42**: display slider `zoomSpeed`
