@@ -1,0 +1,10 @@
+{
+  "id": "graphnotes-card-merge",
+  "name": "GraphNotes",
+  "version": "0.1.1",
+  "minAppVersion": "1.8.7",
+  "description": "Vault ↔ GraphNotes: личное хранилище, офер в ризому и очередь editor’а.",
+  "author": "Юрий Ефимов",
+  "authorUrl": "https://psychoanalyst.pro/GraphNotes",
+  "isDesktopOnly": true
+}

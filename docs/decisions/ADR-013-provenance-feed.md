@@ -1,0 +1,29 @@
+# ADR-013 - Provenance and rhizome-card feed
+
+Status: Accepted (living). Note-text canon is GraphNotes stores
+(PRODUCT_SPEC **3.40** / MASTER_CONTEXT), not git. ADR-007 is superseded.
+Accepted: 2026-09-03
+Refines: ADR-001 (Markdown remains the text canon)
+
+## Decision
+
+GraphNotes records **who did what to the published shared rhizome** as
+derived events, not as a second copy of Markdown.
+
+On publication of a proposal, the product writes `rhizome_events` rows:
+created or edited for each scoped path, and linked/unlinked for index
+edges that appeared or disappeared versus the previous shared revision.
+Each event stores actor UUID, proposal id, path, optional other path, and
+time. It does **not** store note bodies.
+
+`GET /api/shared/notes/{path}/feed` returns that feed for a rhizome card.
+Public JSON omits Git SHAs, branches and PR URLs.
+
+Git remains the canon of note text. Rebuild of the derived index does not
+require the feed; the feed is product history that git log cannot express
+(the commit is made by the app, not the author's UUID).
+
+TZ 2.94 leftover vs this ADR: the card page no longer auto-loads the feed.
+On-demand **«История правок»** reads `card_revisions` — last 30 snapshots
+and a unified diff. That table is edit history, not a second living canon.
+`rhizome_events` stay body-less for contribution counts.

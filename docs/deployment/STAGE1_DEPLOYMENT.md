@@ -129,7 +129,7 @@ an explicit home outside the deployment tree.
 
 Create `.env` directly on `rhizome`; never copy a developer secret file into Git.
 
-## Stable target verification
+## Production target verification
 
 Run these only after inspecting the target:
 

@@ -1,5 +1,22 @@
 .env
 .venv/
+
+# Local working notes stay on nord (stage journals, agent briefing)
+AGENTS.md
+README_FIRST.md
+START_*.md
+.cursor/*
+!.cursor/rules/
+!.cursor/rules/**/*.mdc
+docs/*
+!docs/deployment/
+!docs/product/
+!docs/context/
+!docs/decisions/
+!docs/stages/
+docs/stages/*
+!docs/stages/PRODUCT_TRACEABILITY.md
+
 __pycache__/
 *.py[cod]
 .pytest_cache/
@@ -8,7 +25,13 @@ __pycache__/
 *.egg-info/
 dist/
 build/
+backend/app/services/graphnotes-wikidiff2
+.cache/
 node_modules/
 .pnpm-store/
 frontend/dist/
+frontend/test-out/
 *.tsbuildinfo
+.secrets/
+tmp/
+output/

@@ -1,0 +1,25 @@
+.graphnotes-publisher { width: min(880px, 92vw); }
+.graphnotes-publisher .gn-file-list { max-height: 48vh; overflow: auto; margin: 12px 0; border: 1px solid var(--background-modifier-border); border-radius: 6px; }
+.graphnotes-publisher .gn-file { display: flex; align-items: center; gap: 10px; padding: 8px; overflow-wrap: anywhere; }
+.graphnotes-publisher .gn-file span:first-of-type { flex: 1; }
+.graphnotes-publisher input[type=checkbox] { flex-shrink: 0; }
+.graphnotes-publisher input[type=search], .graphnotes-publisher select { width: 100%; margin-bottom: 8px; }
+.graphnotes-publisher .gn-review-row { border-bottom: 1px solid var(--background-modifier-border); padding-bottom: 8px; }
+.graphnotes-publisher .gn-review-row > div { padding: 2px 8px; }
+.graphnotes-publisher .gn-review-row button { margin: 4px 8px; }
+.graphnotes-publisher .gn-muted { color: var(--text-muted); font-size: var(--font-small); }
+.graphnotes-publisher .gn-error { color: var(--text-error); }
+.graphnotes-publisher .gn-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; align-items: center; }
+.graphnotes-publisher .gn-link { padding: 6px; }
+.graphnotes-publisher .gn-working button, .graphnotes-publisher .gn-working input, .graphnotes-publisher .gn-working select { pointer-events: none; opacity: .65; }
+.graphnotes-publisher pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+.gn-sidebar { padding: 8px 12px; }
+.gn-sidebar .gn-muted { color: var(--text-muted); font-size: var(--font-small); }
+.gn-sidebar .gn-error { color: var(--text-error); }
+.gn-sidebar .gn-write { width: 100%; margin-top: 8px; }
+.gn-sidebar h5 { margin: 16px 0 4px; }
+.gn-sidebar .gn-offer-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0; }
+.gn-sidebar .gn-offer-list { margin-top: 8px; }
+.gn-sidebar .gn-offer { display: flex; align-items: flex-start; gap: 8px; padding: 8px 0; border-top: 1px solid var(--background-modifier-border); }
+.gn-sidebar .gn-offer-meta { flex: 1; overflow-wrap: anywhere; }
+.gn-sidebar .gn-offer button { flex-shrink: 0; }

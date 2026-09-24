@@ -1,6 +1,10 @@
 # GraphNotes - Environments
 
-Updated: 2026-08-17
+Updated: 2026-09-21
+
+Current implementation stage is Stage 8 (Graph Diff) on `feature/08-graph-diff`.
+Stages 0–7 are DONE and were validated on `rhizome-test`. Stage 9 production
+deployment to `rhizome` remains explicitly deferred.
 
 ## 1. nord - development workstation
 Platform and tools:
@@ -10,11 +14,15 @@ Platform and tools:
 - hostname: `nord`
 - Codex is installed locally
 - VS Code is used for review/manual edits
+- local editor-diff tests: native wikidiff2 C++ helper
+  (`backend/scripts/build_wikidiff2.sh`, `g++`, `libthai-dev` /
+  `libthai0`). Canon is that helper (owner 2026-09-21 / TZ 3.03 / 3.05);
+  `php-cli` / `php-wikidiff2` are not the editor-diff install path.
 
 Role:
 - primary source-code authoring environment
 - local Git repository
-- GitHub write access
+- Git write access to the canonical source remote
 - branches, commits and pushes
 - Codex runs against the local repository
 - user reviews/modifies code in VS Code
@@ -22,13 +30,14 @@ Role:
 Project location:
 - local repository: `~/Projects/graphnotes`
 
-## 2. rhizome-test - integration and test environment
+## 2. rhizome-test - development-runtime, integration and test environment
 Platform and address:
 - Debian 13 KVM
 - address: `172.16.13.14/24`
 - currently reachable from `nord` on the shared `172.16.13.0/24` network
 
 Role:
+- runtime environment for in-progress Stage development revisions
 - integration and deployment testing
 - database migration testing
 - Docker/Compose and end-to-end validation
@@ -38,11 +47,13 @@ Role:
 Rules:
 - every new feature revision must be tested here before deployment to `rhizome`
 - failures and destructive experiments belong here, not on `rhizome`
-- normally consume the GitHub repository read-only
-- clone, fetch and check out candidate revisions from GitHub
+- normally consume the canonical source remote read-only
+- clone, fetch and check out candidate revisions from that remote
 - do not treat this environment or its working tree as canonical source
 - use `compose.yaml` together with `deploy/compose.rhizome-test.yaml`
 - expose frontend to `nord` at `http://172.16.13.14:8080`
+- plugin test origin may use **HTTP** to that URL (explicit test exception);
+  production GraphNotes is HTTPS; do not disable TLS verification
 - keep backend bound only to `127.0.0.1:8000`
 - do not publish a PostgreSQL host port
 - local `compose.override.yaml` files are non-canonical and must not be required
@@ -65,7 +76,7 @@ It waits for the exact configured bind IP and force-recreates only the frontend
 container from an existing image. This preserves the restricted LAN binding;
 it does not widen exposure to `0.0.0.0`.
 
-## 3. rhizome - stable target
+## 3. rhizome - production
 Platform and known facts:
 - Debian 13
 - address: `172.16.13.13/24`
@@ -84,18 +95,29 @@ Observed by read-only inspection on 2026-08-17:
 - host Nginx is not installed or active
 
 Role:
-- stable target for approved builds
-- early user testing
+- production target for approved revisions
+- stable user-facing operation
 
 Current deployment decision:
 - do not deploy GraphNotes to `rhizome` yet
 - all feature integration and destructive testing remains on `rhizome-test`
-- stable deployment will happen only after a separate explicit owner decision
+- production deployment will happen only after a separate explicit owner decision
+- guest anti-scrape of published cards (TZ 2.80 / product §16) is a
+  **post-production** wave: do not enable it on `rhizome-test`
+- invite-only registration (TZ 2.85–2.87 / product §17) **is on
+  `rhizome-test`** (TZ 2.89). Do not deploy this wave to production
+  `rhizome` until a separate owner decision. Alembic `0020` attributes
+  existing accounts (except `efimov`) to `@efimov`.
+- TZ 2.94 card revisions (Alembic `0021`) and the TZ 2.98 invite map
+  are the same `rhizome-test` wave. Code Writer deploys the page to
+  `http://172.16.13.14:8080/#/invites` (admin). JSON is
+  `GET /api/graph/invites`, not a hash. Do not apply `0021` on
+  production `rhizome` until an approved revision.
 
 Rules:
 - deploy only a revision already validated on `rhizome-test`
 - Git repository access must be read-only
-- do not configure GitHub credentials capable of push
+- do not configure push-capable credentials on this host
 - receive only approved commits or tags
 - do not use this host for destructive experiments
 - do not use this host as the first environment for migrations or new feature code
@@ -110,14 +132,18 @@ Important:
 
 ```text
 nord
-  -> GitHub
+  -> canonical source remote
       -> rhizome-test
           -> approved revision
               -> rhizome
 ```
 
-Canonical public repository:
-`https://github.com/vgdnet/graphnotes`
+Owner 2026-09-21: GitHub **`https://github.com/vgdnet/rhizome`** is
+**private**. Not a public product, not knowledge ingest. Do not confuse
+with production host `rhizome`. `nord` `origin` for this tree is still
+`git@github.com:vgdnet/graphnotes.git` until the owner retargets.
+`rhizome-test` must clone/fetch the source remote with authenticated Git
+(SSH deploy key / token). Anonymous HTTPS to a private repo fails.
 
 Git is the primary delivery mechanism. SSH/rsync is permitted only as a fallback
 or bootstrap mechanism when Git delivery is not yet available. A fallback copy
@@ -127,4 +153,4 @@ revision on `rhizome-test` before promotion to `rhizome`.
 ## 5. Source-of-truth rule
 Once the local repository is established, source edits should normally originate from the Git working tree on `nord`, not from direct ad-hoc editing in `/opt/graphnotes` on Rhizome.
 
-The public GitHub repository and approved revision are the source of truth for delivery across environments. Promote the same reviewed commit or tag from `rhizome-test` to `rhizome`; do not rebuild an untracked variant directly on the stable target.
+The canonical source repository and approved revision are the source of truth for delivery across environments. Promote the same reviewed commit or tag from `rhizome-test` to `rhizome`; do not rebuild an untracked variant directly in production.

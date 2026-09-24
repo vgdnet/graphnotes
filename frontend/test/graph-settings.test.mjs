@@ -1,0 +1,172 @@
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { test } from "node:test";
+import { fileURLToPath } from "node:url";
+
+import {
+  GRAPH_SETTINGS_DEFAULTS,
+  GRAPH_SETTINGS_STORAGE_KEY,
+  buildVisibleGraph,
+  colorForNode,
+  cookieWritePair,
+  forceLayoutOptions,
+  isTagNodePath,
+  loadGraphSettings,
+  nodeMatchesGroupQuery,
+  parseGraphSettings,
+  persistGraphSettings,
+  readCookie,
+  stylesheetOptions,
+  tagNodePath,
+  wheelSensitivityValue,
+} from "../test-out/graphSettings.js";
+
+const graphViewSrc = readFileSync(
+  join(dirname(fileURLToPath(import.meta.url)), "../src/GraphView.tsx"),
+  "utf8",
+);
+const panelSrc = readFileSync(
+  join(dirname(fileURLToPath(import.meta.url)), "../src/GraphSettingsPanel.tsx"),
+  "utf8",
+);
+const pixiSrc = readFileSync(
+  join(dirname(fileURLToPath(import.meta.url)), "../src/PixiGraphView.tsx"),
+  "utf8",
+);
+
+const sample = {
+  nodes: [
+    { path: "hub.md", title: "Hub", tags: ["psy", "child"], isolated: false, unresolved: false },
+    { path: "lone.md", title: "Lone", tags: ["psy"], isolated: true, unresolved: false },
+    { path: "other.md", title: "Other", tags: [], isolated: false, unresolved: false },
+  ],
+  edges: [
+    { source: "hub.md", target: "other.md", type: "wikilink", unresolved: false },
+  ],
+};
+
+test("page graph has Obsidian-like settings panel, not a toolbar tag box", () => {
+  assert.match(graphViewSrc, /GraphSettingsPanel/);
+  assert.match(panelSrc, /Теги/);
+  assert.match(panelSrc, /Объекты без связей/);
+  assert.match(panelSrc, /Группировка/);
+  assert.match(panelSrc, /Новая группа/);
+  assert.match(panelSrc, /Направление связей/);
+  assert.match(panelSrc, /Порог исчезания текста/);
+  assert.match(panelSrc, /Размер узла/);
+  assert.match(panelSrc, /Толщина линий/);
+  assert.match(panelSrc, /Скорость зума/);
+  assert.match(panelSrc, /Сила притяжения/);
+  assert.match(panelSrc, /Сила отталкивания/);
+  assert.match(panelSrc, /Сила связи/);
+  assert.match(panelSrc, /Расстояние между узлами/);
+  assert.match(panelSrc, /Поисковый запрос/);
+  assert.match(panelSrc, /Запустить анимацию/);
+  assert.match(panelSrc, /role="switch"/);
+  assert.match(panelSrc, /Сбросить настройки/);
+  assert.equal(graphViewSrc.includes('placeholder="тег"'), false);
+  assert.match(pixiSrc, /GraphSettingsPanel/);
+  assert.match(pixiSrc, /seedCircularLayout/);
+});
+
+test("orphans toggle hides isolated notes", () => {
+  const shown = buildVisibleGraph(sample, { kind: "all", showTags: false, showOrphans: true });
+  const hidden = buildVisibleGraph(sample, { kind: "all", showTags: false, showOrphans: false });
+  assert.equal(shown.nodes.some((node) => node.path === "lone.md"), true);
+  assert.equal(hidden.nodes.some((node) => node.path === "lone.md"), false);
+  assert.equal(hidden.nodes.some((node) => node.path === "hub.md"), true);
+});
+
+test("tags toggle adds tag nodes and leaves notes in place", () => {
+  const off = buildVisibleGraph(sample, { kind: "all", showTags: false, showOrphans: true });
+  assert.equal(off.nodes.some((node) => isTagNodePath(node.path)), false);
+
+  const withTags = buildVisibleGraph(sample, { kind: "all", showTags: true, showOrphans: true });
+  const psy = tagNodePath("psy");
+  assert.equal(withTags.nodes.some((node) => node.path === psy), true);
+  assert.equal(withTags.nodes.find((node) => node.path === psy)?.kind, "tag");
+  assert.equal(withTags.edges.some((edge) => edge.type === "tag" && edge.target === psy), true);
+});
+
+test("group color last match wins and tag: query matches tags", () => {
+  const hub = sample.nodes[0];
+  assert.equal(nodeMatchesGroupQuery(hub, "tag:child"), true);
+  assert.equal(nodeMatchesGroupQuery(hub, "#psy"), true);
+  assert.equal(nodeMatchesGroupQuery(hub, "file:hub"), true);
+  assert.equal(nodeMatchesGroupQuery(hub, ""), false);
+  assert.equal(
+    colorForNode(hub, [
+      { id: "a", query: "hub", color: "#111111" },
+      { id: "b", query: "tag:child", color: "#ff0000" },
+    ]),
+    "#ff0000",
+  );
+});
+
+test("parse and persist keep slider defaults and clamp junk", () => {
+  const parsed = parseGraphSettings({
+    showTags: false,
+    showOrphans: false,
+    arrows: true,
+    textFade: 99,
+    nodeSize: 0.1,
+    groups: [{ id: "g1", query: "psy", color: "red" }, { query: "x", color: "#00ff00" }],
+  });
+  assert.equal(parsed.showTags, false);
+  assert.equal(parsed.showOrphans, false);
+  assert.equal(parsed.arrows, true);
+  assert.equal(parsed.textFade, 10);
+  assert.equal(parsed.nodeSize, 0.4);
+  assert.equal(parsed.zoomSpeed, GRAPH_SETTINGS_DEFAULTS.zoomSpeed);
+  assert.equal(parsed.centerForce, GRAPH_SETTINGS_DEFAULTS.centerForce);
+  assert.equal(parsed.groups[0].color, "#e93147");
+  assert.equal(parsed.groups[1].color, "#00ff00");
+
+  const memory = new Map();
+  const storage = {
+    getItem(key) { return memory.get(key) ?? null; },
+    setItem(key, value) { memory.set(key, value); },
+  };
+  persistGraphSettings(parsed, storage);
+  const loaded = loadGraphSettings(storage);
+  assert.equal(loaded.showTags, false);
+  assert.equal(memory.has(GRAPH_SETTINGS_STORAGE_KEY), true);
+});
+
+test("graph settings persist to storage and fall back to a cookie copy", () => {
+  const jar = new Map();
+  const cookies = {
+    get(name) { return jar.get(name) ?? null; },
+    set(name, value) { jar.set(name, value); },
+  };
+  persistGraphSettings({ ...GRAPH_SETTINGS_DEFAULTS, showTags: false, zoomSpeed: 3 }, undefined, cookies);
+  assert.equal(JSON.parse(jar.get(GRAPH_SETTINGS_STORAGE_KEY)).zoomSpeed, 3);
+
+  const fromCookie = loadGraphSettings({
+    getItem() { return null; },
+    setItem() {},
+  }, cookies);
+  assert.equal(fromCookie.showTags, false);
+  assert.equal(fromCookie.zoomSpeed, 3);
+
+  const encoded = cookieWritePair(GRAPH_SETTINGS_STORAGE_KEY, JSON.stringify({ arrows: true }));
+  assert.equal(readCookie(encoded, GRAPH_SETTINGS_STORAGE_KEY)?.includes("arrows"), true);
+});
+
+test("default display and forces match the previous fCoSE look", () => {
+  const display = stylesheetOptions(GRAPH_SETTINGS_DEFAULTS);
+  assert.equal(display.arrows, false);
+  assert.equal(display.labelScoreCutoff, 3);
+  assert.equal(display.minZoomedFontSize, 14);
+  assert.equal(display.nodeMin, 22);
+  assert.equal(display.nodeMax, 56);
+  assert.equal(display.edgeWidth, 1.6);
+
+  const forces = forceLayoutOptions(GRAPH_SETTINGS_DEFAULTS);
+  assert.equal(forces.nodeRepulsion, 4500);
+  assert.equal(Math.round(forces.idealEdgeLength), 79);
+  assert.equal(GRAPH_SETTINGS_DEFAULTS.zoomSpeed, 2);
+  assert.equal(wheelSensitivityValue(1), 0.25);
+  assert.equal(wheelSensitivityValue(2), 0.5);
+});

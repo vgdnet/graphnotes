@@ -1,0 +1,12 @@
+{
+  "name": "graphnotes-obsidian-leftover",
+  "version": "0.1.1",
+  "private": true,
+  "description": "Leftover-not-built. Live client is ../obsidian-card-merge/. Do not ship.",
+  "license": "AGPL-3.0-only",
+  "scripts": {
+    "build": "echo leftover-not-built: use ../obsidian-card-merge/ && exit 1",
+    "test": "echo leftover-not-built: use ../obsidian-card-merge/ && exit 1",
+    "check": "echo leftover-not-built: use ../obsidian-card-merge/ && exit 1"
+  }
+}

@@ -1,6 +1,7 @@
 # ADR-005 - GNU Affero General Public License v3.0
 
-Status: Accepted
+Status: Accepted (living). Card/note content to the shared rhizome is
+WTFPL (product contract, TZ 2.44), not a second root LICENSE.
 
 ## Context
 GraphNotes is open-source software and needs one canonical project license that

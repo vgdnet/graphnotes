@@ -1,6 +1,325 @@
 # GraphNotes - Stage Status
 
-Updated: 2026-08-17
+Updated: 2026-09-23
+
+**This overlay on rhizome-test (TZ 3.45, 2026-09-23):** mobile / narrow
+`#/card/{path}` shows the card only (local graph aside from **960px**).
+TZ **3.44** graph settings persist in `localStorage` and a cookie
+copy. TZ **3.43** `#/graph-test` uses the same cog and seeds a disk
+like Obsidian. Overlay frontend only
+(`compose.yaml` + `deploy/compose.rhizome-test.yaml`, LAN `:8080`).
+TZ **3.42** `#/graph` wheel zoom 2× + slider
+(1×–4×). TZ **3.41** tab **Тестовый граф** — Pixi.js + d3-force, same
+`GET /api/graph/*`. Canon `#/graph` stays Cytoscape/fCoSE. Not production.
+
+**Accepted product TZ 3.40** (owner 2026-09-21) plus **3.41**–**3.45**
+(owner 2026-09-22 / 2026-09-23). Ingest remains **3.37**
+plugin / no external git host. One canon: PRODUCT_SPEC **3.45** +
+MASTER_CONTEXT. Do not invent extra product. Do not treat Pixi as the
+rhizome canvas.
+
+**This wave (TZ hygiene, not a product bump):** owner superseded
+ADR-003 / ADR-007 / ADR-008 / ADR-009 (and ADR-004 remains superseded
+by ADR-006). Living ADRs: 001, 002, 005, 006, 010–018. Index:
+`docs/decisions/README.md` and MASTER §0. Agents read SPEC + MASTER,
+not the ADR pile. Do not invent grant-write-to-already-shared. Do not
+wipe the personal store. Do not deploy. Do not merge `main`.
+
+**This wave:** user cards always stay in `personal_uploads` (see graph,
+send edits). A card into the rhizome = proposal from that personal copy.
+Duplicate path in personal+shared is **not dirt** — do not delete
+personal rows because a shared file exists. Do not wipe
+`personal_uploads` on deploy (postgres volume stays; no
+`compose down -v`). OPEN, next stage (спросить product-editor): granted
+write to already-shared cards (one shared file, plugin PUT shared, no
+duplicate personal). Do not implement that this wave.
+
+**Plugin:** one live client, already united: `obsidian-card-merge/`.
+`obsidian-plugin/` (old Publisher) is leftover-not-built, not a second
+shipped package. Do not invent a third merge.
+
+**This session rhizome-test:** hard-align `/opt/graphnotes` to pushed
+`origin/feature/08-graph-diff` only. Discard host **source** overlay (no
+merge, no stash-apply, no mix of uncommitted test-host edits). Do not
+treat personal store rows as overlay dirt. Canonical compose:
+`compose.yaml` + `deploy/compose.rhizome-test.yaml`. Rebuild backend
+image so native C++ **wikidiff2** is in the running container. Not
+production.
+
+Owner 2026-09-21: GitHub **`https://github.com/vgdnet/rhizome`** is
+**private** (not a public product, not ingest). Do not confuse with
+production host `rhizome`. `nord` origin is still
+`vgdnet/graphnotes` until retarget. Test fetch of a private source
+remote must be authenticated.
+
+**Previously shipped on nord:** knowledge merge-out **gone** (no
+`create_branch` / `merge_branch` / `commit_markdown` / `reconcile_proposals`;
+`GitHubAppClient` cannot talk to GitHub). Approve/reject/rollback write
+`shared_notes` + proposal rows. Native C++ **wikidiff2** helper in the
+backend image (pinned Wikimedia 1.14.2 + CLI); PHP only off that path.
+Grants already in tree (`access_grants`, Admin «Доступы», empty ≠ whole
+queue) — not rewritten. Always-applied Cursor rule
+`.cursor/rules/technical-canon.mdc`. GitHub remains source-code delivery
+(ADR-006). Live plugin is `obsidian-card-merge/`. Not production.
+
+**Previous overlay on rhizome-test (TZ 3.40, superseded by hard-align):**
+graph settings panel chrome as Obsidian (folds, switches, slider numbers,
+round color, «Запустить анимацию») on
+`http://172.16.13.14:8080/#/graph`. Overlay frontend only. Not production.
+
+**Also on rhizome-test:** TZ **3.39** Obsidian-like
+graph settings on `#/graph`
+(`http://172.16.13.14:8080/#/graph`). Cog: Filters (Теги, Объекты без
+связей), groups (query + color), display (arrows, text fade, node size,
+link thickness), forces (center, repel, link, distance). Prefs in
+`localStorage` `graphnotes-graph-settings`. Card aside local graph has no
+panel. Overlay deploy frontend only. Not production.
+
+**Previously on rhizome-test:** TZ **3.38** cabinet
+`#/user` has **no** personal-git connect
+(`http://172.16.13.14:8080/#/user`). Four tabs: Личные данные, Договор
+автора, Obsidian, Пригласить пользователя. Removed «Свой git», the
+sentence «Личный git не связан — можно загрузить .md в локальный склад.»,
+and the connect/disconnect GitHub form. Website `.md`/ZIP upload stays
+off (TZ 2.96). Leftover `/api/personal/connect` is not called from the
+cabinet. Overlay deploy frontend only. Not production.
+
+**Also on rhizome-test:** TZ **3.36** guest chrome
+on `http://172.16.13.14:8080`. Graph page names the rhizome and says when
+load failed; health is not green on `/api/health` alone; `/users/me` 5xx
+keeps the session; search empty/searching/none/error; hanging-card local
+graph shows incoming wikilinks; about copy + «Стать автором»; title/og
+«Ризома психоанализа». Overlay deploy only. Not production.
+
+**Also on rhizome-test:** TZ **3.33** admin
+search on `#/admin` (`http://172.16.13.14:8080/#/admin`). «Пользователи»:
+search by nick; the row shows rights (role, author, active, grants).
+«Доступы»: search → list of cards (path/title, no bodies) and list of
+tags (click lists cards with that tag). Reuses `GET /api/admin/users?q=`
+(`grants[]` on each row) and `GET /api/admin/grants/catalog?q=&tag=`
+(`cards[]`). Overlay deploy only. Not production.
+
+Product model TZ **3.37** (living canon does not name an external git
+host; plugin writes the store) / **3.35** (plugin ingest; not Wikipedia
+as a product; leftover git host unfinished) is TZ-only, not this overlay.
+
+Product model TZ **3.34** (history + `/contribution`: who proposed which
+edit, volume; accepter is not the text author) **shipped** on this overlay
+2026-09-21: `GET /api/cards/{path}/revisions` names proposer, optional
+accepter, lines/bytes; `#/contribution` lists `edits[]` (path, volume,
+state). Alembic `0025`. Not production.
+
+**Also on rhizome-test:** TZ **3.32** Card Merge file-menu — show
+«Предложить в ризому» for `user` / unknown capabilities; hide only known
+editor/admin. Register `file-menu` + `editor-menu` at start of `onload`.
+Same `dist/graphnotes-card-merge` build (`main.js`, `manifest.json`,
+`styles.css`), do not overwrite `data.json`:
+`/home/efimov/obsidian/rhizome/.obsidian/plugins/graphnotes-card-merge/`
+and `/home/efimov/obsidian/guide_psy/.obsidian/plugins/graphnotes-card-merge/`
+— Reload app without saving in **both** vaults.
+
+**Also on rhizome-test:** TZ **3.31** — offer list / `GET /api/differ`
+is path+hash metadata from `personal_uploads` ↔ `shared_notes` (no bodies,
+no wikidiff2, no live remote API, no git copy-in on sidebar open or `#/differ`
+list). Plugin `user` calls `GET /api/differ?include_inbound=false`.
+`GET /api/proposals` queued mark does not reconcile an external git host. Leftover
+merge-out on `POST /proposals` does not block the offer.
+30s Notice stays as fallback.
+Same `dist/graphnotes-card-merge` build, do not overwrite `data.json`:
+`/home/efimov/obsidian/rhizome/.obsidian/plugins/graphnotes-card-merge/`
+and `/home/efimov/obsidian/guide_psy/.obsidian/plugins/graphnotes-card-merge/`
+— Reload app without saving in **both** vaults. In `guide_psy` leftover
+Publisher is still enabled; enable Card Merge and disable Publisher.
+
+**Also on rhizome-test:** TZ **3.30** grant
+canon: shared rhizome lives **apart** from every account; endpoints
+are per card; authorization is a DB grant `(user, path)` **or**
+`(user, tag)` **or** `(user, path_prefix)` (folder, e.g. `психология/`).
+**Empty grant = no extra shared write** (3.21 empty=whole-queue
+withdrawn); empty is not a corpus dump. Runtime this wave:
+`access_grants` table; admin-only CRUD
+`GET/POST /api/admin/grants`, `DELETE /api/admin/grants/{id}`,
+`GET /api/admin/grants/catalog`; website **Доступы** (TZ **3.33**:
+search by nick / card / tag / folder → lists, not one corpus select);
+queue/file/resolve filtered to the grant; plugin
+`GET/PUT /integrations/obsidian/v1/granted*`. Write-grant = right on
+**one** `shared_notes` file + vault client copy. Personal store =
+ungranted drafts only. Coarse `can_propose_to_rhizome` remains TZ
+**3.27** — `true` for role `user`, `false` for `editor`/`admin`.
+Plugin copy (same `dist/graphnotes-card-merge` build, do not overwrite
+`data.json`):
+`/home/efimov/obsidian/rhizome/.obsidian/plugins/graphnotes-card-merge/`
+and `/home/efimov/obsidian/guide_psy/.obsidian/plugins/graphnotes-card-merge/`
+— Reload app without saving in **both** vaults.
+`obsidian-plugin/` leftover catalog hides the same panel.
+
+Product model TZ **3.33** (admin `#/admin` nick search + rights on the
+user row; «Доступы» search lists of cards/tags) /
+**3.31** (offer list = store hashes, no git/bodies on
+open) /
+**3.30** (prefix grant; shared apart from every
+account; 3.24 narrowed; **empty grant ≠ whole queue**; one server file
+NOW; personal = ungranted drafts) /
+**3.27** (today's coarse offer flag) /
+**3.26** (one Obsidian plugin is canon; TZ 3.09
+withdrawn. Queue from API is an editor capability in the same client;
+without editor access the queue UI is off. Manual editor edit = same
+sync as a participant. Catalogs `obsidian-plugin/` +
+`obsidian-card-merge/` leftover catalog `obsidian-plugin/` until
+Publisher is retired; runtime is `obsidian-card-merge/` (sync + offer +
+queue). Later the same plugin shows/hides capabilities
+from the API when access is not all cards, only specific cards —
+fits TZ 3.24. Grant API and one plugin live in MASTER; ADR-007 is
+superseded. OPEN next stage: grant-write to already-shared) /
+3.25 (two operations after accept, not «Save &
+Resolve = POST shared»: (1) always write local vault; opening = that
+note; accept unfinished if write fails; (2) update rhizome store from
+editor account only if local ≠ store; skip if same. Queue = others’
+edits through editor. GraphNotes stays the canonical shared store;
+Differ stays the shared write gate; editor vault is not a second
+rhizome. **Shipped:** vault write and open first; POST
+`/resolve` second if local ≠ store) /
+3.24 (narrowed 3.30: card API + grant, not rights-on-the-card;
+four access classes incl. paid content maker;
+global RBAC stays coarse gate; Differ stays shared write gate;
+one plugin is canon TZ 3.26, two catalogs leftover; needs ADR) /
+3.22 (editor two stores: personal Publisher +
+shared via queue/Card Merge; 2+ editors parallel; 3.25: two ops —
+always local vault; store update from editor account only if local ≠
+store) /
+3.21 (editor rights by card tags, §5.6.5; **empty = whole queue
+withdrawn by 3.28 / 3.30**; prefix is a third grant kind) /
+3.19 (after accept write the merged card
+into the local vault and open it as a normal note; TZ 3.25: that
+write is operation 1 and mandatory; store update is operation 2 only
+if local ≠ store) /
+3.18 (Save & Resolve accepts one card;
+siblings stay in the queue) /
+3.16 (Card Merge: one card in work) /
+3.15 (one Settings checkbox/toggle: «Получать
+уведомления об изменениях в карточках, которые вы правили») /
+3.13 (inbound Differ: watched published paths;
+`#/differ` take shared updates into personal store) /
+3.12 (Card Merge queue is metadata-only;
+accept-into-work caches both card sides; do not equate Save & Resolve
+with POST /proposals/{id}/resolve — TZ 3.25; that POST first is debt) /
+3.11 (author Differ is `#/differ` propose-only,
+not a merge; plugin does not list personal Differ) /
+3.10 (editor-access queue = website
+`#/queue` New tab) /
+3.09 leftover withdrawn by 3.26 (two plugin
+packages are not the lock; two catalogs leftover until one package
+ships) /
+3.08 (`#/queue` one open proposal, one open card,
+decide buttons under each card) /
+3.07 leftover withdrawn by 3.11 for authors (no vault pair download
+from personal Differ) /
+3.06 leftover withdrawn by 3.11 (author plugin does not list Differ) /
+3.05 (one canon for all agents; leftover runtime is
+unfinished code, not a second spec) /
+3.03 (editor accept engine is wikidiff2; ADR-018
+amendment: native C++ helper shipped 2026-09-21; `php-cli` /
+`php-wikidiff2` leave this path only) /
+3.02 (Wikipedia-style two-column table; Differ author list stays path checkboxes) /
+3.01 leftover withdrawn by 3.11 (Differ is chrome tab `#/differ` again) /
+3.00 (no «Мой граф» / `/my_graph`; `/graph` defaults to
+the rhizome) /
+2.99 (product TZ → technical TZ → rhizome-test) /
+2.98 (invite map page `http://172.16.13.14:8080/#/invites`;
+Code Writer deploys to rhizome-test) /
+2.97 / **2.98** (person card `#/users/{login}` only; public UUID is 404
+and is omitted from card JSON) /
+2.96 (no website `.md`/ZIP upload, including Differ;
+plugin writes the store; last 30 versions for rollback; index / graph /
+Differ use latest only) /
+2.95 (public person card for guests and signed-in:
+inviter + personal/proposed store counts + proposed edit bytes) /
+2.94 (card «История правок» on demand: last 30
+revisions with who / when / what changed; Alembic `0021`; do not fetch
+history with the card body) /
+2.93 (website Markdown editor **off**: no
+«Отредактировать карточку»; reverse download / reverse sync leftover
+re-enables it; taking another participant’s card into one’s rhizome later
+unlocks edit + reverse sync for those cards) /
+2.92 (invite line on current-user cards: person,
+contribution, settings, admin row; data still 2.89 cutover to `@efimov`) /
+2.89 (2.85–2.87 shipped on `rhizome-test`: any account
+may invite by email link; no Register tab; person card «Приглашен …
+от @user»; existing accounts except `efimov` attributed to `@efimov`;
+Alembic `0020`; production `rhizome` not deployed) /
+2.83 (Elasticsearch iteration starts **only after the
+first approved rhizome production deploy**; SQL `/search` until then) /
+2.90 (plugin queues vault edits; write on sidebar «Передать правки на
+сервер» / ribbon / file close / idle minutes; first dump «Отправить
+все правки»; contribution marks on the site are leftover UI) /
+2.81 (login-by-mail on the Login tab) / 2.79 (2.72–2.76 shipped) / §6.3.4: Obsidian plugin **API** writes
+vault files into the owner's existing personal store (`personal_uploads` +
+`personal_assets`). Desktop plugin **GraphNotes Publisher** lives in
+`obsidian-plugin/` (TZ 2.69). Token is a personal API key (TZ 2.75):
+`gnp_` + `secrets.token_urlsafe(32)`, stored in `/user` and copied into
+plugin `data.json`; SHA-256 for Bearer lookup only. Compromise → revoke
+the key; restore → new key from the cabinet. TZ 2.73–2.74: access log on
+`/user` (who / IP / which token), ~6 months in the working DB, ceiling
+~1 year; separate logs DB later. Alembic `0017`–`0019`. Batch transfer
+with versions and idempotency. Git connection does **not** disable
+plugin write (TZ 2.62). Shared rhizome and Differ unchanged.
+Technical contract: `MASTER_CONTEXT` §12.1. TZ 2.67: white-noise personal ingest (ZIP / `.md` /
+in-app / git copy-in) is rejected and the account is locked; admins
+are mailed when SMTP is on; already-indexed notes stay. TZ 2.66: missing wikilink / unresolved node opens a card
+page without a body — guests see «карточки пока нет»; signed-in authors
+create a personal card from that page or the hover hint on the missing
+link. TZ 2.65: personal ZIP ingest accepts **10 000** files
+(`GRAPHNOTES_INGEST_MAX_FILES`; over → HTTP 400 `archive has too many files`).
+~120-file vaults succeed. Zip-bomb size/ratio guards unchanged (2 MiB / 8 MiB /
+256 KiB). TZ 2.64: publisher navigation — graph node and wikilink open
+the card; card page has a side local graph; guests read published shared
+cards. TZ 2.63 (historical): local stores hold `.md`
+(`personal_uploads`, `shared_notes`); PostgreSQL `note_index` is the
+search/graph index, not a second canon. Personal export (if any) is
+from the store, not synthesized from the index. Shared is not a product ZIP.
+TZ 2.62: personal working copy is always the GraphNotes local
+store. **Superseded as ingest canon by TZ 3.35 / 3.37** (plugin writes
+the store). Leftover: personal git **bind** API (no copy-in). Differ
+compares the local store to the shared rhizome. Copy-in on git
+connect/refresh/rebuild/webhook/poller is **closed** vs 3.37 (leftover
+functions remain unused). In-app save of the website editor is **off** (TZ 2.93); plugin / leftover ZIP /
+stay on the local store (no write-back to git).
+Disconnect keeps copied files (no `drop_personal_layer`). Alembic
+`0017_obsidian_integration` (tokens, transfers, personal assets,
+`object_version`). ADR-008 is **superseded**; hosted store is canon.
+Website in-app edit is **off** until reverse download / reverse sync
+(`#/card/personal:{path}` remains preview; hash may be `personal%3A`).
+TZ 2.54: `[[wikilink]]` inherits the open card layer (personal stays personal).
+Published shared working copies live in `shared_notes` (TZ 2.63 historical
+copy-in leftover; ingest is plugin, TZ **3.35** / **3.37**).
+Current implementation stage is Stage 8. Differ outbound is
+personal → published shared; TZ 3.13 inbound is shipped on `#/differ`
+(`GET /api/differ` + `POST /differ/inbound/{path}/accept`). ADR-009 is
+**superseded** (living Differ is store path/hash in MASTER / SPEC 3.40).
+TZ 2.59 shipped the 2.58 sitemap in the hash UI: `/card` start card
+(Admin → Установка); `/card/{path}` card + stack 2.56; `/queue` editor
+queue; `/user` settings; `/offer` my proposals; `/graph` shared canvas;
+`#/invites` invite map (`http://172.16.13.14:8080/#/invites`; Code Writer
+deploys; currently admin, TZ 2.98); `/search` SQL card
+search; no `/my_graph` (TZ 3.00); `/contribution`
+Мой вклад; Differ on `#/differ` (TZ 3.11 / 3.13: propose outbound and
+take inbound into personal; not a merge editor);
+`/offer` is my proposals; editor accept Wikipedia table
+via wikidiff2 (TZ 3.03); `/` → `/graph`. Unified auth:
+login / forgot; reset by login or email; letter to stored
+inbox only. Elasticsearch (ADR-015 / TZ 2.83) starts **only after the
+first approved rhizome production deploy**; not this branch; SQL search
+until then. Payment gateway remains later.
+TZ 2.89 shipped 2.85–2.87 on `rhizome-test`: `POST /api/invites`,
+`POST /api/auth/invite/accept`, `POST /api/auth/register` → 410;
+`/user` invite form; `#/users/{login}` attribution line.
+TZ 2.13: Settings at `/user` hold required email, optional contacts, git
+and author contract. TZ 2.14: start page is `/graph`. TZ 2.64: guests open published
+shared cards from the graph and wikilinks; personal / queue / comments
+still need a session. Rhizome access levels (ADR-016 / TZ 2.41): paid level =
+closed slice; entitlements and payment gateway remain later. SMTP login is
+ADR-017 (TZ 2.37 / 2.40 / 2.45 / 2.52 / 2.59). Vsepsy identity stays a
+separate ADR.
 
 ## Stage 0 - Infrastructure
 Status: DONE
@@ -15,13 +334,14 @@ Status: DONE
 Branch: `feature/01-project-bootstrap`
 Primary authoring environment: `nord`
 Target integration environment: `rhizome-test` (`172.16.13.14`)
-Stable deployment target: `rhizome`
+Production deployment target: `rhizome`
 Canonical repository: `https://github.com/vgdnet/graphnotes` (public)
-Delivery path: `nord -> GitHub -> rhizome-test -> approved revision -> rhizome`
+Delivery path: `nord -> canonical source remote -> rhizome-test -> approved revision -> rhizome`
 
 Accepted project decisions:
-- canonical license: GNU Affero General Public License v3.0 (`AGPL-3.0`)
-- GitHub is the canonical source delivery mechanism
+- canonical software license: GNU Affero General Public License v3.0 (`AGPL-3.0`)
+- card/note content offered to the shared rhizome: WTFPL (TZ 2.44; no second LICENSE file)
+- the public git remote is the canonical source delivery mechanism
 - `rhizome-test` normally consumes candidate revisions read-only
 - `rhizome` Git access is read-only and must not use push-capable credentials
 - SSH/rsync is fallback/bootstrap only
@@ -39,7 +359,7 @@ Implemented locally on `nord` as of 2026-08-17:
 - loopback-only host bindings for frontend/backend and no PostgreSQL host port
 - Git-primary deployment instructions, SSH/rsync fallback instructions and an Nginx location example
 - canonical AGPL-3.0 license and license ADR
-- GitHub delivery/read-only production security ADR
+- production git-readonly delivery security ADR
 - canonical `rhizome-test` Compose overlay with configurable frontend LAN bind
 - versioned `rhizome-test` boot unit that waits for the configured LAN address
   and repairs the frontend port bindings without exposing `0.0.0.0`
@@ -47,7 +367,7 @@ Implemented locally on `nord` as of 2026-08-17:
 Stage 1 integration results on `rhizome-test`:
 - initial integration revision: `5c9ec1b`
 - boot-race fix tested revision: `aad3eb0766b6952e9d9c87cbf2d98c0f5812fbad`
-- PASS: clean clone from the public GitHub repository
+- PASS: clean clone from the public source remote
 - PASS: canonical public remote
   `https://github.com/vgdnet/graphnotes.git` resolves the tested Stage 1 branch
 - PASS: `docker compose config` validated
@@ -77,7 +397,7 @@ Stage 1 integration results on `rhizome-test`:
 - PASS: after reboot backend remained unavailable through
   `172.16.13.14:8000`; PostgreSQL still had no published host port
 
-Deferred until stable deployment is explicitly requested:
+Deferred until production deployment is explicitly requested:
 - reconcile the old uncommitted `/opt/graphnotes` worktree without overwriting
   unmanaged files
 - configure read-only Git access with no push-capable credentials
@@ -93,10 +413,10 @@ Resolved integration issue:
 
 Completion decision:
 - the owner accepted revision `0152937` after integration validation
-- stable deployment to `rhizome` (`172.16.13.13`) is explicitly deferred; the
+- production deployment to `rhizome` (`172.16.13.13`) is explicitly deferred; the
   host was inventoried read-only and remains untouched
 - Stage 1 is complete as a reproducible bootstrap validated on
-  `rhizome-test`; eventual stable deployment retains the normal promotion gate
+  `rhizome-test`; eventual production deployment retains the normal promotion gate
 
 Expected components:
 - FastAPI skeleton
@@ -114,21 +434,306 @@ Expected components:
 Explicitly out of scope:
 - registration/login implementation
 - Telegram
-- GitHub product integration
+- leftover git-host product integration
 - Markdown import/parser
 - graph engine/UI
 - PR/merge workflow
 
 ## Stage 2 - Password Authentication
-Status: NEXT / PLANNED
+Status: DONE
 Branch: `feature/02-password-auth`
+Completed: 2026-08-19
+Tested integration revision: `c883b2fcae62cc5ceb5e85467399dacc45857e26`
+Primary authoring environment: `nord`
+Target integration environment: `rhizome-test` (`172.16.13.14`)
 
-MVP auth:
-- username/password
-- secure password hashing
-- access/refresh auth or secure session equivalent
-- `/me`
-- logout
-- user/editor/admin roles
+MVP auth delivered:
+- username/password with Argon2
+- opaque PostgreSQL-backed sessions
+- HttpOnly SameSite cookies; Secure disabled only for HTTP `rhizome-test`
+- `/me`, logout, registration always `user`
+- global hierarchical roles `user < editor < admin`
+- admin user list, role/blocking UI, bootstrap CLI, last-admin protection
+- audit events without authentication secrets
 
 Telegram remains future scope.
+
+Observed on `rhizome-test` at the tested revision:
+- PASS: backend tests (`8 passed`)
+- PASS: frontend production build
+- PASS: Compose config; frontend LAN `8080`; backend loopback-only; no PostgreSQL host port
+- PASS: health, db health, frontend from `nord`
+- PASS: Alembic `0002_password_auth` upgrade/downgrade/re-upgrade
+- PASS: live register/login/logout/RBAC API flow from `nord`
+- leftover `0003_pre_git_notes` was downgraded and removed; notes table is gone
+
+See `docs/stages/STAGE2_COMPLETED.md`.
+
+Production deployment to `rhizome` remains deferred.
+
+## Stage 3 - historical git connector
+Status: DONE (leftover vs TZ **3.35** / **3.37**: ingest is the plugin)
+Branch: `feature/03-github-integration`
+Completed: 2026-08-19
+Tested integration revision: `d8322d425cd97b157d6f7214f2e859e227f8fd87`
+
+Owner-verified on `rhizome-test`: shared `vgdnet/rhizome` connected with
+content; a user bound `vgdnet/guide_psy`. See `docs/stages/STAGE3_COMPLETED.md`.
+
+## Stage 4 - Take from shared / ZIP fallback
+Status: DONE
+Branch: `feature/04-markdown-import`
+Completed: 2026-08-19
+Tested integration revision: `003638259909c42eedb4fb4973dd9a45d1f0a3e1`
+
+Owner-verified take-from-shared on `rhizome-test`: accepted 1, personal commit
+`fbabd7529700` on `vgdnet/guide_psy`. See `docs/stages/STAGE4_COMPLETED.md`.
+
+## Stage 5 - Revisioned Graph Engine
+Status: DONE
+Branch: `feature/05-graph-engine`
+Completed: 2026-08-19
+Tested integration revision: `eb09f5a4436a578edccd1a03d1c77668782fb4d8`
+
+Owner-verified derived graph on `rhizome-test` (shared nodes/edges visible;
+refresh after git/Obsidian push). See `docs/stages/STAGE5_COMPLETED.md` and
+`docs/deployment/STAGE5_INDEX.md`.
+
+## Stage 6 - Shared graph + personal overlay
+Status: DONE
+Branch: `feature/06-personal-graph`
+Completed: 2026-08-19
+Tested integration revision: `1dd29caa65607b0edbe5396a7dc7cdcdd5d6a641`
+
+Cytoscape shared graph and overlay of the caller's git onto the shared rhizome.
+Public graph without login; overlay requires a session. See
+`docs/stages/STAGE6_COMPLETED.md`.
+
+## Stage 7 - Differ, ZIP download, editor queue
+Status: DONE
+Branch: `feature/07-publish-merge`
+Completed: 2026-08-19
+Tested integration revision: `b362aa8382777465bc5da8f90663f93e0b7c4b72`
+
+ADR-009 (historical): Differ listed personal → published shared;
+download was a ZIP. **Superseded:** ZIP of published shared is not
+product; living Differ is store path/hash (SPEC 3.40 / MASTER).
+Editors accept, reject, return or roll back. See `docs/stages/STAGE7_COMPLETED.md`.
+
+## Stage 8 - Proposal Graph Diff
+Status: CURRENT
+Branch: `feature/08-graph-diff`
+
+Graph Diff is the structural view of Differ / a proposal. Follow
+`docs/stages/STAGE8.md`. Do not introduce a second comparison model.
+
+TZ 2.5–2.7 on this branch (not merged to main; production
+`rhizome` not deployed):
+- TZ 2.5–2.6 revision: `fd9d1c314ad344819ff12e7d92d8524d8c5a2c53`
+- TZ 2.7 contribution stats revision: `a56b2da908cb0584de5c275ae4332bd22f38fa1c`
+- ADR-010 author legal contract revision: `959c624b040adc58b5dd28d84276618d8fe911a1`
+  checkbox / accept step, stored who+when, withdraw and re-accept;
+  contributing gated; Alembic `0007_author_contract`
+- backend tests: 43 passed (`cd backend && .venv/bin/python3 -m pytest -q`)
+- frontend production build: PASS (`pnpm build`, tsc included)
+- `rhizome-test` (`172.16.13.14`): `compose.yaml` +
+  `deploy/compose.rhizome-test.yaml` `up -d --build`
+- ADR-010 author contract: `959c624` Alembic `0007_author_contract`
+- ADR-011 closed corpus: `4b6636d` Alembic `0008_closed_paths`
+- ADR-012 in-app user cards API: `94b1f73`; UI + feed/comments: `5a924e5ab7c265e366d06b81c9e51c8fae5e75ae`
+- ADR-013 rhizome-card feed: Alembic `0009_rhizome_events` (no note bodies)
+- ADR-014 commenter: Alembic `0010_note_comments` (pending until editor approves)
+- live on `rhizome-test` 2026-09-05: SHA `2b38dfcbe25100566b24f0a06baa199375fee086`,
+  Alembic `0011_user_settings`
+- TZ 2.13–2.15: Settings (required email, contacts, git, author contract);
+  start page is the shared graph; guests search without card bodies;
+  signed-in users open a separate read-only Markdown card page from the
+  bottom node link (`GET /search`, `GET /cards/{path}`)
+- TZ 2.27: graph layout is fCoSE; Differ pulls connected personal git HEAD
+  on open (and via poller/webhook)
+- TZ 2.28: git XOR upload (409); overlay/search from server uploads
+  without git; ZIP Cyrillic names + 2 MiB ingest (nginx 8m); in-process
+  personal-git poller (`GRAPHNOTES_PERSONAL_SYNC_INTERVAL_SECONDS`)
+- TZ 2.29: nested `.md` git trees + unique basename / title wikilinks (NFC)
+- TZ 2.30 / 2.32: folder-note `GraphNotes/GraphNotes.md`; gitlink trees
+  walked and `[[GraphNotes]]` must not stay `unresolved:GraphNotes`
+- TZ 2.31 / ADR-016: rhizome access levels (not a consumer role); paid
+  level = closed slice in the same personal git; entitlements later
+- TZ 2.41: ADR-016 UX refinement (spec only): «два графа» = shared + own
+  overlay on one graph; «ризома автора» = closed-slice view after
+  entitlement; «загрузить» = open in GraphNotes, not ZIP/clone. Open
+  personal as a public catalog is not accepted. No application code in
+  this revision.
+- TZ 2.33: one rebuild refreshes shared + every personal git layer;
+  search, cards and comments follow the current trees
+- TZ 2.34: admin set-password and in-app audit log on the
+  Administration tab (`POST /admin/users/{id}/password`,
+  `GET /admin/audit`); leftover ADR polish vs ADR-002 is paperwork
+- TZ 2.35: Graph Diff cache, parse/time incompleteness, direction change,
+  accessible legend; `STAGE8_COMPLETED.md` records test evidence. Stage 8
+  stays CURRENT until owner/Observer close. Production `rhizome` not deployed
+- TZ 2.36: graph layer names — «ваша часть ризомы» is the overlay
+  stitch/intersection with the shared page; «ваша личная ризома» is
+  `GET /api/graph/personal`. Automatic from the index; cards and search
+  (`layer=overlay|personal`) follow that visibility. Live on
+  `rhizome-test` 2026-09-05: SHA `4d6fbd62821c86ee841dd38cde7758046cd42f2c`.
+  Production `rhizome` not deployed
+- TZ 2.37: installation SMTP (ADR-017) and a three-screen admin
+  (users / journal / operator). Alembic `0012_smtp_admin`. Live on
+  `rhizome-test` 2026-09-05: SHA `97596f8066dd1f23390f5dc5a44ecde3ec016ecb`.
+  Production `rhizome` not deployed
+- TZ 2.38–2.40: queue tabs New / In progress / Rejected; `#/card/`
+  role-scoped search with layer on hits; password reset + queue notify
+  (SMTP 587 STARTTLS). Named in PRODUCT_SPEC 2.50 / MASTER_CONTEXT
+- TZ 2.42–2.46: git XOR hint in Settings (not Differ); connected-git
+  Settings chrome (no connect field, leftover remote link, disconnect wipes
+  personal index); author-contract copy `2026-09-05` (WTFPL cards,
+  AGPL-3.0 software); SMTP register opens no session until confirm
+  (`#/auth/confirm?token=`); Differ chrome **Отличающиеся**
+- TZ 2.56: same path in shared + personal → stacked cards on
+  `/card/{path}` (rhizome top, personal bottom, even if identical);
+  Differ is an offer under the stack, not the landing. Semantic compare
+  later + ADR; author Differ line-by-line UX is still open. TZ 3.02–3.03
+  closed Wikipedia-style line compare for **editor accept** only; the
+  engine is wikidiff2 C++ (ADR-018 amendment), not `difflib`. Native
+  helper shipped 2026-09-21 (pinned 1.14.2); `php-cli` / `php-wikidiff2`
+  leave the editor-diff path only.
+- TZ 2.55: one `/card/{path}` router; no layer folders. Own note is
+  editable, published is not. Hash `personal:` is transitional.
+- TZ 2.54: `[[wikilink]]` inherits the open card layer (personal stays
+  personal). Layer-prefixed hashes remain the live `#/card/personal:`
+  route until 2.55; do not collapse wiki clicks onto unprefixed shared.
+- TZ 2.47–2.50 / **2.53**: card `#/card/{path}` is **view-first**.
+  Own personal `#/card/personal:{path}` (hash `personal%3A…` is the same
+  class) mounts the thin editor and shows «Отредактировать карточку» only
+  for the owner with accepted contract. Broken before this ship: editor
+  not wired on the card page, so those URLs looked shared/read-only.
+  Widget is **MDXEditor** (rich + source); read stays GraphNotes preview.
+  Save is `PUT /api/personal/notes/{path}` (`source` + `expected_hash`;
+  git XOR upload; author contract; no new path; 409 stale). In-app saves
+  record `rhizome_events` (`edited` / `linked` / `unlinked`) with
+  `owner_user_id`; `GET /api/cards/{path}/feed` is the card history
+  (no bodies; personal events do not mix into the shared feed for the
+  same path). Shared / others' personal / proposal stay read-only on
+  `GET /api/cards/{path}`. Guest `#/card/` = published hits, no body.
+  Default search `layer=visible` (overlay remains graph stitch).
+  ADR-011 `closed_paths` still omit Differ, lock stub, hide body from
+  other users. ADR-008 is **superseded** (hosted store is canon).
+  Live on `rhizome-test` 2026-09-07: running tree on git SHA
+  `3fb9be9db1a9719acab1990a6f0d4bd9b74e2163` (Alembic
+  `0015_installation_public_url`; personal editor + `0014_personal_edit_events`
+  shipped in the deployed working tree, not in that commit). Production
+  `rhizome` not deployed
+- TZ 2.51: graph canvas is **весь граф** or **локальный граф** (depth 1–4,
+  «Показать всё»). Overlay local center for overlay-only notes is
+  `personal:{path}`; unknown `center` does not fall back to the first
+  shared page. «К графу» from a card focuses that node on the whole graph
+  (TZ 3.00: «К графу» stays on the rhizome canvas). Named in
+  PRODUCT_SPEC 2.51 / MASTER_CONTEXT
+- TZ 2.58: owner sitemap (spec only, no app code). `/user` = settings;
+  `/offer` = my proposals; `/queue` = editor queue; `/contribution` = Мой вклад.
+  TZ 3.00 removed `/my_graph`. 2.57 person-card /
+  combined-queue inferences withdrawn.
+- TZ 2.61–2.63 shipped on this branch (superseded as ingest by TZ **3.35** /
+  **3.37**): leftover git copy `.md` into
+  `personal_uploads` / `shared_notes`; Differ and cards read the copies;
+  disconnect keeps the personal store; search/graph still use `note_index`.
+  Leftover: personal git bind API is 410. Knowledge merge-out
+  (`reconcile_proposals` / `merge_branch`) is **deleted**. Closed this wave: GET Differ /
+  repository status / graph / search / cards / comments / contributions /
+  `POST /proposals` / `POST /index/rebuild` / webhook live disk / poller
+  do not copy-in or live-pull GitHub. Admin «Подключить общую ризому» gone.
+  Live on `rhizome-test` 2026-09-11: SHA `10586d6fd178cbbcba58d8306225eb238e80e9b0`,
+  Alembic `0016_shared_notes`. Production `rhizome` not deployed.
+- TZ 2.65: personal ZIP file-count cap is **10 000** (was 100). A ~120-file
+  archive succeeds; over the cap is HTTP 400 `archive has too many files`.
+  Compressed ZIP 2 MiB, unpacked 8 MiB, per-file 256 KiB and zip-bomb
+  ratio/symlink/encryption guards stay. Named in PRODUCT_SPEC 2.65 /
+  `functional.md` §6.3 / `STAGE4_INGEST.md`. Production `rhizome` not deployed.
+- TZ 2.67: white-noise gate on personal ingest. Combined heuristics
+  (invalid UTF-8 / NUL, high Shannon entropy, few letters, control soup;
+  fences/frontmatter stripped for soft scores). HTTP 400
+  `content is not Markdown notes`; `is_active=false` + session drop;
+  audit `ingest.white_noise_lock`; admin mail via installation SMTP /
+  public URL. Mail failure does not undo the lock. Last admin is not
+  locked. Production `rhizome` not deployed.
+- TZ 2.68–2.76 shipped on this branch (TZ 2.79): Obsidian plugin API
+  (`/integrations/obsidian/v1`) writes only the token owner's personal
+  store; Settings tab **Obsidian** stores the `gnp_` key and the user
+  copies it into the plugin (TZ 2.75); access history ~6 months / max
+  ~1 year and revoke (TZ 2.73–2.74). Separate logs DB is leftover.
+  Desktop GraphNotes Publisher in `obsidian-plugin/`
+  persists the same token in `data.json`. Connected git does not
+  disable write. Plugin white-noise is 415 `unsupported_type` without
+  account lock. Alembic `0017`–`0019`. Production `rhizome` not
+  deployed.
+- TZ 2.82: Publisher client copies eligible vault edits after save
+  (`autoSync` default on). No card-picker required. First dump is
+  «Отправить всё». HTTP prefix unchanged. §6.6.3 marks/topics UI is
+  leftover (accepted model, not this delivery). Production `rhizome`
+  not deployed.
+- TZ 2.78: `#/about` is credits (rhizome — Мария Надршина,
+  GraphNotes — Юрий Ефимов, Telegram links). Footer is the About
+  button only — no WTFPL/AGPL one-liner, no author-contract control.
+  Contract copy stays in Settings. Production `rhizome` not deployed.
+- TZ 2.81: Login tab «Войти письмом» (SMTP on) uses the same
+  `POST /auth/email/request` / `verify` contour as confirm/reset;
+  identifier is login or email; letter only to the stored inbox;
+  `#/auth/login-code?token=` still opens a session. Plugin manifest
+  credits Юрий Ефимов. Cabinet hint: token default 30 days, max 90.
+  Production `rhizome` not deployed.
+- leftover: TZ 3.25 canon persist is two ops after accept (always local
+  vault write; rhizome store update from editor account only if local ≠
+  store; skip if same); Card Merge runtime
+  still POSTs `/proposals/{id}/resolve` first then may write the vault —
+  unfinished code, not a second spec;
+- leftover: Card Merge leftover vs 3.11 (`OpenMergeModal` / command
+  «Сравнить и слить карточку» / `GET /api/differ`) — other agents own
+  the plugin; do not treat site `#/differ` leftover as still open;
+- leftover: TZ **3.26** one plugin is canon (3.09 withdrawn); runtime
+  is `obsidian-card-merge/`; `obsidian-plugin/` leftover — do not merge
+  trees;
+- leftover: TZ 3.24 per-card display API + card rights accepted as
+  canon in MASTER (3.30 grant); **not** a new ADR this wave; ADR-007
+  is superseded;
+  do not treat `GET /api/cards/{path}` as that model;
+- leftover: TZ 2.88 / §6.6.3 rhizome marks / topic suggestions remain
+  site leftover (plugin later was withdrawn by 3.11 for authors);
+- leftover: rollback from card history (TZ 2.96) — store last 30
+  versions; restore-from-history is not this wave;
+- leftover: open the invite map (`#/invites`) wider than admin;
+- leftover: TZ 2.83 / ADR-015 Elasticsearch iteration starts **only after
+  the first approved rhizome production deploy**; not this branch; SQL
+  `/search` until then; §6.5.3 questions 1–9 unanswered; do not add ES
+  to Compose;
+- leftover: ADR-003 / ADR-007 / ADR-008 / ADR-009 **superseded**
+  2026-09-21 (owner); living product is PRODUCT_SPEC **3.40** +
+  MASTER_CONTEXT; GitHub is ADR-006 source delivery only;
+  index `docs/decisions/README.md`;
+- leftover: native wikidiff2 C++ helper **shipped** 2026-09-21; PHP
+  is not the install path (TZ 3.03 / 3.05 / ADR-018);
+- leftover: Bearer calls on `/differ` and `/proposals` do not append
+  `integration_token_access` (only `/integrations/obsidian/v1` does);
+  `/differ` and `/proposals` errors stay `{detail}`, not the v1
+  `{error:{code,…}}` envelope;
+- leftover: `AGENTS.md` is gitignored — clones of the source remote do not have
+  it; one canon is `PRODUCT_SPEC` **3.40** + `MASTER_CONTEXT` (TZ 3.05);
+  living ADRs via MASTER §0, not the superseded pile;
+- leftover: promote invite wave (TZ 2.85–2.87 / 2.89) to production
+  `rhizome` only after a separate owner decision;
+  TZ 2.80 / §16 guest anti-scrape (one IP → many unique
+  published cards) **after** first `rhizome` production deploy; do not
+  ship on `rhizome-test`; ADR before code;
+  separate **logs database** vs working PostgreSQL (TZ 2.74
+  keeps `integration_token_access` in the working DB with prune);
+  rhizome access-level **entitlement tables** / payment
+  gateway (ADR-016 + TZ 2.41 name the model and the «ризома автора»
+  view; `closed_paths` already exists — not this slice); vsepsy
+  identity §6.1.3 (needs ADR); ZIP of published shared is not product
+  (ADR-009 superseded);
+  formal ADR for TZ 2.18 admin password/audit vs ADR-002 (screen
+  already expanded in 2.37); Elasticsearch remains ADR-015, scheduled
+  **only after the first approved rhizome production deploy** (TZ 2.83;
+  not this branch; SQL search until then). Do not
+  ship payment gateway, SMTP redesign, vsepsy, ES or Celery in the
+  current implementer wave

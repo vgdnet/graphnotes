@@ -1,0 +1,1481 @@
+from __future__ import annotations
+
+from datetime import UTC, datetime
+import hashlib
+import uuid
+
+from sqlalchemy import delete, func, or_, select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.core.config import settings
+from app.models.comment import NoteComment
+from app.models.github import PersonalRepository, SharedRepository
+from app.models.graph import NoteIndex, NoteLayer, NoteLink, NoteTag, SyncJob, SyncJobStatus, Tag
+from app.models.personal_upload import PersonalUpload
+from app.models.shared_note import SharedNote
+from app.services.audit import record_audit_event
+from app.services.closed_corpus import all_closed_keys, matches_closed
+from app.services.github import GitHubAppClient, GitHubAppError
+from app.services.markdown import (
+    ParsedLink,
+    ParsedNote,
+    notes_lookup_map,
+    parse_markdown,
+    resolve_link_target,
+)
+from app.services.repository import SHARED_SINGLETON_ID
+
+
+class IndexerError(Exception):
+    def __init__(self, status_code: int, detail: str) -> None:
+        super().__init__(detail)
+        self.status_code = status_code
+        self.detail = detail
+
+
+def index_status_label(observed_sha: str | None, indexed_sha: str | None, index_status: str) -> str:
+    if not observed_sha:
+        return "empty"
+    if index_status == "error":
+        return "error"
+    if indexed_sha == observed_sha:
+        return "current"
+    return "updating"
+
+
+def _index_key(layer: str, owner_id: uuid.UUID | None, proposal_id: uuid.UUID | None, revision: str, path: str) -> str:
+    owner = str(owner_id) if owner_id else "shared"
+    proposal = str(proposal_id) if proposal_id else "-"
+    return f"{layer}:{owner}:{proposal}:{revision}:{path}"
+
+
+def _slug(path: str) -> str:
+    name = path.rsplit("/", 1)[-1]
+    if name.lower().endswith(".md"):
+        name = name[:-3]
+    return name[:180] or "note"
+
+
+async def _running_rebuild(
+    database: AsyncSession, layer: str, owner_id: uuid.UUID | None
+) -> SyncJob | None:
+    return await database.scalar(
+        select(SyncJob).where(
+            SyncJob.layer == layer,
+            SyncJob.owner_user_id == owner_id,
+            SyncJob.status == SyncJobStatus.RUNNING.value,
+        )
+    )
+
+
+async def rebuild_shared(
+    database: AsyncSession,
+    client: GitHubAppClient | None = None,
+    *,
+    actor_user_id: uuid.UUID | None = None,
+    paths: set[str] | None = None,
+) -> SyncJob:
+    """Rebuild the shared index from shared_notes. No GitHub copy-in."""
+    del client, paths
+    from app.services.repository import ensure_local_shared
+
+    if await _running_rebuild(database, NoteLayer.SHARED.value, None):
+        raise IndexerError(409, "index rebuild is already running")
+    row = await ensure_local_shared(database)
+    revision = await reindex_shared_store(database)
+    row = await database.get(SharedRepository, SHARED_SINGLETON_ID) or row
+    row.observed_sha = revision
+    row.indexed_sha = revision
+    row.index_status = "current"
+    row.sync_status = "ready"
+    row.last_error = None
+    job = SyncJob(
+        layer=NoteLayer.SHARED.value,
+        owner_user_id=None,
+        revision_sha=revision,
+        status=SyncJobStatus.READY.value,
+        started_at=datetime.now(UTC),
+        finished_at=datetime.now(UTC),
+    )
+    database.add(job)
+    record_audit_event(
+        database,
+        action="index.rebuild",
+        actor_user_id=actor_user_id,
+        details={"layer": NoteLayer.SHARED.value, "mode": "store"},
+    )
+    await _prune_sync_jobs(database)
+    await database.commit()
+    await database.refresh(job)
+    return job
+
+
+async def rebuild_personal(
+    database: AsyncSession,
+    user_id: uuid.UUID,
+    client: GitHubAppClient | None = None,
+    *,
+    actor_user_id: uuid.UUID | None = None,
+    paths: set[str] | None = None,
+) -> SyncJob:
+    """Rebuild the personal index from personal_uploads. No GitHub copy-in."""
+    del client, paths
+    if await _running_rebuild(database, NoteLayer.PERSONAL.value, user_id):
+        raise IndexerError(409, "index rebuild is already running")
+    revision = await reindex_personal_uploads(database, user_id)
+    job = SyncJob(
+        layer=NoteLayer.PERSONAL.value,
+        owner_user_id=user_id,
+        revision_sha=revision,
+        status=SyncJobStatus.READY.value,
+        started_at=datetime.now(UTC),
+        finished_at=datetime.now(UTC),
+    )
+    database.add(job)
+    record_audit_event(
+        database,
+        action="index.rebuild",
+        actor_user_id=actor_user_id or user_id,
+        details={"layer": NoteLayer.PERSONAL.value, "mode": "store"},
+    )
+    await _prune_sync_jobs(database)
+    await database.commit()
+    await database.refresh(job)
+    return job
+
+
+async def ensure_shared_current(database: AsyncSession, client: GitHubAppClient | None = None) -> None:
+    del client
+    row = await database.get(SharedRepository, SHARED_SINGLETON_ID)
+    if row is None:
+        return
+    await reindex_shared_store(database)
+
+
+async def ensure_personal_current(
+    database: AsyncSession,
+    user_id: uuid.UUID,
+    client: GitHubAppClient | None = None,
+) -> None:
+    del client
+    await reindex_personal_uploads(database, user_id)
+
+
+async def rebuild_derived_indexes(
+    database: AsyncSession,
+    client: GitHubAppClient | None = None,
+    *,
+    actor_user_id: uuid.UUID | None = None,
+) -> None:
+    """Rebuild derived indexes from the local Markdown stores. No GitHub."""
+    del client
+    from app.services.repository import ensure_local_shared
+
+    await ensure_local_shared(database)
+    await reindex_shared_store(database)
+    user_ids = set(await database.scalars(select(PersonalUpload.user_id).distinct()))
+    user_ids.update(list(await database.scalars(select(PersonalRepository.user_id))))
+    for user_id in user_ids:
+        await reindex_personal_uploads(database, user_id)
+    await purge_comments_for_missing_notes(database)
+    record_audit_event(
+        database,
+        action="index.rebuild",
+        actor_user_id=actor_user_id,
+        details={"layer": "derived", "mode": "store"},
+    )
+    await database.commit()
+
+
+async def purge_comments_for_missing_notes(database: AsyncSession) -> int:
+    """Drop comments whose path is gone from every current derived store."""
+    live: set[str] = set()
+    shared = await database.get(SharedRepository, SHARED_SINGLETON_ID)
+    if shared is not None and shared.indexed_sha:
+        live.update(
+            (
+                await database.scalars(
+                    select(NoteIndex.path).where(
+                        NoteIndex.layer == NoteLayer.SHARED.value,
+                        NoteIndex.owner_user_id.is_(None),
+                        NoteIndex.revision_sha == shared.indexed_sha,
+                    )
+                )
+            ).all()
+        )
+    bindings = (await database.scalars(select(PersonalRepository))).all()
+    for row in bindings:
+        if not row.indexed_sha:
+            continue
+        live.update(
+            (
+                await database.scalars(
+                    select(NoteIndex.path).where(
+                        NoteIndex.layer == NoteLayer.PERSONAL.value,
+                        NoteIndex.owner_user_id == row.user_id,
+                        NoteIndex.revision_sha == row.indexed_sha,
+                    )
+                )
+            ).all()
+        )
+    live.update((await database.scalars(select(PersonalUpload.path))).all())
+    live.update((await database.scalars(select(SharedNote.path))).all())
+    if not live:
+        return 0
+    result = await database.execute(
+        delete(NoteComment).where(NoteComment.path.notin_(live))
+    )
+    return int(result.rowcount or 0)
+
+
+async def _store_texts_for_layer(
+    database: AsyncSession,
+    layer: str,
+    owner_id: uuid.UUID | None,
+) -> dict[str, str] | None:
+    """Latest working-copy Markdown for index/graph (TZ 2.63 / 2.96).
+
+    Never reads ``card_revisions``. None = leftover GitHub.
+    """
+    if layer == NoteLayer.SHARED.value:
+        rows = list((await database.scalars(select(SharedNote))).all())
+        return {row.path: row.body for row in rows}
+    if layer == NoteLayer.PERSONAL.value and owner_id is not None:
+        rows = list(
+            (
+                await database.scalars(
+                    select(PersonalUpload).where(PersonalUpload.user_id == owner_id)
+                )
+            ).all()
+        )
+        return {row.path: row.body for row in rows}
+    return {}
+
+
+async def _rebuild(
+    database: AsyncSession,
+    client: GitHubAppClient,
+    *,
+    layer: str,
+    owner_id: uuid.UUID | None,
+    owner: str,
+    name: str,
+    revision: str,
+    binding: SharedRepository | PersonalRepository,
+    actor_user_id: uuid.UUID | None,
+    paths: set[str] | None,
+) -> SyncJob:
+    running = await database.scalar(
+        select(SyncJob).where(
+            SyncJob.layer == layer,
+            SyncJob.owner_user_id == owner_id,
+            SyncJob.status == SyncJobStatus.RUNNING.value,
+        )
+    )
+    if running is not None:
+        raise IndexerError(409, "index rebuild is already running")
+
+    job = SyncJob(
+        layer=layer,
+        owner_user_id=owner_id,
+        revision_sha=revision,
+        status=SyncJobStatus.RUNNING.value,
+        started_at=datetime.now(UTC),
+    )
+    database.add(job)
+    binding.index_status = "updating"
+    await database.flush()
+
+    try:
+        del client, owner, name
+        texts = await _store_texts_for_layer(database, layer, owner_id)
+        listed = sorted(texts)
+        listed_set = set(listed)
+        if len(listed) > settings.index_max_notes:
+            raise IndexerError(400, "too many notes to index")
+        existing = (
+            await database.scalars(
+                select(NoteIndex).where(
+                    NoteIndex.layer == layer,
+                    NoteIndex.owner_user_id == owner_id,
+                )
+            )
+        ).all()
+        if paths is None:
+            fetch_paths = listed_set
+        else:
+            existing_paths = {note.path for note in existing}
+            fetch_paths = (listed_set & paths) | (listed_set - existing_paths)
+        parsed: dict[str, ParsedNote] = {}
+        for path in sorted(fetch_paths):
+            parsed[path] = parse_markdown(path, texts[path])
+        unchanged = [note for note in existing if note.path in listed_set and note.path not in fetch_paths]
+        parsed.update(await _parsed_from_existing(database, unchanged))
+        await _delete_layer(database, layer, owner_id)
+        lookup = notes_lookup_map(
+            set(parsed),
+            {path: (note.title, *note.aliases) for path, note in parsed.items()},
+        )
+        records: dict[str, NoteIndex] = {}
+        for path, note in parsed.items():
+            record = NoteIndex(
+                index_key=_index_key(layer, owner_id, None, revision, path),
+                layer=layer,
+                revision_sha=revision,
+                path=path,
+                slug=_slug(path),
+                title=note.title,
+                content_hash=note.content_hash,
+                owner_user_id=owner_id,
+            )
+            database.add(record)
+            records[path] = record
+        await database.flush()
+        for path, note in parsed.items():
+            record = records[path]
+            for tag_name in dict.fromkeys(note.tags):
+                normalized = tag_name.casefold()[:80]
+                tag = await database.scalar(select(Tag).where(Tag.name == normalized))
+                if tag is None:
+                    tag = Tag(name=normalized)
+                    database.add(tag)
+                    await database.flush()
+                database.add(NoteTag(note_id=record.id, tag_id=tag.id))
+            seen_links: set[tuple[str, str]] = set()
+            for link in note.typed_links:
+                key = (link.kind, link.target)
+                if key in seen_links:
+                    continue
+                seen_links.add(key)
+                target_path = resolve_link_target(link.target, lookup)
+                target_note = records.get(target_path) if target_path else None
+                database.add(
+                    NoteLink(
+                        source_id=record.id,
+                        target_id=None if target_note is None else target_note.id,
+                        target_raw=link.target[:200],
+                        link_type=link.kind,
+                        unresolved=target_note is None,
+                    )
+                )
+        binding.indexed_sha = revision
+        binding.index_status = "current"
+        job.status = SyncJobStatus.READY.value
+        job.finished_at = datetime.now(UTC)
+        await purge_comments_for_missing_notes(database)
+        record_audit_event(
+            database,
+            action="index.rebuild",
+            actor_user_id=actor_user_id,
+            details={
+                "layer": layer,
+                "notes": len(parsed),
+                "mode": "full" if paths is None else "incremental",
+            },
+        )
+        await _prune_sync_jobs(database)
+        await database.commit()
+        await database.refresh(job)
+        return job
+    except (GitHubAppError, IndexerError, ValueError) as exc:
+        await database.rollback()
+        binding = await _reload_binding(database, layer, owner_id, binding)
+        binding.index_status = "error"
+        failed = SyncJob(
+            layer=layer,
+            owner_user_id=owner_id,
+            revision_sha=revision,
+            status=SyncJobStatus.ERROR.value,
+            error=str(exc)[:255],
+            started_at=datetime.now(UTC),
+            finished_at=datetime.now(UTC),
+        )
+        database.add(failed)
+        await database.commit()
+        if isinstance(exc, IndexerError):
+            raise
+        if isinstance(exc, GitHubAppError):
+            raise IndexerError(502, exc.message) from exc
+        raise IndexerError(500, "index rebuild failed") from exc
+
+
+async def _reload_binding(
+    database: AsyncSession,
+    layer: str,
+    owner_id: uuid.UUID | None,
+    binding: SharedRepository | PersonalRepository,
+) -> SharedRepository | PersonalRepository:
+    if layer == NoteLayer.SHARED.value:
+        row = await database.get(SharedRepository, SHARED_SINGLETON_ID)
+        return row or binding
+    row = await database.scalar(
+        select(PersonalRepository).where(PersonalRepository.user_id == owner_id)
+    )
+    return row or binding
+
+
+async def drop_personal_layer(database: AsyncSession, owner_id: uuid.UUID) -> None:
+    await _delete_layer(database, NoteLayer.PERSONAL.value, owner_id)
+
+
+async def _delete_layer(database: AsyncSession, layer: str, owner_id: uuid.UUID | None) -> None:
+    ids = select(NoteIndex.id).where(
+        NoteIndex.layer == layer,
+        NoteIndex.owner_user_id == owner_id,
+    )
+    await database.execute(delete(NoteLink).where(NoteLink.source_id.in_(ids)))
+    await database.execute(delete(NoteLink).where(NoteLink.target_id.in_(ids)))
+    await database.execute(delete(NoteTag).where(NoteTag.note_id.in_(ids)))
+    await database.execute(
+        delete(NoteIndex).where(NoteIndex.layer == layer, NoteIndex.owner_user_id == owner_id)
+    )
+
+
+async def reindex_personal_uploads(database: AsyncSession, user_id: uuid.UUID) -> str:
+    """Rebuild the personal derived index from the local store only.
+
+    Must not copy git into personal_uploads: that would overwrite plugin writes.
+    Indexes the latest working copy per path (TZ 2.96). Do not index
+    ``card_revisions`` — those are rollback snapshots, not the graph.
+    """
+    if await _running_rebuild(database, NoteLayer.PERSONAL.value, user_id):
+        raise IndexerError(409, "index rebuild is already running")
+    texts = await _store_texts_for_layer(database, NoteLayer.PERSONAL.value, user_id) or {}
+    digest = hashlib.sha256()
+    for path in sorted(texts):
+        digest.update(path.encode("utf-8"))
+        digest.update(b"\0")
+        digest.update(hashlib.sha256(texts[path].encode("utf-8")).digest())
+    revision = digest.hexdigest()[:40] if texts else "empty"
+    parsed = {path: parse_markdown(path, text) for path, text in texts.items()}
+    lookup = notes_lookup_map(set(parsed))
+    await _delete_layer(database, NoteLayer.PERSONAL.value, user_id)
+    records: dict[str, NoteIndex] = {}
+    for path, note in parsed.items():
+        record = NoteIndex(
+            index_key=_index_key(NoteLayer.PERSONAL.value, user_id, None, revision, path),
+            layer=NoteLayer.PERSONAL.value,
+            revision_sha=revision,
+            path=path,
+            slug=_slug(path),
+            title=note.title,
+            content_hash=note.content_hash,
+            owner_user_id=user_id,
+        )
+        database.add(record)
+        records[path] = record
+    await database.flush()
+    for path, note in parsed.items():
+        record = records[path]
+        for tag_name in dict.fromkeys(note.tags):
+            normalized = tag_name.casefold()[:80]
+            tag = await database.scalar(select(Tag).where(Tag.name == normalized))
+            if tag is None:
+                tag = Tag(name=normalized)
+                database.add(tag)
+                await database.flush()
+            database.add(NoteTag(note_id=record.id, tag_id=tag.id))
+        seen_links: set[tuple[str, str]] = set()
+        for link in note.typed_links:
+            key = (link.kind, link.target)
+            if key in seen_links:
+                continue
+            seen_links.add(key)
+            target_path = resolve_link_target(link.target, lookup)
+            target_note = records.get(target_path) if target_path else None
+            database.add(
+                NoteLink(
+                    source_id=record.id,
+                    target_id=None if target_note is None else target_note.id,
+                    target_raw=link.target[:200],
+                    link_type=link.kind,
+                    unresolved=target_note is None,
+                )
+            )
+    binding = await database.scalar(
+        select(PersonalRepository).where(PersonalRepository.user_id == user_id)
+    )
+    if binding is not None:
+        binding.observed_sha = revision
+        binding.indexed_sha = revision
+        binding.index_status = "current"
+        binding.sync_status = "ready"
+        binding.last_error = None
+    await database.flush()
+    return revision
+
+
+async def reindex_shared_store(database: AsyncSession) -> str:
+    """Rebuild the shared derived index from shared_notes only.
+
+    Must not copy git into shared_notes: that would overwrite granted writes.
+    """
+    from app.services.repository import ensure_local_shared
+
+    if await _running_rebuild(database, NoteLayer.SHARED.value, None):
+        raise IndexerError(409, "index rebuild is already running")
+    await ensure_local_shared(database)
+    texts = await _store_texts_for_layer(database, NoteLayer.SHARED.value, None) or {}
+    digest = hashlib.sha256()
+    for path in sorted(texts):
+        digest.update(path.encode("utf-8"))
+        digest.update(b"\0")
+        digest.update(hashlib.sha256(texts[path].encode("utf-8")).digest())
+    revision = digest.hexdigest()[:40] if texts else "empty"
+    parsed = {path: parse_markdown(path, text) for path, text in texts.items()}
+    lookup = notes_lookup_map(set(parsed))
+    await _delete_layer(database, NoteLayer.SHARED.value, None)
+    records: dict[str, NoteIndex] = {}
+    for path, note in parsed.items():
+        record = NoteIndex(
+            index_key=_index_key(NoteLayer.SHARED.value, None, None, revision, path),
+            layer=NoteLayer.SHARED.value,
+            revision_sha=revision,
+            path=path,
+            slug=_slug(path),
+            title=note.title,
+            content_hash=note.content_hash,
+            owner_user_id=None,
+        )
+        database.add(record)
+        records[path] = record
+    await database.flush()
+    for path, note in parsed.items():
+        record = records[path]
+        for tag_name in dict.fromkeys(note.tags):
+            normalized = tag_name.casefold()[:80]
+            tag = await database.scalar(select(Tag).where(Tag.name == normalized))
+            if tag is None:
+                tag = Tag(name=normalized)
+                database.add(tag)
+                await database.flush()
+            database.add(NoteTag(note_id=record.id, tag_id=tag.id))
+        seen_links: set[tuple[str, str]] = set()
+        for link in note.typed_links:
+            key = (link.kind, link.target)
+            if key in seen_links:
+                continue
+            seen_links.add(key)
+            target_path = resolve_link_target(link.target, lookup)
+            target_note = records.get(target_path) if target_path else None
+            database.add(
+                NoteLink(
+                    source_id=record.id,
+                    target_id=None if target_note is None else target_note.id,
+                    target_raw=link.target[:200],
+                    link_type=link.kind,
+                    unresolved=target_note is None,
+                )
+            )
+    binding = await database.get(SharedRepository, SHARED_SINGLETON_ID)
+    if binding is not None:
+        binding.observed_sha = revision
+        binding.indexed_sha = revision
+        binding.index_status = "current"
+        binding.sync_status = "ready"
+        binding.last_error = None
+    await database.flush()
+    return revision
+
+
+async def _prune_sync_jobs(database: AsyncSession) -> None:
+    total = await database.scalar(select(func.count()).select_from(SyncJob))
+    if total is None or total <= 20:
+        return
+    oldest = (
+        await database.scalars(
+            select(SyncJob.id).order_by(SyncJob.created_at.asc()).limit(total - 20)
+        )
+    ).all()
+    if oldest:
+        await database.execute(delete(SyncJob).where(SyncJob.id.in_(oldest)))
+
+
+async def load_graph(
+    database: AsyncSession,
+    *,
+    layer: str,
+    owner_id: uuid.UUID | None,
+    revision: str,
+    limit: int,
+    center: str | None,
+    depth: int,
+    extra_centers: list[str] | None = None,
+) -> dict[str, object]:
+    empty = {
+        "layer": layer,
+        "index_status": "empty",
+        "truncated": False,
+        "nodes": [],
+        "edges": [],
+    }
+    layer_filter = (
+        NoteIndex.layer == layer,
+        NoteIndex.owner_user_id == owner_id,
+        NoteIndex.revision_sha == revision,
+    )
+    seeds = [item for item in [center, *(extra_centers or [])] if item]
+    if seeds:
+        rows = (
+            await database.execute(
+                select(NoteIndex.id, NoteIndex.path).where(*layer_filter).order_by(NoteIndex.path)
+            )
+        ).all()
+        if not rows:
+            return empty
+        by_id_path = {note_id: path for note_id, path in rows}
+        path_ids = {path: note_id for note_id, path in rows}
+        links = (
+            await database.scalars(select(NoteLink).where(NoteLink.source_id.in_(by_id_path)))
+        ).all()
+        adjacency: dict[str, set[str]] = {path: set() for path in path_ids}
+        for link in links:
+            source_path = by_id_path.get(link.source_id)
+            target_path = by_id_path.get(link.target_id) if link.target_id else None
+            if source_path and target_path:
+                adjacency[source_path].add(target_path)
+                adjacency[target_path].add(source_path)
+        expanded = list(
+            dict.fromkeys(
+                key for seed in seeds for key in graph_center_keys(seed) if key in path_ids
+            )
+        )
+        if not expanded:
+            incoming = _incoming_paths_for_unresolved(seeds, by_id_path, links)
+            if not incoming:
+                return {**empty, "index_status": "current", "truncated": bool(rows)}
+            if depth <= 1:
+                chosen = set(incoming[:limit])
+            else:
+                chosen = _bounded_from_seeds(
+                    list(path_ids), adjacency, incoming, depth - 1, limit
+                )
+            truncated = len(rows) > len(chosen)
+        else:
+            chosen = _bounded_from_seeds(list(path_ids), adjacency, expanded, depth, limit)
+            truncated = len(rows) > len(chosen)
+        if not chosen:
+            return {**empty, "index_status": "current", "truncated": truncated}
+        chosen_notes = list(
+            (
+                await database.scalars(
+                    select(NoteIndex).where(*layer_filter, NoteIndex.path.in_(chosen)).order_by(NoteIndex.path)
+                )
+            ).all()
+        )
+        chosen_ids = {note.id for note in chosen_notes}
+        chosen_links = [link for link in links if link.source_id in chosen_ids]
+        return await _graph_payload(database, layer, chosen_notes, chosen_links, truncated)
+
+    window = (
+        await database.scalars(select(NoteIndex).where(*layer_filter).order_by(NoteIndex.path).limit(limit + 1))
+    ).all()
+    truncated = len(window) > limit
+    chosen_notes = window[:limit]
+    if not chosen_notes:
+        return empty
+    chosen_ids = {note.id for note in chosen_notes}
+    links = (
+        await database.scalars(
+            select(NoteLink).where(
+                or_(NoteLink.source_id.in_(chosen_ids), NoteLink.target_id.in_(chosen_ids))
+            )
+        )
+    ).all()
+    chosen_notes, chosen_ids = await _include_resolved_targets(
+        database, layer_filter, list(chosen_notes), chosen_ids, links
+    )
+    links = (
+        await database.scalars(
+            select(NoteLink).where(
+                or_(NoteLink.source_id.in_(chosen_ids), NoteLink.target_id.in_(chosen_ids))
+            )
+        )
+    ).all()
+    return await _graph_payload(database, layer, chosen_notes, links, truncated)
+
+
+async def load_overlay(
+    database: AsyncSession,
+    *,
+    owner_id: uuid.UUID,
+    personal_revision: str,
+    shared_payload: dict[str, object],
+    overlay_limit: int,
+) -> dict[str, object]:
+    shared_nodes = list(shared_payload.get("nodes") or [])
+    shared_edges = list(shared_payload.get("edges") or [])
+    visible = {node["path"] for node in shared_nodes if not node.get("unresolved")}
+    shared_rows = (
+        await database.scalars(
+            select(NoteIndex).where(
+                NoteIndex.layer == NoteLayer.SHARED.value,
+                NoteIndex.owner_user_id.is_(None),
+            )
+        )
+    ).all()
+    lookup = notes_lookup_map({note.path for note in shared_rows})
+    personal_notes = (
+        await database.scalars(
+            select(NoteIndex).where(
+                NoteIndex.layer == NoteLayer.PERSONAL.value,
+                NoteIndex.owner_user_id == owner_id,
+                NoteIndex.revision_sha == personal_revision,
+            )
+        )
+    ).all()
+    personal_by_path = {note.path: note for note in personal_notes}
+    personal_ids = {note.id for note in personal_notes}
+    tag_map = await _tags_for(database, personal_ids)
+    links: list[NoteLink] = []
+    if personal_ids:
+        links = list(
+            (
+                await database.scalars(select(NoteLink).where(NoteLink.source_id.in_(personal_ids)))
+            ).all()
+        )
+    personal_by_id = {note.id: note for note in personal_notes}
+
+    nodes: list[dict[str, object]] = []
+    for node in shared_nodes:
+        path = str(node["path"])
+        origin = "both" if (not node.get("unresolved") and path in personal_by_path) else node.get("origin", "shared")
+        nodes.append({**node, "origin": origin})
+    edges: list[dict[str, object]] = [{**edge, "origin": edge.get("origin", "shared")} for edge in shared_edges]
+    existing_edges = {(edge["source"], edge["target"], edge["type"]) for edge in edges}
+
+    added_personal: set[str] = set()
+    overlay_truncated = False
+    overlay_count = 0
+
+    def add_personal_node(note: NoteIndex) -> str:
+        if note.path in visible:
+            return note.path
+        key = f"personal:{note.path}"
+        if key not in added_personal:
+            nodes.append(
+                {
+                    "path": key,
+                    "title": note.title,
+                    "tags": tag_map.get(note.id, []),
+                    "isolated": False,
+                    "unresolved": False,
+                    "origin": "personal",
+                }
+            )
+            added_personal.add(key)
+        return key
+
+    for link in links:
+        source = personal_by_id.get(link.source_id)
+        if source is None:
+            continue
+        target_path = resolve_link_target(link.target_raw, lookup)
+        if target_path is None or target_path not in visible:
+            continue
+        if overlay_count >= overlay_limit:
+            overlay_truncated = True
+            break
+        source_id = add_personal_node(source)
+        key = (source_id, target_path, link.link_type)
+        if key in existing_edges:
+            continue
+        edges.append(
+            {
+                "source": source_id,
+                "target": target_path,
+                "type": link.link_type,
+                "unresolved": False,
+                "origin": "overlay",
+            }
+        )
+        existing_edges.add(key)
+        overlay_count += 1
+
+    status = str(shared_payload.get("index_status") or "current")
+    return {
+        "layer": "overlay",
+        "index_status": status,
+        "truncated": bool(shared_payload.get("truncated")) or overlay_truncated,
+        "nodes": nodes,
+        "edges": edges,
+    }
+
+
+async def load_overlay_from_uploads(
+    database: AsyncSession,
+    *,
+    owner_id: uuid.UUID,
+    shared_payload: dict[str, object],
+    overlay_limit: int,
+) -> dict[str, object]:
+    """Overlay «ваша часть ризомы» from server uploads when git is not connected."""
+    shared_nodes = list(shared_payload.get("nodes") or [])
+    shared_edges = list(shared_payload.get("edges") or [])
+    visible = {node["path"] for node in shared_nodes if not node.get("unresolved")}
+    shared_rows = (
+        await database.scalars(
+            select(NoteIndex).where(
+                NoteIndex.layer == NoteLayer.SHARED.value,
+                NoteIndex.owner_user_id.is_(None),
+            )
+        )
+    ).all()
+    lookup = notes_lookup_map({note.path for note in shared_rows})
+    uploads = list(
+        (
+            await database.scalars(
+                select(PersonalUpload)
+                .where(PersonalUpload.user_id == owner_id)
+                .order_by(PersonalUpload.path)
+            )
+        ).all()
+    )
+    personal_by_path = {row.path: row for row in uploads}
+    nodes: list[dict[str, object]] = []
+    for node in shared_nodes:
+        path = str(node["path"])
+        origin = (
+            "both"
+            if (not node.get("unresolved") and path in personal_by_path)
+            else node.get("origin", "shared")
+        )
+        nodes.append({**node, "origin": origin})
+    edges: list[dict[str, object]] = [{**edge, "origin": edge.get("origin", "shared")} for edge in shared_edges]
+    existing_edges = {(edge["source"], edge["target"], edge["type"]) for edge in edges}
+    added_personal: set[str] = set()
+    overlay_truncated = False
+    overlay_count = 0
+
+    def add_personal_node(path: str, title: str, tags: list[str]) -> str:
+        if path in visible:
+            return path
+        key = f"personal:{path}"
+        if key not in added_personal:
+            nodes.append(
+                {
+                    "path": key,
+                    "title": title,
+                    "tags": tags,
+                    "isolated": False,
+                    "unresolved": False,
+                    "origin": "personal",
+                }
+            )
+            added_personal.add(key)
+        return key
+
+    for row in uploads:
+        parsed = parse_markdown(row.path, row.body)
+        for raw in parsed.links:
+            target_path = resolve_link_target(raw, lookup)
+            if target_path is None or target_path not in visible:
+                continue
+            if overlay_count >= overlay_limit:
+                overlay_truncated = True
+                break
+            source_id = add_personal_node(row.path, parsed.title, list(parsed.tags))
+            key = (source_id, target_path, "wikilink")
+            if key in existing_edges:
+                continue
+            edges.append(
+                {
+                    "source": source_id,
+                    "target": target_path,
+                    "type": "wikilink",
+                    "unresolved": False,
+                    "origin": "overlay",
+                }
+            )
+            existing_edges.add(key)
+            overlay_count += 1
+        if overlay_truncated:
+            break
+
+    status = str(shared_payload.get("index_status") or "current")
+    return {
+        "layer": "overlay",
+        "index_status": status,
+        "truncated": bool(shared_payload.get("truncated")) or overlay_truncated,
+        "nodes": nodes,
+        "edges": edges,
+    }
+
+
+async def overlay_personal_paths(
+    database: AsyncSession,
+    *,
+    owner_id: uuid.UUID,
+    personal_revision: str | None,
+) -> set[str]:
+    """Personal paths that wikilink into the published shared tree.
+
+    This is the automatic «ваша часть ризомы» stitch: no curated catalog.
+    The graph overlay further bounds those notes to the visible shared page.
+    """
+    shared_rows = (
+        await database.scalars(
+            select(NoteIndex.path).where(
+                NoteIndex.layer == NoteLayer.SHARED.value,
+                NoteIndex.owner_user_id.is_(None),
+            )
+        )
+    ).all()
+    shared_paths = {str(path) for path in shared_rows}
+    if not shared_paths:
+        return set()
+    lookup = notes_lookup_map(shared_paths)
+    hits: set[str] = set()
+    if personal_revision:
+        personal_notes = (
+            await database.scalars(
+                select(NoteIndex).where(
+                    NoteIndex.layer == NoteLayer.PERSONAL.value,
+                    NoteIndex.owner_user_id == owner_id,
+                    NoteIndex.revision_sha == personal_revision,
+                )
+            )
+        ).all()
+        personal_by_id = {note.id: note for note in personal_notes}
+        personal_ids = set(personal_by_id)
+        if not personal_ids:
+            return set()
+        links = (
+            await database.scalars(select(NoteLink).where(NoteLink.source_id.in_(personal_ids)))
+        ).all()
+        for link in links:
+            source = personal_by_id.get(link.source_id)
+            if source is None:
+                continue
+            target_path = resolve_link_target(link.target_raw, lookup)
+            if target_path is not None and target_path in shared_paths:
+                hits.add(source.path)
+        return hits
+    uploads = list(
+        (
+            await database.scalars(
+                select(PersonalUpload)
+                .where(PersonalUpload.user_id == owner_id)
+                .order_by(PersonalUpload.path)
+            )
+        ).all()
+    )
+    for row in uploads:
+        parsed = parse_markdown(row.path, row.body)
+        for raw in parsed.links:
+            target_path = resolve_link_target(raw, lookup)
+            if target_path is not None and target_path in shared_paths:
+                hits.add(row.path)
+                break
+    return hits
+
+
+async def load_personal_from_uploads(
+    database: AsyncSession,
+    *,
+    owner_id: uuid.UUID,
+    limit: int,
+    center: str | None,
+    depth: int,
+) -> dict[str, object]:
+    """Full «ваша личная ризома» from server uploads when git is not connected."""
+    empty = {
+        "layer": "personal",
+        "index_status": "empty",
+        "truncated": False,
+        "nodes": [],
+        "edges": [],
+    }
+    uploads = list(
+        (
+            await database.scalars(
+                select(PersonalUpload)
+                .where(PersonalUpload.user_id == owner_id)
+                .order_by(PersonalUpload.path)
+            )
+        ).all()
+    )
+    if not uploads:
+        return empty
+    parsed = [(row.path, parse_markdown(row.path, row.body)) for row in uploads]
+    paths = [path for path, _ in parsed]
+    lookup = notes_lookup_map(set(paths))
+    adjacency: dict[str, set[str]] = {path: set() for path in paths}
+    raw_edges: list[tuple[str, str]] = []
+    by_path = {path: note for path, note in parsed}
+    for path, note in parsed:
+        for raw in note.links:
+            target = resolve_link_target(raw, lookup)
+            if target is None or target not in adjacency:
+                continue
+            adjacency[path].add(target)
+            adjacency[target].add(path)
+            raw_edges.append((path, target))
+    local_center = _personal_graph_center(center)
+    chosen = _bounded_paths(paths, adjacency, local_center, depth, limit)
+    truncated = len(paths) > len(chosen)
+    nodes = []
+    for path in sorted(chosen):
+        note = by_path[path]
+        isolated = path not in adjacency or not (adjacency[path] & chosen)
+        nodes.append(
+            {
+                "path": path,
+                "title": note.title,
+                "tags": list(note.tags),
+                "isolated": isolated,
+                "unresolved": False,
+                "origin": "personal",
+            }
+        )
+    edges = [
+        {
+            "source": source,
+            "target": target,
+            "type": "wikilink",
+            "unresolved": False,
+            "origin": "personal",
+        }
+        for source, target in raw_edges
+        if source in chosen and target in chosen
+    ]
+    return {
+        "layer": "personal",
+        "index_status": "current",
+        "truncated": truncated,
+        "nodes": nodes,
+        "edges": edges,
+    }
+
+
+async def _include_resolved_targets(
+    database: AsyncSession,
+    layer_filter: tuple,
+    chosen_notes: list[NoteIndex],
+    chosen_ids: set,
+    links: list[NoteLink],
+) -> tuple[list[NoteIndex], set]:
+    extra_ids = {
+        link.target_id
+        for link in links
+        if link.source_id in chosen_ids and link.target_id and link.target_id not in chosen_ids
+    }
+    if not extra_ids:
+        return chosen_notes, chosen_ids
+    extras = list(
+        (
+            await database.scalars(
+                select(NoteIndex).where(*layer_filter, NoteIndex.id.in_(extra_ids)).order_by(NoteIndex.path)
+            )
+        ).all()
+    )
+    if not extras:
+        return chosen_notes, chosen_ids
+    chosen_notes = [*chosen_notes, *extras]
+    chosen_ids = {note.id for note in chosen_notes}
+    return chosen_notes, chosen_ids
+
+
+def _personal_graph_center(center: str | None) -> str | None:
+    if not center:
+        return None
+    if center.startswith("personal:"):
+        return center[len("personal:") :]
+    return center
+
+
+def graph_center_keys(center: str) -> tuple[str, ...]:
+    text = center.strip()
+    if not text:
+        return ()
+    keys: list[str] = [text]
+    rest = text
+    for prefix in ("unresolved:", "locked:"):
+        if rest.startswith(prefix):
+            rest = rest[len(prefix) :]
+            keys.append(rest)
+            break
+    if rest.startswith("personal:"):
+        rest = rest[len("personal:") :]
+        keys.append(rest)
+    stem = rest[:-3] if rest.lower().endswith(".md") else rest
+    file_name = stem if stem.lower().endswith(".md") else f"{stem}.md"
+    keys.extend(
+        [
+            stem,
+            file_name,
+            f"unresolved:{stem}",
+            f"unresolved:{file_name}",
+            f"locked:{stem}",
+            f"locked:{file_name}",
+        ]
+    )
+    seen: dict[str, None] = {}
+    for key in keys:
+        if key:
+            seen.setdefault(key, None)
+    return tuple(seen)
+
+
+def match_unresolved_center(center: str, target_raw: str) -> bool:
+    return bool(set(graph_center_keys(center)) & set(graph_center_keys(target_raw)))
+
+
+def seed_paths_for_center(center: str, paths: list[str]) -> list[str]:
+    keys = set(graph_center_keys(center))
+    found = [path for path in paths if path in keys]
+    if found:
+        return found
+    hanging: list[str] = []
+    for path in paths:
+        if not (path.startswith("unresolved:") or path.startswith("locked:")):
+            continue
+        raw = path.split(":", 1)[1]
+        if match_unresolved_center(center, raw):
+            hanging.append(path)
+    return hanging
+
+
+def _incoming_paths_for_unresolved(
+    seeds: list[str],
+    by_id_path: dict,
+    links: list,
+) -> list[str]:
+    incoming: list[str] = []
+    seen: set[str] = set()
+    for link in links:
+        if not (link.unresolved or link.target_id is None):
+            continue
+        if not any(match_unresolved_center(seed, link.target_raw) for seed in seeds):
+            continue
+        source_path = by_id_path.get(link.source_id)
+        if source_path and source_path not in seen:
+            incoming.append(source_path)
+            seen.add(source_path)
+    return incoming
+
+
+def _bounded_paths(
+    paths: list[str],
+    adjacency: dict[str, set[str]],
+    center: str | None,
+    depth: int,
+    limit: int,
+) -> set[str]:
+    if not center:
+        return set(paths[:limit])
+    starts = seed_paths_for_center(center, paths) or [center]
+    return _bounded_from_seeds(paths, adjacency, starts, depth, limit)
+
+
+def _bounded_from_seeds(
+    paths: list[str],
+    adjacency: dict[str, set[str]],
+    seeds: list[str],
+    depth: int,
+    limit: int,
+) -> set[str]:
+    starts = [seed for seed in dict.fromkeys(seeds) if seed in adjacency]
+    if not starts:
+        return set()
+    seen = set(starts)
+    frontier = set(starts)
+    for _ in range(max(depth, 0)):
+        nxt: set[str] = set()
+        for node in frontier:
+            nxt.update(adjacency.get(node, set()))
+        nxt -= seen
+        if not nxt:
+            break
+        seen.update(nxt)
+        frontier = nxt
+        if len(seen) >= limit:
+            break
+    return set(sorted(seen)[:limit])
+
+
+def bound_graph_payload(
+    payload: dict[str, object],
+    center: str,
+    depth: int,
+    limit: int,
+) -> dict[str, object]:
+    nodes = list(payload.get("nodes") or [])
+    edges = list(payload.get("edges") or [])
+    paths = [str(node["path"]) for node in nodes]
+    adjacency: dict[str, set[str]] = {path: set() for path in paths}
+    for edge in edges:
+        source = str(edge["source"])
+        target = str(edge["target"])
+        if source in adjacency and target in adjacency:
+            adjacency[source].add(target)
+            adjacency[target].add(source)
+    starts = seed_paths_for_center(center, paths) or [center]
+    chosen = _bounded_from_seeds(paths, adjacency, starts, depth, limit)
+    chosen_nodes = [node for node in nodes if str(node["path"]) in chosen]
+    chosen_edges = [
+        edge
+        for edge in edges
+        if str(edge["source"]) in chosen and str(edge["target"]) in chosen
+    ]
+    truncated = bool(payload.get("truncated")) or len(nodes) > len(chosen_nodes)
+    return {**payload, "nodes": chosen_nodes, "edges": chosen_edges, "truncated": truncated}
+
+
+async def overlay_local_shared_seeds(
+    database: AsyncSession,
+    *,
+    owner_id: uuid.UUID,
+    personal_revision: str | None,
+    center: str | None,
+) -> list[str]:
+    """Shared notes that seed a local overlay graph around ``center``.
+
+    Overlay-only personal nodes are keyed ``personal:{path}``. Their neighborhood
+    starts at the published notes they wikilink into, not the first shared page.
+    """
+    if not center:
+        return []
+    if not center.startswith("personal:"):
+        return [center]
+    raw = center[len("personal:") :]
+    shared_rows = (
+        await database.scalars(
+            select(NoteIndex.path).where(
+                NoteIndex.layer == NoteLayer.SHARED.value,
+                NoteIndex.owner_user_id.is_(None),
+            )
+        )
+    ).all()
+    shared_paths = {str(path) for path in shared_rows}
+    if not shared_paths:
+        return []
+    lookup = notes_lookup_map(shared_paths)
+    seeds: list[str] = []
+
+    def add_target(raw_target: str) -> None:
+        target = resolve_link_target(raw_target, lookup)
+        if target is not None and target in shared_paths and target not in seeds:
+            seeds.append(target)
+
+    if personal_revision:
+        note = await database.scalar(
+            select(NoteIndex).where(
+                NoteIndex.layer == NoteLayer.PERSONAL.value,
+                NoteIndex.owner_user_id == owner_id,
+                NoteIndex.revision_sha == personal_revision,
+                NoteIndex.path == raw,
+            )
+        )
+        if note is None:
+            return []
+        links = (
+            await database.scalars(select(NoteLink).where(NoteLink.source_id == note.id))
+        ).all()
+        for link in links:
+            add_target(link.target_raw)
+        return seeds
+    upload = await database.scalar(
+        select(PersonalUpload).where(
+            PersonalUpload.user_id == owner_id,
+            PersonalUpload.path == raw,
+        )
+    )
+    if upload is None:
+        return []
+    parsed = parse_markdown(upload.path, upload.body)
+    for target in parsed.links:
+        add_target(target)
+    return seeds
+
+
+async def _parsed_from_existing(
+    database: AsyncSession, notes: list[NoteIndex]
+) -> dict[str, ParsedNote]:
+    if not notes:
+        return {}
+    note_ids = {note.id for note in notes}
+    tag_map = await _tags_for(database, note_ids)
+    links = (await database.scalars(select(NoteLink).where(NoteLink.source_id.in_(note_ids)))).all()
+    typed_links: dict[uuid.UUID, list[ParsedLink]] = {note.id: [] for note in notes}
+    for link in links:
+        typed_links.setdefault(link.source_id, []).append(
+            ParsedLink(target=link.target_raw, kind=link.link_type)
+        )
+    parsed: dict[str, ParsedNote] = {}
+    for note in notes:
+        outgoing = tuple(typed_links.get(note.id, []))
+        parsed[note.path] = ParsedNote(
+            title=note.title,
+            tags=tuple(tag_map.get(note.id, [])),
+            aliases=(),
+            links=tuple(item.target for item in outgoing),
+            typed_links=outgoing,
+            body="",
+            content_hash=note.content_hash,
+        )
+    return parsed
+
+
+async def _graph_payload(
+    database: AsyncSession,
+    layer: str,
+    chosen_notes: list[NoteIndex],
+    links: list[NoteLink],
+    truncated: bool,
+) -> dict[str, object]:
+    chosen_ids = {note.id for note in chosen_notes}
+    chosen_paths = {note.path for note in chosen_notes}
+    tag_map = await _tags_for(database, chosen_ids)
+    by_id = {note.id: note for note in chosen_notes}
+    linked_targets = {link.source_id for link in links if link.source_id in chosen_ids} | {
+        link.target_id for link in links if link.target_id in chosen_ids
+    }
+    origin = "personal" if layer == NoteLayer.PERSONAL.value else "shared"
+    closed_keys = await all_closed_keys(database)
+    nodes = []
+    for note in chosen_notes:
+        nodes.append(
+            {
+                "path": note.path,
+                "title": note.title,
+                "tags": tag_map.get(note.id, []),
+                "isolated": note.id not in linked_targets,
+                "unresolved": False,
+                "locked": False,
+                "origin": origin,
+            }
+        )
+    edges = []
+    unresolved_nodes: dict[str, str] = {}
+    locked_nodes: dict[str, str] = {}
+    for link in links:
+        source = by_id.get(link.source_id)
+        if source is None or source.path not in chosen_paths:
+            continue
+        if link.unresolved or link.target_id is None:
+            if matches_closed(link.target_raw, closed_keys):
+                node_id = f"locked:{link.target_raw}"
+                locked_nodes[node_id] = link.target_raw
+                edges.append(
+                    {
+                        "source": source.path,
+                        "target": node_id,
+                        "type": link.link_type,
+                        "unresolved": False,
+                        "locked": True,
+                        "origin": origin,
+                    }
+                )
+            else:
+                node_id = f"unresolved:{link.target_raw}"
+                unresolved_nodes[node_id] = link.target_raw
+                edges.append(
+                    {
+                        "source": source.path,
+                        "target": node_id,
+                        "type": link.link_type,
+                        "unresolved": True,
+                        "locked": False,
+                        "origin": origin,
+                    }
+                )
+            continue
+        target = by_id.get(link.target_id)
+        if target is None or target.path not in chosen_paths:
+            continue
+        edges.append(
+            {
+                "source": source.path,
+                "target": target.path,
+                "type": link.link_type,
+                "unresolved": False,
+                "locked": False,
+                "origin": origin,
+            }
+        )
+    for node_id, title in unresolved_nodes.items():
+        nodes.append(
+            {
+                "path": node_id,
+                "title": title,
+                "tags": [],
+                "isolated": False,
+                "unresolved": True,
+                "locked": False,
+                "origin": origin,
+            }
+        )
+    for node_id, title in locked_nodes.items():
+        nodes.append(
+            {
+                "path": node_id,
+                "title": title,
+                "tags": [],
+                "isolated": False,
+                "unresolved": False,
+                "locked": True,
+                "origin": origin,
+            }
+        )
+    return {
+        "layer": layer,
+        "index_status": "current",
+        "truncated": truncated,
+        "nodes": nodes,
+        "edges": edges,
+    }
+
+
+async def index_proposal_notes(
+    database: AsyncSession,
+    *,
+    proposal_id: uuid.UUID,
+    owner_id: uuid.UUID,
+    revision: str,
+    files: dict[str, str],
+) -> None:
+    await drop_proposal_notes(database, proposal_id)
+    for path, text in files.items():
+        parsed = parse_markdown(path, text)
+        record = NoteIndex(
+            index_key=_index_key(NoteLayer.PROPOSAL.value, owner_id, proposal_id, revision, path),
+            layer=NoteLayer.PROPOSAL.value,
+            revision_sha=revision,
+            path=path,
+            slug=_slug(path),
+            title=parsed.title,
+            content_hash=parsed.content_hash,
+            owner_user_id=owner_id,
+            proposal_id=proposal_id,
+        )
+        database.add(record)
+        await database.flush()
+        for tag_name in dict.fromkeys(parsed.tags):
+            normalized = tag_name.casefold()[:80]
+            tag = await database.scalar(select(Tag).where(Tag.name == normalized))
+            if tag is None:
+                tag = Tag(name=normalized)
+                database.add(tag)
+                await database.flush()
+            database.add(NoteTag(note_id=record.id, tag_id=tag.id))
+
+
+async def drop_proposal_notes(database: AsyncSession, proposal_id: uuid.UUID) -> None:
+    await database.execute(delete(NoteIndex).where(NoteIndex.proposal_id == proposal_id))
+
+
+async def _tags_for(database: AsyncSession, note_ids: set[uuid.UUID]) -> dict[uuid.UUID, list[str]]:
+    if not note_ids:
+        return {}
+    rows = (
+        await database.execute(
+            select(NoteTag.note_id, Tag.name)
+            .join(Tag, Tag.id == NoteTag.tag_id)
+            .where(NoteTag.note_id.in_(note_ids))
+        )
+    ).all()
+    result: dict[uuid.UUID, list[str]] = {}
+    for note_id, name in rows:
+        result.setdefault(note_id, []).append(name)
+    return result
